@@ -1,0 +1,109 @@
+[
+  {
+    "id": 1767465028932,
+    "answers": {
+      "firstName": "Partho",
+      "lastName": "Mukherjee",
+      "dob": "2026-01-04",
+      "grade": "1",
+      "guardian": "+9177777788",
+      "notes": "none"
+    },
+    "createdAt": "2026-01-03T18:30:28.932Z"
+  },
+  {
+    "id": 1767519151834,
+    "answers": {
+      "firstName": "Parthoprotim",
+      "lastName": "Mukherjee",
+      "email": "partho.protim@gmail.com",
+      "dob": "2026-01-04",
+      "address": "wewe,eee,eee",
+      "stream": "Science",
+      "batch": "Mon/Wed 10:00-12:00",
+      "dateOfJoining": "2026-01-15",
+      "payment": "Monthly"
+    },
+    "createdAt": "2026-01-04T09:32:31.834Z"
+  },
+  {
+    "id": 1767520011467,
+    "answers": {
+      "firstName": "Parthoprotim",
+      "lastName": "Mukherjee",
+      "email": "partho.protim@gmail.com",
+      "dob": "2026-01-04",
+      "address": "wrrer",
+      "streams": [
+        "Keyboard",
+        "Guitar",
+        "Piano"
+      ],
+      "batch": "Mon/Wed 10:00-12:00",
+      "dateOfJoining": "2026-01-15",
+      "payment": "Monthly"
+    },
+    "createdAt": "2026-01-04T09:46:51.467Z"
+  },
+  {
+    "id": 1767521513737,
+    "answers": {
+      "firstName": "Parthoprotim",
+      "lastName": "Mukherjee",
+      "email": "partho.protim@gmail.com",
+      "dob": "2026-01-04",
+      "address": "dd",
+      "streams": [
+        {
+          "instrument": "Keyboard",
+          "batch": "Mon/Wed 10:00-12:00",
+          "payment": "Quarterly"
+        },
+        {
+          "instrument": "Guitar",
+          "batch": "Tue/Thu 18:00-20:00",
+          "payment": "Monthly"
+        }
+      ],
+      "streamsConfig": {
+        "Keyboard": {
+          "batch": "Mon/Wed 10:00-12:00",
+          "payment": "Quarterly"
+        },
+        "Guitar": {
+          "batch": "Tue/Thu 18:00-20:00",
+          "payment": "Monthly"
+        }
+      },
+      "dateOfJoining": "2026-01-04"
+    },
+    "createdAt": "2026-01-04T10:11:53.737Z"
+  },
+  {
+    "id": 1767522120841,
+    "answers": {
+      "firstName": "Parthoprotim",
+      "lastName": "Mukherjee",
+      "email": "partho.protim@gmail.com",
+      "dob": "2026-01-04",
+      "address": "eee",
+      "guardianName": "peppe",
+      "telephone": "+91 33333",
+      "streams": [
+        {
+          "instrument": "Keyboard",
+          "batch": "Mon/Wed 10:00-12:00",
+          "payment": "Quarterly"
+        }
+      ],
+      "streamsConfig": {
+        "Keyboard": {
+          "batch": "Mon/Wed 10:00-12:00",
+          "payment": "Quarterly"
+        }
+      },
+      "dateOfJoining": "2026-01-04"
+    },
+    "createdAt": "2026-01-04T10:22:00.841Z"
+  }
+]

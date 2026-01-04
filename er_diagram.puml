@@ -1,0 +1,143 @@
+@startuml
+' ER diagram for Hyderabad School of Music (HSM)
+
+hide circle
+skinparam linetype ortho
+
+entity "Student" as Student {
+  * id : uuid
+  --
+  name : string
+  dob : date
+  phone : string
+  guardian_contact : string
+  metadata : json
+}
+
+entity "Teacher" as Teacher {
+  * id : uuid
+  --
+  name : string
+  phone : string
+  role : enum (teacher, admin)
+  payout_terms : json
+}
+
+entity "Instrument" as Instrument {
+  * id : uuid
+  --
+  name : string
+  max_batch_size : int
+  online_supported : boolean
+}
+
+entity "Batch" as Batch {
+  * id : uuid
+  --
+  instrument_id : uuid
+  teacher_id : uuid
+  recurrence : string
+  capacity : int
+  is_makeup : boolean
+}
+
+entity "Enrollment" as Enrollment {
+  * id : uuid
+  --
+  student_id : uuid
+  instrument_id : uuid
+  status : enum (active, paused, completed)
+  classes_remaining : int
+  enrolled_on : date
+}
+
+entity "EnrollmentBatch" as EnrollmentBatch {
+  * id : uuid
+  --
+  enrollment_id : uuid
+  batch_id : uuid
+  assigned_on : date
+}
+
+entity "AttendanceRecord" as AttendanceRecord {
+  * id : uuid
+  --
+  date : date
+  batch_id : uuid
+  student_id : uuid
+  status : enum (present, absent, excused)
+  source : enum (whatsapp, web, manual)
+  finalized_at : datetime
+  confidence : float
+  notes : text
+}
+
+entity "Package" as Package {
+  * id : uuid
+  --
+  instrument_id : uuid
+  name : string
+  classes_count : int
+  price : decimal
+}
+
+entity "Payment" as Payment {
+  * id : uuid
+  --
+  student_id : uuid
+  package_id : uuid
+  amount : decimal
+  method : string
+  transaction_id : string
+  timestamp : datetime
+}
+
+entity "TeacherPayout" as TeacherPayout {
+  * id : uuid
+  --
+  teacher_id : uuid
+  amount : decimal
+  method : string
+  period_start : date
+  period_end : date
+  linked_classes_count : int
+}
+
+entity "Holiday" as Holiday {
+  * id : uuid
+  --
+  date : date
+  scope : enum (school, teacher, batch)
+  reason : string
+  affected_batch_id : uuid
+}
+
+entity "AuditLog" as AuditLog {
+  * id : uuid
+  --
+  actor_id : uuid
+  actor_role : string
+  action : string
+  payload : json
+  timestamp : datetime
+}
+
+' Relationships
+Student ||--o{ Enrollment : "has"
+Enrollment ||--o{ EnrollmentBatch : "assigned to"
+Batch ||--o{ EnrollmentBatch : "contains"
+Batch }o--|| Teacher : "taught by"
+Batch }o--|| Instrument : "for"
+Enrollment }o--|| Instrument : "for"
+AttendanceRecord }o--|| Batch : "for"
+AttendanceRecord }o--|| Student : "of"
+Payment }o--|| Student : "by"
+Payment }o--|| Package : "for"
+Package }o--|| Instrument : "applies to"
+TeacherPayout }o--|| Teacher : "to"
+Holiday }o--|| Batch : "may affect"
+AuditLog ..> Student : "tracks"
+AuditLog ..> AttendanceRecord : "tracks"
+AuditLog ..> Payment : "tracks"
+
+@enduml
