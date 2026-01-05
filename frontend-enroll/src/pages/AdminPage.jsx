@@ -28,8 +28,6 @@ export default function AdminPage(){
               <div><strong>Date:</strong> {new Date(e.createdAt).toLocaleString()}</div>
               <div><strong>Name:</strong> {e.answers.firstName} {e.answers.lastName}</div>
               <div><strong>Email:</strong> {e.answers.email}</div>
-              <div><strong>Guardian:</strong> {e.answers.guardianName}</div>
-              <div><strong>Telephone:</strong> {e.answers.telephone}</div>
               <div>
                 <strong>Streams:</strong>
                 <ul style={{marginTop:6}}>

@@ -22,8 +22,8 @@ Notes:
 - For production, build the app (`npm run build`) and serve the `dist/` files from your Node backend or a static host.
 
 Notes:
-- The Q&A collects: Name (first, last), Email, DOB, Mailing address, Guardian name, Telephone (WhatsApp-enabled), **Streams** (one or more of: Keyboard, Guitar, Piano, Drums, Tabla, Violin, Hindustani vocals, Carnatic vocals). For each selected stream the user configures **Batch** and **Payment** (Monthly/Quarterly).
-- The frontend POSTs `{ answers: { firstName, lastName, email, dob, address, guardianName, telephone, streams: [ { instrument, batch, payment } ], dateOfJoining } }` to `http://localhost:3000/api/enroll` and falls back to `localStorage` if the server is unavailable.
+- The Q&A collects: Name (first, last), Email, DOB, Mailing address, **Streams** (one or more of: Keyboard, Guitar, Piano, Drums, Tabla, Violin, Hindustani vocals, Carnatic vocals). For each selected stream the user configures **Batch** and **Payment** (Monthly/Quarterly).
+- The frontend POSTs `{ answers: { firstName, lastName, email, dob, address, streams: [ { instrument, batch, payment } ], dateOfJoining } }` to `http://localhost:3000/api/enroll` and falls back to `localStorage` if the server is unavailable.
 - To package for mobile: run with Capacitor (add Capacitor, build, then `npx cap add android` / `npx cap add ios`).
 
 Next suggested steps:

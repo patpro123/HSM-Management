@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Enrollment Agent</title>
+  <style>
+    body { font-family: "Segoe UI", system-ui, sans-serif; background: #0c1118; color: #e8ecf3; margin: 0; padding: 0; }
+    .shell { max-width: 960px; margin: 0 auto; padding: 32px; }
+    h1 { margin-bottom: 8px; }
+    .card { background: #131b26; border: 1px solid #1f2a38; border-radius: 12px; padding: 16px; margin-bottom: 16px; box-shadow: 0 8px 20px rgba(0,0,0,0.25); }
+    .log { max-height: 420px; overflow-y: auto; border-radius: 8px; display: flex; flex-direction: column; gap: 12px; }
+    .bubble { padding: 12px 14px; border-radius: 10px; line-height: 1.4; white-space: pre-wrap; }
+    .user { background: #1f6feb; color: #e8ecf3; align-self: flex-end; }
+    .bot { background: #111827; color: #c9d4e3; border: 1px solid #1f2a38; }
+    form { display: flex; gap: 8px; margin-top: 8px; }
+    textarea { flex: 1; min-height: 80px; border-radius: 10px; border: 1px solid #1f2a38; background: #0f1722; color: #e8ecf3; padding: 10px; resize: vertical; }
+    button { background: #34d399; color: #081018; border: none; border-radius: 10px; padding: 12px 18px; font-weight: 600; cursor: pointer; }
+    button:disabled { opacity: 0.6; cursor: not-allowed; }
+    .state { font-family: "SFMono-Regular", Consolas, Menlo, monospace; background: #0f1722; border: 1px solid #1f2a38; border-radius: 10px; padding: 12px; overflow-x: auto; }
+    .pill { display: inline-block; padding: 6px 10px; border-radius: 999px; background: #1f2a38; color: #9fb4d0; margin: 2px; font-size: 12px; }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <h1>Enrollment Agent</h1>
+    <p>A lightweight conversational assistant that gathers all enrollment details before submission. Point this page at the backend `POST /api/agent/enroll` endpoint.</p>
+
+    <div class="card">
+      <div id="log" class="log"></div>
+      <form id="chat-form">
+        <textarea id="message" placeholder="e.g., Enroll Riya Sharma for Keyboard Tue/Thu 5-6pm, guardian Vinod Sharma, phone +91-98765..., payment monthly"></textarea>
+        <button type="submit">Send</button>
+      </form>
+    </div>
+
+    <div class="card">
+      <h3>Collected Fields</h3>
+      <div id="collected" class="state">{}</div>
+      <h4>Missing</h4>
+      <div id="missing"></div>
+    </div>
+  </div>
+
+  <script>
+    const logEl = document.getElementById('log')
+    const form = document.getElementById('chat-form')
+    const messageEl = document.getElementById('message')
+    const collectedEl = document.getElementById('collected')
+    const missingEl = document.getElementById('missing')
+
+    let sessionId = null
+    const apiBase = window.AGENT_API || 'http://localhost:3000/api/agent/enroll'
+
+    const appendBubble = (text, type = 'bot') => {
+      const div = document.createElement('div')
+      div.className = `bubble ${type}`
+      div.textContent = text
+      logEl.appendChild(div)
+      logEl.scrollTop = logEl.scrollHeight
+    }
+
+    const renderState = (data) => {
+      collectedEl.textContent = JSON.stringify(data.collected || {}, null, 2)
+      const missing = data.missing || []
+      missingEl.innerHTML = missing.length ? missing.map((m) => `<span class="pill">${m}</span>`).join('') : '<span class="pill" style="background:#16302f;color:#9be7c4;">All captured</span>'
+    }
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault()
+      const text = messageEl.value.trim()
+      if (!text) return
+      appendBubble(text, 'user')
+      messageEl.value = ''
+      form.querySelector('button').disabled = true
+      try {
+        const res = await fetch(apiBase, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sessionId, message: text })
+        })
+        const data = await res.json()
+        if (!res.ok) throw new Error(data.error || 'Request failed')
+        sessionId = data.sessionId
+        appendBubble(data.prompt || 'Received', 'bot')
+        renderState(data)
+      } catch (err) {
+        appendBubble(`Error: ${err.message}`, 'bot')
+      } finally {
+        form.querySelector('button').disabled = false
+      }
+    })
+
+    appendBubble('Hi! Share the student details in natural language to start enrollment.', 'bot')
+  </script>
+</body>
+</html>
