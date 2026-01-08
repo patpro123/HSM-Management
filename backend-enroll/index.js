@@ -430,14 +430,20 @@ app.get('/api/enrollments', async (req, res)=>{
         e.status,
         e.classes_remaining,
         e.enrolled_on,
-        json_agg(json_build_object(
-          'batch_id', b.id,
-          'instrument', i.name,
-          'batch_recurrence', b.recurrence,
-          'teacher', t.name,
-          'start_time', b.start_time,
-          'end_time', b.end_time
-        )) as batches
+        COALESCE(
+          json_agg(
+            json_build_object(
+              'batch_id', b.id,
+              'instrument', i.name,
+              'batch_recurrence', b.recurrence,
+              'teacher', t.name,
+              'start_time', b.start_time,
+              'end_time', b.end_time
+            )
+            ORDER BY i.name, b.recurrence
+          ) FILTER (WHERE b.id IS NOT NULL),
+          '[]'::json
+        ) as batches
       FROM students s
       JOIN enrollments e ON s.id = e.student_id
       LEFT JOIN enrollment_batches eb ON e.id = eb.enrollment_id
@@ -451,6 +457,32 @@ app.get('/api/enrollments', async (req, res)=>{
   }catch(err){
     console.error('Get enrollments error:', err)
     res.status(500).json({ error: 'Failed to fetch enrollments' })
+  }
+})
+
+// POST /api/students/:studentId/image - upload student image
+app.post('/api/students/:studentId/image', async (req, res) => {
+  const { studentId } = req.params
+  const { image } = req.body || {}
+  if (!image || typeof image !== 'string') {
+    return res.status(400).json({ error: 'image (base64 string) is required' })
+  }
+  try {
+    const updateRes = await pool.query(
+      `UPDATE students SET metadata = jsonb_set(
+        COALESCE(metadata, '{}'::jsonb),
+        '{image}',
+        to_jsonb($1)
+      ) WHERE id = $2 RETURNING id`,
+      [image, studentId]
+    )
+    if (updateRes.rows.length === 0) {
+      return res.status(404).json({ error: 'Student not found' })
+    }
+    res.json({ ok: true, studentId, message: 'Image uploaded successfully' })
+  } catch (err) {
+    console.error('Image upload error:', err)
+    res.status(500).json({ error: 'Failed to upload image' })
   }
 })
 

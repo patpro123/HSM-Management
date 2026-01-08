@@ -13,6 +13,7 @@ export default function App(){
           </div>
           <nav className="nav">
             <Link to="/">Enroll</Link>
+            <Link to="/students">Students</Link>
             <Link to="/admin">Admin</Link>
           </nav>
         </div>

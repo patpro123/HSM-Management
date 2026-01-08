@@ -4,6 +4,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import App from './App'
 import EnrollPage from './pages/EnrollPage'
 import AdminPage from './pages/AdminPage'
+import StudentsPage from './pages/StudentsPage'
 import './styles.css'
 
 createRoot(document.getElementById('root')).render(
@@ -11,6 +12,7 @@ createRoot(document.getElementById('root')).render(
     <Routes>
       <Route path="/" element={<App />}>
         <Route index element={<EnrollPage />} />
+        <Route path="students" element={<StudentsPage />} />
         <Route path="admin" element={<AdminPage />} />
       </Route>
     </Routes>
