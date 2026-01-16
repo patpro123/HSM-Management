@@ -27,14 +27,21 @@ Priority for the MVP: 1) Enrollment, 2) Payments, 3) Attendance (AI-assisted via
 ## 3. Core Functional Requirements ✅
 
 ### 3.1 Enrollment
-- Admin registers students (or bulk import CSV). Required fields: name, DOB, phone, guardian contact, selected instrument(s), preferred batch choices.
-- A student may enroll in multiple instruments; each enrollment links to one or more batch assignments (two batches per instrument by default).
-- System enforces batch capacity; offers waitlist if batch is full (optional).
-- Enrollment creates an invoice or ties to an existing prepaid package.
+- Admin registers students via an interactive web form with validation. Required fields: name (first/last), email, DOB, mailing address, guardian name, phone (WhatsApp-enabled), date of joining.
+- **Instrument Selection:** Dynamically fetched from the database via `/api/instruments`. Displays instrument names with online availability indicator.
+- **Batch Selection:** For each selected instrument, batches are dynamically fetched from `/api/batches/:instrumentId` and displayed with teacher name and recurrence details.
+- **Payment Plan:** For each instrument, user selects payment frequency (Monthly or Quarterly).
+- **Data Model:** One enrollment record per student with multiple batch assignments. Each batch assignment includes `instrument_id`, `batch_id`, and `payment_frequency`.
+- System uses UUID references for instruments and batches throughout the enrollment flow (frontend and backend).
+- Enrollment payload is submitted to `/api/enroll` with all student details and an array of batch assignments.
+- System enforces batch capacity; offers waitlist if batch is full (optional - future enhancement).
 
 Acceptance criteria:
-- Admin can create a student with multiple instrument enrollments and assign them to batches.
-- System prevents assignment when batch capacity would be exceeded.
+- Enrollment form dynamically loads instruments and batches from the database.
+- Frontend uses instrument/batch UUIDs for all API communication.
+- Single enrollment record created per student with multiple batch assignments.
+- System validates all required fields and prevents submission with incomplete data.
+- Backend creates student, enrollment, and batch assignment records atomically.
 
 ### 3.2 Payments
 - Support two package types for MVP:
@@ -49,31 +56,67 @@ Acceptance criteria:
 - Can define packages per instrument with price and classes_count.
 - On payment success, classes_remaining is set/updated and a receipt is generated.
 
-### 3.3 Attendance (AI-assisted via WhatsApp)
-- Teachers submit attendance via WhatsApp text to the school number (WhatsApp Business API / Twilio WhatsApp webhook).
-- The system ingests the text message and generates a **draft attendance** (present list) using an AI/parsing pipeline.
-- Drafts are sent back to the teacher for quick confirmation OR are visible in the admin dashboard for review.
-- Absentees are **finalized at end-of-day** (e.g., 23:59 local time) if no cancel/holiday flag exists for the class.
-- Holidays and teacher leaves are stored in a central calendar and **do not** decrement `classes_remaining` for that day.
+### 3.3 Attendance Capture (Hybrid: Dashboard + WhatsApp)
 
-Edge behavior & acceptance criteria:
-- Misspellings / ambiguous names are flagged for confirmation.
-- System finalizes absentees automatically at cutoff; finalized attendance decrements classes for presented students only.
-- Admin can reopen or correct finalized attendance with an audit trail.
+**Primary Flow (Dashboard/Mobile UI):**
+- **Batch-Centric Interface:** Teachers/admin open today's scheduled batches, select a batch, and see list of enrolled students.
+- **Mobile-First Design:** Large tap targets, swipe gestures optional, optimized for phone screens.
+- **Quick Actions:** "Mark All Present" button for efficiency; toggle individual students to Absent/Excused.
+- **Default State:** All students default to Present; teacher marks exceptions (absences/excused).
+- **Submission:** Teacher submits attendance after class ends. System timestamps and locks the record.
+- **Role-Based Access:**
+  - Teachers: Mark attendance only for current day and their assigned batches.
+  - Admin: Mark/edit attendance for any past or current day, any batch (with audit trail).
+
+**Secondary Flow (WhatsApp AI-Assisted):**
+- Teachers can optionally submit attendance via WhatsApp text message (e.g., "Present: John, Mary, Ahmed").
+- System generates **draft attendance** using AI/parsing pipeline and sends back for confirmation.
+- Teacher confirms via WhatsApp reply or reviews/edits in dashboard.
+- WhatsApp flow augments dashboard; both methods supported.
+
+**Makeup Classes:**
+- When student misses a regular class (marked Absent), `classes_remaining` is **not** decremented.
+- System tracks missed classes and allows admin to schedule makeup classes.
+- When student attends makeup class (marked Present), `classes_remaining` is decremented.
+- Makeup class attendance captured separately with flag `is_makeup=true` in batch.
+
+**Attendance Finalization:**
+- Attendance records finalized at end-of-day (23:59 local time) or on teacher submission.
+- Finalized attendance decrements `classes_remaining` only for Present students in regular (non-makeup) classes.
+- Holidays/teacher leaves stored in central calendar; classes on these days do not decrement `classes_remaining`.
+
+**Future Enhancement (Low Priority):**
+- Offline support: Allow teachers to mark attendance offline and sync when connection restored.
+
+Acceptance criteria:
+- Mobile-responsive batch attendance UI with "Mark All Present" and individual toggle options.
+- Teachers can mark attendance for current day; admin can mark/edit any day with audit log.
+- WhatsApp integration for attendance submission with AI draft generation and confirmation flow.
+- Makeup classes tracked separately; `classes_remaining` logic correctly handles regular vs makeup attendance.
+- System prevents duplicate attendance for same student/batch/date.
+- Finalized attendance cannot be edited by teachers; admin can reopen with audit trail.
 
 ---
 
 ## 4. Data Model (Core Entities) 🧭
-- Student { id, name, dob, phone, guardian_contact, metadata }
-- Teacher { id, name, phone, roles }
-- Instrument { id, name, max_batch_size, online_supported }
-- Batch { id, instrument_id, teacher_id, recurrence (days/times), capacity, is_makeup }
-- Enrollment { id, student_id, instrument_id, batch_ids[], status, classes_remaining }
-- AttendanceRecord { id, date, batch_id, student_id, status (present/absent/excused), source, finalized_at }
-- Payment { id, student_id, package_id, amount, method, transaction_id, timestamp }
-- Package / FeeStructure { id, instrument_id, name, classes_count, price }
-- Holiday / Leave { id, date, type (school/teacher-specific), notes }
-- AuditLog { id, actor, action, payload, timestamp }
+- Student { id (UUID), first_name, last_name, email, dob, address, guardian_name, telephone, date_of_joining, created_at, updated_at }
+- Teacher { id (UUID), name, phone, email, payout_type (fixed/per_class), rate, created_at }
+- Instrument { id (UUID), name, online_supported, max_batch_size, created_at }
+- Batch { id (UUID), instrument_id (FK), teacher_id (FK), recurrence (e.g., "Monday 5-6 PM"), day_of_week, start_time, end_time, capacity, is_makeup, created_at }
+- Enrollment { id (UUID), student_id (FK), status (active/inactive/waitlist), date_of_enrollment, created_at, updated_at }
+- BatchAssignment { id (UUID), enrollment_id (FK), batch_id (FK), payment_frequency (monthly/quarterly), classes_remaining, created_at }
+- AttendanceRecord { id (UUID), date, batch_id (FK), student_id (FK), status (present/absent/excused), source (whatsapp/admin), finalized_at, created_at }
+- Payment { id (UUID), student_id (FK), batch_assignment_id (FK), amount, classes_count, method, transaction_id, timestamp }
+- Package / FeeStructure { id (UUID), instrument_id (FK), name, frequency (monthly/quarterly), classes_count, price, created_at }
+- Holiday / Leave { id (UUID), date, type (school/teacher-specific), teacher_id (FK nullable), notes, created_at }
+- AuditLog { id (UUID), actor, action, entity_type, entity_id, payload (JSONB), timestamp }
+
+**Key Changes from Initial Design:**
+- UUIDs used for all primary keys for better distribution and security.
+- Enrollment refactored: one enrollment per student, with separate BatchAssignment table for multiple instrument/batch enrollments.
+- BatchAssignment tracks payment_frequency and classes_remaining per batch (not per enrollment).
+- Student model expanded with first_name, last_name, email, address fields.
+- Batch model includes structured time fields (day_of_week, start_time, end_time) in addition to recurrence string.
 
 ---
 
