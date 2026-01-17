@@ -10,15 +10,16 @@ import {
 } from './types';
 import StatsOverview from './components/StatsOverview';
 import StudentManagement from './components/StudentManagement';
-import EnrollmentForm from './components/EnrollmentForm';
-import AttendanceDashboard from './components/AttendanceDashboard';
+import TeacherManagement from './components/TeacherManagement';
+// @ts-ignore - JSX component
+import AttendanceTab from './components/Attendance/AttendanceTab';
 import PaymentModule from './components/PaymentModule';
 import hsmLogo from './images/hsmLogo.jpg';
 
 const API_BASE = '/api';
 
 const App: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'stats' | 'enroll' | 'attendance' | 'payments' | 'students' | 'teachers'>('stats');
+  const [activeTab, setActiveTab] = useState<'stats' | 'students' | 'attendance' | 'payments' | 'teachers'>('stats');
   const [students, setStudents] = useState<Student[]>([]);
   const [batches, setBatches] = useState<Batch[]>([]);
   const [instruments, setInstruments] = useState<Instrument[]>([]);
@@ -27,6 +28,7 @@ const App: React.FC = () => {
   const [payments, setPayments] = useState<PaymentRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const fetchData = async () => {
     try {
@@ -71,10 +73,55 @@ const App: React.FC = () => {
     fetchData();
   }, []);
 
+  const handleTabChange = (tab: typeof activeTab) => {
+    setActiveTab(tab);
+    setMobileMenuOpen(false); // Close mobile menu when tab changes
+  };
+
   return (
     <div className="min-h-screen flex flex-col md:flex-row bg-slate-50">
-      <nav className="w-full md:w-64 bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900 text-white p-6 flex-shrink-0 flex flex-col">
+      {/* Mobile Menu Button */}
+      <button
+        onClick={() => setMobileMenuOpen(true)}
+        className="md:hidden fixed top-4 left-4 z-40 p-3 bg-gradient-to-r from-orange-500 to-amber-500 text-white rounded-lg shadow-lg hover:shadow-xl transition"
+        aria-label="Open menu"
+      >
+        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+        </svg>
+      </button>
+
+      {/* Backdrop Overlay for Mobile */}
+      {mobileMenuOpen && (
+        <div
+          className="md:hidden fixed inset-0 bg-black bg-opacity-50 z-40 transition-opacity"
+          onClick={() => setMobileMenuOpen(false)}
+        />
+      )}
+
+      {/* Sidebar Navigation */}
+      <nav className={`
+        fixed md:relative
+        w-64 h-full
+        bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900 
+        text-white p-6 
+        flex-shrink-0 flex flex-col
+        transition-transform duration-300 ease-in-out
+        z-50
+        ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
+      `}>
         <div className="flex flex-col items-center gap-4 mb-8 text-center">
+          {/* Close button for mobile */}
+          <button
+            onClick={() => setMobileMenuOpen(false)}
+            className="md:hidden self-end p-2 text-slate-400 hover:text-white transition"
+            aria-label="Close menu"
+          >
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+          
           <div className="w-full bg-white rounded-xl overflow-hidden p-3 flex items-center justify-center shadow-lg">
             <img 
               src={hsmLogo} 
@@ -86,33 +133,28 @@ const App: React.FC = () => {
         </div>
         <ul className="space-y-2 flex-1">
           <li>
-            <button onClick={() => setActiveTab('stats')} className={`w-full text-left px-4 py-3 rounded-lg transition-colors font-medium ${activeTab === 'stats' ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-lg shadow-orange-500/30' : 'text-slate-300 hover:bg-slate-800 hover:text-white'}`}>
+            <button onClick={() => handleTabChange('stats')} className={`w-full text-left px-4 py-3 rounded-lg transition-colors font-medium ${activeTab === 'stats' ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-lg shadow-orange-500/30' : 'text-slate-300 hover:bg-slate-800 hover:text-white'}`}>
               📊 <span className="ml-2">Overview</span>
             </button>
           </li>
           <li>
-            <button onClick={() => setActiveTab('students')} className={`w-full text-left px-4 py-3 rounded-lg transition-colors font-medium ${activeTab === 'students' ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-lg shadow-orange-500/30' : 'text-slate-300 hover:bg-slate-800 hover:text-white'}`}>
+            <button onClick={() => handleTabChange('students')} className={`w-full text-left px-4 py-3 rounded-lg transition-colors font-medium ${activeTab === 'students' ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-lg shadow-orange-500/30' : 'text-slate-300 hover:bg-slate-800 hover:text-white'}`}>
               👥 <span className="ml-2">Students</span>
             </button>
           </li>
           <li>
-            <button onClick={() => setActiveTab('teachers')} className={`w-full text-left px-4 py-3 rounded-lg transition-colors font-medium ${activeTab === 'teachers' ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-lg shadow-orange-500/30' : 'text-slate-300 hover:bg-slate-800 hover:text-white'}`}>
-              👨‍🏫 <span className="ml-2">Teachers</span>
-            </button>
-          </li>
-          <li>
-            <button onClick={() => setActiveTab('enroll')} className={`w-full text-left px-4 py-3 rounded-lg transition-colors font-medium ${activeTab === 'enroll' ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-lg shadow-orange-500/30' : 'text-slate-300 hover:bg-slate-800 hover:text-white'}`}>
-              📝 <span className="ml-2">Enrollment</span>
-            </button>
-          </li>
-          <li>
-            <button onClick={() => setActiveTab('attendance')} className={`w-full text-left px-4 py-3 rounded-lg transition-colors font-medium ${activeTab === 'attendance' ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-lg shadow-orange-500/30' : 'text-slate-300 hover:bg-slate-800 hover:text-white'}`}>
+            <button onClick={() => handleTabChange('attendance')} className={`w-full text-left px-4 py-3 rounded-lg transition-colors font-medium ${activeTab === 'attendance' ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-lg shadow-orange-500/30' : 'text-slate-300 hover:bg-slate-800 hover:text-white'}`}>
               📅 <span className="ml-2">Attendance</span>
             </button>
           </li>
           <li>
-            <button onClick={() => setActiveTab('payments')} className={`w-full text-left px-4 py-3 rounded-lg transition-colors font-medium ${activeTab === 'payments' ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-lg shadow-orange-500/30' : 'text-slate-300 hover:bg-slate-800 hover:text-white'}`}>
+            <button onClick={() => handleTabChange('payments')} className={`w-full text-left px-4 py-3 rounded-lg transition-colors font-medium ${activeTab === 'payments' ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-lg shadow-orange-500/30' : 'text-slate-300 hover:bg-slate-800 hover:text-white'}`}>
               💳 <span className="ml-2">Payments</span>
+            </button>
+          </li>
+          <li>
+            <button onClick={() => handleTabChange('teachers')} className={`w-full text-left px-4 py-3 rounded-lg transition-colors font-medium ${activeTab === 'teachers' ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-lg shadow-orange-500/30' : 'text-slate-300 hover:bg-slate-800 hover:text-white'}`}>
+              👨‍🏫 <span className="ml-2">Teachers</span>
             </button>
           </li>
         </ul>
@@ -121,8 +163,8 @@ const App: React.FC = () => {
         </div>
       </nav>
 
-      <main className="flex-1 p-4 md:p-10 overflow-y-auto max-h-screen">
-        <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+      <main className="flex-1 p-4 md:p-10 overflow-y-auto max-h-screen md:ml-0">
+        <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8 mt-16 md:mt-0">
           <div>
             <h2 className="text-3xl font-bold text-slate-900 capitalize">{activeTab.replace('-', ' ')}</h2>
             <p className="text-slate-500 font-medium italic">"Unleash the <span className="text-red-500 not-italic font-bold">MUSICIAN</span> in you"</p>
@@ -168,33 +210,21 @@ const App: React.FC = () => {
               />
             )}
 
-            {activeTab === 'teachers' && (
-              <div className="text-center py-20">
-                <h3 className="text-2xl font-bold text-slate-800 mb-4">👨‍🏫 Teacher Management</h3>
-                <p className="text-slate-500">Phase 3: Teacher management component coming soon...</p>
-              </div>
-            )}
-
-            {activeTab === 'enroll' && (
-              <EnrollmentForm 
-                students={students}
-                batches={batches}
-                instruments={instruments}
-                onRefresh={fetchData}
-              />
-            )}
-
             {activeTab === 'attendance' && (
-              <AttendanceDashboard 
-                batches={batches}
-                onRefresh={fetchData}
-              />
+              <AttendanceTab />
             )}
 
             {activeTab === 'payments' && (
               <PaymentModule 
                 students={students}
                 payments={payments}
+                onRefresh={fetchData}
+              />
+            )}
+
+            {activeTab === 'teachers' && (
+              <TeacherManagement
+                instruments={instruments}
                 onRefresh={fetchData}
               />
             )}

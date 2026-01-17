@@ -1,7 +1,7 @@
 /* Attendance Tab Styles */
 
 .attendance-container {
-  max-width: 800px;
+  max-width: 900px;
   margin: 0 auto;
   padding: 20px;
   background: #f9f9f9;
@@ -17,7 +17,10 @@
 .attendance-header h2 {
   margin: 0;
   font-size: 28px;
-  color: #2c3e50;
+  background: linear-gradient(135deg, #f97316, #f59e0b);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
   font-weight: 600;
 }
 
@@ -97,21 +100,20 @@
 .date-picker input[type="date"] {
   width: 100%;
   padding: 10px 12px;
-  border: 1px solid #bdc3c7;
+  border: 2px solid #e5e7eb;
   border-radius: 6px;
   font-size: 14px;
-  background: white;
-  cursor: pointer;
+  transition: all 0.2s;
 }
 
 .date-picker input[type="date"]:focus {
   outline: none;
-  border-color: #3498db;
-  box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
+  border-color: #f97316;
+  box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.1);
 }
 
-/* Batch Selector Section */
-.batch-selector-section {
+/* Instrument Selector */
+.instrument-selector-section {
   margin-bottom: 24px;
 }
 
@@ -123,46 +125,79 @@
   margin-bottom: 12px;
 }
 
+.instrument-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 12px;
+}
+
+.instrument-card {
+  background: white;
+  border: 2px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 16px;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-align: center;
+}
+
+.instrument-card:hover {
+  border-color: #f97316;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(249, 115, 22, 0.15);
+}
+
+.instrument-card.active {
+  border-color: #f97316;
+  background: linear-gradient(135deg, #fff7ed, #ffedd5);
+  box-shadow: 0 4px 12px rgba(249, 115, 22, 0.2);
+}
+
+.instrument-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: #2c3e50;
+}
+
+/* Batch Selector Section */
+.batch-selector-section {
+  margin-bottom: 24px;
+}
+
 .batch-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
   gap: 12px;
 }
 
 .batch-card {
   background: white;
-  border: 2px solid #ecf0f1;
+  border: 2px solid #e5e7eb;
   border-radius: 8px;
   padding: 16px;
   cursor: pointer;
   transition: all 0.2s ease;
-  text-align: center;
+  text-align: left;
   font-family: inherit;
 }
 
 .batch-card:hover {
-  border-color: #3498db;
-  box-shadow: 0 2px 8px rgba(52, 152, 219, 0.15);
+  border-color: #f97316;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(249, 115, 22, 0.15);
 }
 
 .batch-card.active {
-  background: #e3f2fd;
-  border-color: #3498db;
-  box-shadow: 0 4px 12px rgba(52, 152, 219, 0.25);
+  border-color: #f97316;
+  background: linear-gradient(135deg, #fff7ed, #ffedd5);
+  box-shadow: 0 4px 12px rgba(249, 115, 22, 0.2);
 }
 
-.batch-time {
+.batch-time-main {
   font-size: 16px;
   font-weight: 600;
   color: #2c3e50;
   margin-bottom: 8px;
-}
-
-.batch-instrument {
-  font-size: 14px;
-  color: #3498db;
-  font-weight: 500;
-  margin-bottom: 6px;
 }
 
 .batch-teacher {
@@ -182,6 +217,7 @@
   border-radius: 8px;
   padding: 20px;
   margin-top: 24px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
 }
 
 /* Bulk Actions */
@@ -196,8 +232,8 @@
   flex: 1;
   min-width: 140px;
   padding: 12px 16px;
-  border: 1px solid #3498db;
-  background: #3498db;
+  border: 2px solid #f97316;
+  background: linear-gradient(135deg, #f97316, #f59e0b);
   color: white;
   border-radius: 6px;
   font-size: 14px;
@@ -207,14 +243,20 @@
 }
 
 .btn-bulk:hover {
-  background: #2980b9;
-  border-color: #2980b9;
+  background: linear-gradient(135deg, #ea580c, #d97706);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(249, 115, 22, 0.3);
 }
 
 .btn-bulk.secondary {
   background: white;
-  color: #3498db;
-  border-color: #3498db;
+  color: #f97316;
+  border-color: #f97316;
+}
+
+.btn-bulk.secondary:hover {
+  background: #fff7ed;
+  transform: translateY(-1px);
 }
 
 .btn-bulk.secondary:hover {
@@ -246,8 +288,8 @@
 
 .attendance-item {
   display: grid;
-  grid-template-columns: 1fr 120px;
-  gap: 12px;
+  grid-template-columns: 1fr auto;
+  gap: 16px;
   align-items: center;
   padding: 12px 0;
   border-bottom: 1px solid #ecf0f1;
@@ -256,6 +298,9 @@
 
 .attendance-item:hover {
   background: #f9f9f9;
+  padding: 12px;
+  margin: 0 -12px;
+  border-radius: 6px;
 }
 
 .student-info {
@@ -275,9 +320,16 @@
   color: #95a5a6;
 }
 
+/* Status Controls */
+.status-controls {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
 /* Status Toggle Button */
 .status-toggle {
-  padding: 8px 12px;
+  padding: 8px 16px;
   border: none;
   border-radius: 6px;
   font-size: 13px;
@@ -285,26 +337,75 @@
   cursor: pointer;
   transition: all 0.2s ease;
   white-space: nowrap;
+  min-width: 100px;
 }
 
-.status-toggle.present {
+.status-toggle.status-present {
   background: #d4edda;
   color: #155724;
-  border: 1px solid #c3e6cb;
+  border: 2px solid #c3e6cb;
 }
 
-.status-toggle.present:hover {
+.status-toggle.status-present:hover {
   background: #c3e6cb;
+  transform: translateY(-1px);
 }
 
-.status-toggle.absent {
+.status-toggle.status-absent {
   background: #f8d7da;
   color: #721c24;
-  border: 1px solid #f5c6cb;
+  border: 2px solid #f5c6cb;
 }
 
-.status-toggle.absent:hover {
+.status-toggle.status-absent:hover {
   background: #f5c6cb;
+  transform: translateY(-1px);
+}
+
+.status-toggle.status-excused {
+  background: #fff3cd;
+  color: #856404;
+  border: 2px solid #ffeeba;
+}
+
+.status-toggle.status-excused:hover {
+  background: #ffeeba;
+  transform: translateY(-1px);
+}
+
+/* Status Option Buttons */
+.status-options {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  background: #f3f4f6;
+  border-radius: 6px;
+}
+
+.status-btn {
+  width: 32px;
+  height: 32px;
+  border: 2px solid transparent;
+  background: white;
+  border-radius: 4px;
+  font-size: 16px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.status-btn:hover {
+  transform: scale(1.1);
+  border-color: #f97316;
+}
+
+.status-btn.active {
+  background: linear-gradient(135deg, #f97316, #f59e0b);
+  color: white;
+  border-color: #f97316;
+  box-shadow: 0 2px 6px rgba(249, 115, 22, 0.3);
 }
 
 /* Submit Section */
@@ -319,7 +420,7 @@
 .btn-submit {
   flex: 1;
   padding: 14px 20px;
-  background: #27ae60;
+  background: linear-gradient(135deg, #f97316, #f59e0b);
   color: white;
   border: none;
   border-radius: 6px;
@@ -330,8 +431,9 @@
 }
 
 .btn-submit:hover:not(:disabled) {
-  background: #229954;
-  box-shadow: 0 4px 12px rgba(39, 174, 96, 0.2);
+  background: linear-gradient(135deg, #ea580c, #d97706);
+  box-shadow: 0 6px 16px rgba(249, 115, 22, 0.3);
+  transform: translateY(-2px);
 }
 
 .btn-submit:disabled {

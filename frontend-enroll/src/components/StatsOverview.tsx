@@ -7,7 +7,7 @@ interface StatsProps {
   enrollments: BatchAssignment[];
   attendance: AttendanceRecord[];
   payments: PaymentRecord[];
-  onNavigate?: (tab: 'stats' | 'enroll' | 'attendance' | 'payments' | 'students' | 'teachers') => void;
+  onNavigate?: (tab: 'stats' | 'students' | 'attendance' | 'payments' | 'teachers') => void;
 }
 
 const StatCard: React.FC<{
@@ -64,7 +64,7 @@ const StatsOverview: React.FC<StatsProps> = ({ students, enrollments, attendance
           value={enrollments.length.toString()} 
           icon="📚" 
           color="bg-indigo-500" 
-          onClick={() => onNavigate?.('enroll')}
+          onClick={() => onNavigate?.('students')}
         />
         <StatCard 
           title="Attendance" 

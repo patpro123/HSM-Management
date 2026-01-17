@@ -190,6 +190,31 @@ app.get('/api/batches', async (req, res) => {
   }
 })
 
+// GET /api/teachers/:id/batches - fetch batches for a specific teacher
+app.get('/api/teachers/:id/batches', async (req, res) => {
+  const { id } = req.params
+  try {
+    const result = await pool.query(`
+      SELECT 
+        b.id,
+        b.recurrence,
+        b.start_time,
+        b.end_time,
+        b.capacity,
+        i.id as instrument_id,
+        i.name as instrument_name
+      FROM batches b
+      JOIN instruments i ON b.instrument_id = i.id
+      WHERE b.teacher_id = $1 AND b.is_makeup = false
+      ORDER BY i.name, b.recurrence
+    `, [id])
+    res.json({ batches: result.rows })
+  } catch (err) {
+    console.error('Get teacher batches error:', err)
+    res.status(500).json({ error: 'Failed to fetch teacher batches' })
+  }
+})
+
 // GET /api/batches/:instrumentId - fetch batches for a specific instrument
 app.get('/api/batches/:instrumentId', async (req, res) => {
   const { instrumentId } = req.params
@@ -211,12 +236,15 @@ app.get('/api/batches/:instrumentId', async (req, res) => {
         b.is_makeup,
         i.name as instrument_name,
         t.id as teacher_id,
-        t.name as teacher_name
+        t.name as teacher_name,
+        COUNT(DISTINCT eb.enrollment_id) as enrolled_count
       FROM batches b
       JOIN instruments i ON b.instrument_id = i.id
       LEFT JOIN teachers t ON b.teacher_id = t.id
+      LEFT JOIN enrollment_batches eb ON b.id = eb.batch_id
       WHERE b.instrument_id = $1 AND b.is_makeup = false
-      ORDER BY b.recurrence
+      GROUP BY b.id, i.name, t.id, t.name
+      ORDER BY b.recurrence, b.start_time
     `, [instrumentId])
     res.json({ batches: result.rows })
   } catch (err) {
@@ -794,18 +822,16 @@ app.post('/api/teachers', async (req, res) => {
   try {
     const result = await pool.query(
       `INSERT INTO teachers (name, phone, role, payout_type, rate, payout_terms) 
-       VALUES ($1, $2, 'teacher', $3, $4, jsonb_build_object('email', $5)) 
+       VALUES ($1, $2, 'teacher', $3, $4, jsonb_build_object('email', $5::text)) 
        RETURNING *`,
-      [name, phone || null, payout_type || 'per_class', rate || 0, email || '']
+      [name, phone || null, payout_type || 'per_student_monthly', rate || 0, email || '']
     )
     res.status(201).json({ teacher: result.rows[0] })
   } catch (err) {
     console.error('Create teacher error:', err)
     res.status(500).json({ error: 'Failed to create teacher' })
   }
-})
-
-// PUT /api/teachers/:id - Update teacher
+})// PUT /api/teachers/:id - Update teacher
 app.put('/api/teachers/:id', async (req, res) => {
   const { id } = req.params
   const { name, phone, email, payout_type, rate, is_active } = req.body
