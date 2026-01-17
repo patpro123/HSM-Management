@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import { API_BASE_URL } from '../config'
 
 export default function StudentsPage() {
   const [students, setStudents] = useState([])
