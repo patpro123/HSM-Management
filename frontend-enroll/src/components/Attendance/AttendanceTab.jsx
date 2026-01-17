@@ -41,7 +41,7 @@ export default function AttendanceTab() {
     setLoadingInstruments(true)
     setError('')
     try {
-      const response = await fetch('http://localhost:3000/api/instruments')
+      const response = await fetch(`${API_BASE_URL}/api/instruments`)
       if (!response.ok) throw new Error('Failed to fetch instruments')
       const data = await response.json()
       setInstruments(data.instruments || [])
@@ -58,7 +58,7 @@ export default function AttendanceTab() {
     setLoadingBatches(true)
     setError('')
     try {
-      const response = await fetch(`http://localhost:3000/api/batches/${selectedInstrument}`)
+      const response = await fetch(`${API_BASE_URL}/api/batches/${selectedInstrument}`)
       if (!response.ok) throw new Error('Failed to fetch batches')
       const data = await response.json()
       
@@ -101,7 +101,7 @@ export default function AttendanceTab() {
     setError('')
     try {
       // Fetch students in batch
-      const studentsResponse = await fetch(`http://localhost:3000/api/batches/${batchId}/students`)
+      const studentsResponse = await fetch(`${API_BASE_URL}/api/batches/${batchId}/students`)
       if (!studentsResponse.ok) throw new Error('Failed to fetch students')
       const studentsData = await studentsResponse.json()
       const studentsList = studentsData.students || []
@@ -192,7 +192,7 @@ export default function AttendanceTab() {
     }))
 
     try {
-      const response = await fetch('http://localhost:3000/api/attendance', {
+      const response = await fetch(`${API_BASE_URL}/api/attendance`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ records: attendanceRecords })

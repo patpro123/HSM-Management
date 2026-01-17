@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { API_BASE_URL } from '../config';
 import { Student, PaymentRecord, PaymentFrequency } from '../types';
 
 interface PaymentModuleProps {
@@ -44,7 +45,7 @@ const PaymentModule: React.FC<PaymentModuleProps> = ({ students, payments, onRef
     try {
       const classCredits = calculateClassCredits(formData.payment_frequency);
       
-      const response = await fetch('/api/payments', {
+      const response = await fetch(`${API_BASE_URL}/api/payments`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

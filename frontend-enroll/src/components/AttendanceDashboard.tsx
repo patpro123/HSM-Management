@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { API_BASE_URL } from '../config';
 import { Batch, AttendanceStatus } from '../types';
 
 interface AttendanceDashboardProps {
@@ -28,7 +29,7 @@ const AttendanceDashboard: React.FC<AttendanceDashboardProps> = ({ batches, onRe
   const fetchBatchStudents = async (batchId: number) => {
     try {
       setLoading(true);
-      const response = await fetch(`/api/batches/${batchId}/students`);
+      const response = await fetch(`${API_BASE_URL}/api/batches/${batchId}/students`);
       if (response.ok) {
         const data = await response.json();
         setBatchStudents(
@@ -71,7 +72,7 @@ const AttendanceDashboard: React.FC<AttendanceDashboardProps> = ({ batches, onRe
         status: s.status
       }));
 
-      const response = await fetch('/api/attendance', {
+      const response = await fetch(`${API_BASE_URL}/api/attendance`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ records: attendanceRecords })

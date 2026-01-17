@@ -72,7 +72,7 @@ export default function TeacherManagement({ instruments, onRefresh }: TeacherMan
   async function fetchTeachers() {
     try {
       setLoading(true);
-      const response = await fetch('http://localhost:3000/api/teachers');
+      const response = await fetch(`${API_BASE_URL}/api/teachers`);
       if (!response.ok) throw new Error('Failed to fetch teachers');
       const data = await response.json();
       setTeachers(data.teachers || []);
@@ -86,7 +86,7 @@ export default function TeacherManagement({ instruments, onRefresh }: TeacherMan
 
   async function fetchBatches() {
     try {
-      const response = await fetch('http://localhost:3000/api/batches');
+      const response = await fetch(`${API_BASE_URL}/api/batches`);
       if (!response.ok) throw new Error('Failed to fetch batches');
       const data = await response.json();
       setBatches(data.batches || []);
@@ -159,7 +159,7 @@ export default function TeacherManagement({ instruments, onRefresh }: TeacherMan
 
   async function fetchTeacherBatches(teacherId: string) {
     try {
-      const response = await fetch(`http://localhost:3000/api/teachers/${teacherId}/batches`);
+      const response = await fetch(`${API_BASE_URL}/api/teachers/${teacherId}/batches`);
       if (!response.ok) throw new Error('Failed to fetch teacher batches');
       const data = await response.json();
       setTeacherBatches(prev => ({ ...prev, [teacherId]: data.batches || [] }));
@@ -186,7 +186,7 @@ export default function TeacherManagement({ instruments, onRefresh }: TeacherMan
     }
 
     try {
-      const response = await fetch('http://localhost:3000/api/teachers', {
+      const response = await fetch(`${API_BASE_URL}/api/teachers`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(teacherForm)
@@ -209,7 +209,7 @@ export default function TeacherManagement({ instruments, onRefresh }: TeacherMan
     if (!selectedTeacher) return;
 
     try {
-      const response = await fetch(`http://localhost:3000/api/teachers/${selectedTeacher.id}`, {
+      const response = await fetch(`${API_BASE_URL}/api/teachers/${selectedTeacher.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(teacherForm)
@@ -257,7 +257,7 @@ export default function TeacherManagement({ instruments, onRefresh }: TeacherMan
         capacity: batchForm.capacity
       };
 
-      const response = await fetch('http://localhost:3000/api/batches', {
+      const response = await fetch(`${API_BASE_URL}/api/batches`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(batchData)
@@ -299,7 +299,7 @@ export default function TeacherManagement({ instruments, onRefresh }: TeacherMan
         capacity: batchForm.capacity
       };
 
-      const response = await fetch(`http://localhost:3000/api/batches/${selectedBatch.id}`, {
+      const response = await fetch(`${API_BASE_URL}/api/batches/${selectedBatch.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(batchData)

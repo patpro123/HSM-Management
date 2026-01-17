@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { API_BASE_URL } from '../config';
 import { Student, Batch, Instrument, PaymentFrequency } from '../types';
 
 interface EnrollmentFormProps {
@@ -62,7 +63,7 @@ const EnrollmentForm: React.FC<EnrollmentFormProps> = ({ students, batches, inst
     }
 
     try {
-      const response = await fetch('/api/enroll', {
+      const response = await fetch(`${API_BASE_URL}/api/enroll`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(enrollmentData)

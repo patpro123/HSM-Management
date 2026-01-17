@@ -1,4 +1,5 @@
 import React, {useEffect, useState} from 'react'
+import { API_BASE_URL } from '../config'
 
 export default function AdminPage(){
   const [enrollments, setEnrollments] = useState(null)
@@ -7,7 +8,7 @@ export default function AdminPage(){
 
   useEffect(()=>{
     setLoading(true)
-    fetch('http://localhost:3000/api/enrollments')
+    fetch(`${API_BASE_URL}/api/enrollments`)
       .then(r=>r.json())
       .then(b=>{ setEnrollments(b.enrollments || []); setLoading(false) })
       .catch(e=>{ setError('Failed to load enrollments'); setLoading(false) })

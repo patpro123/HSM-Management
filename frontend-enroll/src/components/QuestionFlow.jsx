@@ -1,5 +1,4 @@
-import React, {useState, useEffect} from 'react'
-import StreamsConfigurator from './StreamsConfigurator'
+import React, {useState, useEffect} from 'react'import { API_BASE_URL } from '../config'import StreamsConfigurator from './StreamsConfigurator'
 
 const QUESTIONS = [
   { key: 'name', label: 'Name', type: 'name' },
@@ -66,7 +65,7 @@ export default function QuestionFlow(){
   useEffect(() => {
     async function fetchInstruments() {
       try {
-        const response = await fetch('http://localhost:3000/api/instruments')
+        const response = await fetch(`${API_BASE_URL}/api/instruments`)
         const data = await response.json()
         setInstruments(data.instruments || [])
         setLoadingInstruments(false)
@@ -112,7 +111,7 @@ export default function QuestionFlow(){
   async function fetchBatchesForInstrument(instrumentId) {
     setLoadingBatches(prev => ({ ...prev, [instrumentId]: true }))
     try {
-      const response = await fetch(`http://localhost:3000/api/batches/${instrumentId}`)
+      const response = await fetch(`${API_BASE_URL}/api/batches/${instrumentId}`)
       const data = await response.json()
       setBatchesByInstrument(prev => ({
         ...prev,
@@ -215,7 +214,7 @@ export default function QuestionFlow(){
     const payload = { answers: { ...answers, streams: streamsArray } }
 
     try{
-      const res = await fetch('http://localhost:3000/api/enroll', {
+      const res = await fetch(`${API_BASE_URL}/api/enroll`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)

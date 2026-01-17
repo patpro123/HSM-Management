@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Student, Batch, Instrument, PaymentFrequency } from '../types';
+import { API_BASE_URL } from '../config';
 
 interface StudentManagementProps {
   students: Student[];
@@ -134,7 +135,7 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students, batches
         
         // If batches are selected and we have a student ID, enroll the student
         if (selectedBatches.length > 0 && studentId) {
-          const enrollResponse = await fetch(`/api/students/${studentId}/enroll`, {
+          const enrollResponse = await fetch(`${API_BASE_URL}/api/students/${studentId}/enroll`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -164,7 +165,7 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students, batches
     }
 
     try {
-      const response = await fetch(`http://localhost:3000/api/students/${id}`, {
+      const response = await fetch(`${API_BASE_URL}/api/students/${id}`, {
         method: 'DELETE'
       });
 

@@ -23,7 +23,7 @@ export default function StudentsPage() {
   const fetchStudents = async () => {
     try {
       setLoading(true)
-      const res = await fetch('/api/enrollments')
+      const res = await fetch(`${API_BASE_URL}/api/enrollments`)
       if (!res.ok) {
         const text = await res.text()
         throw new Error(`Failed to fetch: ${res.status}`)
@@ -53,7 +53,7 @@ export default function StudentsPage() {
     if (!imagePreview || !selectedStudent) return
     try {
       setUploadingImage(true)
-      const res = await fetch(`/api/students/${studentId}/image`, {
+      const res = await fetch(`${API_BASE_URL}/api/students/${studentId}/image`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ image: imagePreview })
