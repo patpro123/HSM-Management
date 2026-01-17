@@ -8,7 +8,21 @@ const https = require('https')
 const pool = require('./db')
 
 const app = express()
-app.use(cors())
+
+// CORS configuration - allow frontend from Vercel and localhost
+const corsOptions = {
+  origin: [
+    'https://hsm-management.vercel.app',
+    'https://hsm-management-git-main-parthoprotim-mukherjees-projects.vercel.app',
+    /\.vercel\.app$/, // Allow all Vercel preview deployments
+    'http://localhost:5173',
+    'http://localhost:3000'
+  ],
+  credentials: true,
+  optionsSuccessStatus: 200
+}
+
+app.use(cors(corsOptions))
 app.use(express.json())
 app.use(morgan('dev'))
 
