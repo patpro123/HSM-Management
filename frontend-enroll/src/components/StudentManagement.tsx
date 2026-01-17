@@ -158,13 +158,13 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students, batches
     }
   };
 
-  const handleDeleteStudent = async (id: number) => {
+  const handleDeleteStudent = async (id: number | string) => {
     if (!confirm('Are you sure you want to delete this student? This will also remove their enrollments.')) {
       return;
     }
 
     try {
-      const response = await fetch(`/api/students/${id}`, {
+      const response = await fetch(`http://localhost:3000/api/students/${id}`, {
         method: 'DELETE'
       });
 

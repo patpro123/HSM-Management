@@ -1,75 +1,156 @@
 # Hyderabad School of Music — Management System 🎵
 
-Complete school management software for music education with enrollment, batch management, AI-assisted attendance, and payment tracking.
+Complete school management software for music education with enrollment, batch management, attendance tracking, payment processing, and teacher payouts.
 
 ## 📋 Quick Links
 
 - [Requirements](requirements.md) — Full MVP requirements and business rules
 - [ER Diagram](ER_Diagram.md) — Database schema visualization
-- [API Documentation](backend-enroll/API.md) — Backend API reference
+- [API Documentation](backend-enroll/API.md) — Comprehensive backend API reference
 - [Implementation Summary](IMPLEMENTATION_SUMMARY.md) — Latest changes and testing
 - [Checklist](CHECKLIST.md) — Development status and next steps
+- [Database Setup](db/README.md) — PostgreSQL setup and migrations
 
 ## 🎯 Features
 
-### Phase 1 (MVP) — ✅ Completed
-- ✅ **Student Enrollment** with multiple instruments
-- ✅ **Batch Management** (instrument + teacher + schedule)
-- ✅ **Payment Processing** (Monthly/Quarterly packages)
-- ✅ **Dynamic Instruments API** (fetch from database)
-- ✅ **Dynamic Batches API** (with teacher details)
-- ✅ **One Enrollment Per Student** (flexible batch assignments)
+### Core Modules — ✅ Fully Implemented
+
+#### 👨‍🎓 Student Management
+- ✅ **Student Registration** with comprehensive profile management
+- ✅ **Multi-instrument Enrollment** (one enrollment per student)
+- ✅ **Dynamic Batch Assignment** (multiple batches per student)
+- ✅ **Student Profile Images** (upload and display)
+- ✅ **Search & Filter** (by name, email, instrument, batch)
+- ✅ **Edit & Delete Operations** with validation
+- ✅ **Enrollment History** tracking per student
+
+#### 🎹 Batch Management
+- ✅ **Batch Creation & Configuration** (instrument + teacher + schedule)
+- ✅ **Capacity Management** (max students per batch)
+- ✅ **Dynamic Batch Listing** (with teacher and instrument details)
+- ✅ **Batch-specific Student Lists**
+- ✅ **Schedule Management** (recurrence patterns, time slots)
+- ✅ **Makeup Batch Support**
+
+#### 📊 Attendance Tracking
+- ✅ **Daily Attendance Marking** (batch-centric workflow)
+- ✅ **Bulk Actions** (Mark All Present/Absent)
+- ✅ **Historical Attendance Records**
+- ✅ **Auto-deduction of Classes** on attendance marking
+- ✅ **Date Picker** for backdated attendance
+- ✅ **Mobile-responsive Design**
+- ✅ **Role-based Access** (teachers vs admins)
+
+#### 💰 Payment Processing
+- ✅ **Payment Recording** (manual and package-based)
+- ✅ **Payment Frequency** (Monthly/Quarterly packages)
+- ✅ **Auto-calculation of Classes** based on package type
+- ✅ **Payment History** per student
+- ✅ **Class Balance Tracking**
+- ✅ **Transaction Management**
+
+#### 👨‍🏫 Teacher Management
+- ✅ **Teacher Profiles** (name, contact, bio, expertise)
+- ✅ **Batch Assignment** (view all batches per teacher)
+- ✅ **Payout Calculations** (per-session basis)
+- ✅ **Monthly Payout Reports**
+- ✅ **Payment Status Tracking** (pending/paid)
+- ✅ **Attendance-based Earnings**
+
+#### 🎼 Instrument Management
+- ✅ **Dynamic Instrument Library** (Keyboard, Guitar, Piano, Drums, Tabla, Violin, Vocals)
+- ✅ **Instrument Configuration** (max batch size, online support)
+- ✅ **Instrument-specific Filtering**
+
+### Additional Features
+- ✅ **Dashboard & Statistics** (enrollment counts, batch capacity, revenue)
+- ✅ **Search & Filter** across all modules
+- ✅ **Responsive UI** (mobile-first design)
+- ✅ **PostgreSQL Database** with migrations
+- ✅ **RESTful API** (comprehensive endpoint coverage)
+- ✅ **Error Handling & Validation** throughout
 
 ### Phase 2 (Planned)
-- AI-assisted Attendance via WhatsApp
-- Teacher Payouts Automation
-- Parent Portal
-- Recurring Invoices
-- Holiday Management
+- 🔄 AI-assisted Attendance via WhatsApp (LLM integration ready)
+- 🔄 Automated Recurring Invoices
+- 🔄 Parent Portal Dashboard
+- 🔄 Holiday Management
+- 🔄 SMS/Email Notifications
 
 ### Phase 3 (Future)
-- Automated Student Feedback on Recordings
-- Churn Prediction Analytics
-- Advanced Scheduling & Marketplace
+- 📅 Automated Student Feedback on Recordings
+- 📅 Churn Prediction Analytics
+- 📅 Advanced Scheduling & Marketplace
+- 📅 Mobile App (iOS/Android)
 
 ## 🏗️ Architecture
 
 ```
 HSM-Management/
-├── backend-enroll/          # Node.js + Express API
-│   ├── index.js             # Main server (5 endpoints)
-│   ├── db.js                # PostgreSQL connection pool
-│   ├── API.md               # API documentation
-│   └── test-api.js          # Automated tests
+├── backend-enroll/                    # Node.js + Express API
+│   ├── index.js                       # Main server (35+ endpoints)
+│   ├── db.js                          # PostgreSQL connection pool
+│   ├── API.md                         # Comprehensive API documentation
+│   └── test-api.js                    # Automated API tests
 │
-├── frontend-enroll/         # React enrollment UI
+├── frontend-enroll/                   # React + TypeScript UI
 │   ├── src/
 │   │   ├── components/
-│   │   └── pages/
-│   └── index.html
+│   │   │   ├── StudentManagement.tsx  # Student CRUD & filtering
+│   │   │   ├── TeacherManagement.tsx  # Teacher profiles & payouts
+│   │   │   ├── EnrollmentForm.tsx     # Multi-step enrollment wizard
+│   │   │   ├── PaymentModule.tsx      # Payment recording & history
+│   │   │   ├── AttendanceDashboard.tsx# Attendance overview
+│   │   │   ├── StatsOverview.tsx      # Dashboard statistics
+│   │   │   └── Attendance/
+│   │   │       ├── AttendanceTab.jsx  # Daily attendance marking
+│   │   │       ├── BatchSelector.jsx  # Batch selection UI
+│   │   │       ├── AttendanceList.jsx # Student status toggles
+│   │   │       └── HistoricalAttendance.jsx  # Past records
+│   │   ├── pages/
+│   │   │   ├── AdminPage.jsx          # Admin dashboard
+│   │   │   ├── StudentsPage.jsx       # Student management
+│   │   │   └── EnrollPage.jsx         # Enrollment flow
+│   │   ├── types.ts                   # TypeScript type definitions
+│   │   └── mockData.ts                # Development data
+│   └── vite.config.js                 # Vite build configuration
 │
 ├── db/
-│   ├── schema.sql           # PostgreSQL DDL
-│   ├── seed.sql             # Sample data
-│   ├── migrations/          # Schema migrations
-│   └── README.md            # Local DB setup guide
+│   ├── schema.sql                     # Complete PostgreSQL DDL
+│   ├── seed.sql                       # Sample data (8 instruments, 5 teachers)
+│   ├── migrations/                    # Schema evolution
+│   │   ├── 001_update_enrollment_schema.sql
+│   │   ├── 002_add_teacher_payout_columns.sql
+│   │   └── 003_add_enrollment_batches_columns.sql
+│   └── README.md                      # Database setup guide
 │
 ├── scripts/
-│   ├── start-db.sh          # Start PostgreSQL + apply schema
-│   └── verify-db.sh         # Verify DB tables and data
+│   ├── start-db.sh                    # Start PostgreSQL + apply schema
+│   └── verify-db.sh                   # Verify DB tables and data
 │
-└── docker-compose.yml       # PostgreSQL + pgAdmin
+├── docker-compose.yml                 # PostgreSQL + pgAdmin containers
+└── enrollment-agent-frontend/         # AI-assisted enrollment (experimental)
 ```
+
+### Technology Stack
+- **Backend:** Node.js 18+, Express.js, PostgreSQL 15
+- **Frontend:** React 18, TypeScript, Vite
+- **Database:** PostgreSQL with pgcrypto extension
+- **DevOps:** Docker Compose, Shell scripts
+- **Future:** Ollama LLM integration for WhatsApp attendance
 
 ## 🚀 Quick Start
 
 ### 1. Start the Database
 ```bash
-# Using Docker Compose
+# Using Docker Compose (recommended)
 docker compose up -d
 
 # Or using the script
 ./scripts/start-db.sh
+
+# Verify database setup
+./scripts/verify-db.sh
 ```
 
 **Containers:**
@@ -83,9 +164,18 @@ npm install
 node index.js
 ```
 
-API runs on `http://localhost:3000`
+API runs on `http://localhost:3000` with 35+ RESTful endpoints
 
-### 3. Test the API
+### 3. Start the Frontend Application
+```bash
+cd frontend-enroll
+npm install
+npm run dev
+```
+
+Frontend runs on `http://localhost:5173` (Vite dev server)
+
+### 4. Test the API (Optional)
 ```bash
 cd backend-enroll
 node test-api.js
@@ -95,9 +185,16 @@ Expected output:
 ```
 ✅ All endpoints working!
 1. GET /api/instruments - Found 8 instruments
-2. GET /api/batches - Found 4 batches
-3. GET /api/enrollments - Found 2 enrollments
+2. GET /api/batches - Found 4+ batches
+3. GET /api/students - Student management operational
+4. GET /api/teachers - Teacher management operational
+5. POST /api/attendance - Attendance tracking ready
 ```
+
+### 5. Access the Application
+- **Frontend Dashboard:** http://localhost:5173
+- **API Endpoints:** http://localhost:3000/api/*
+- **Database Admin:** http://localhost:8080
 
 ### 4. Start the Frontend (optional)
 ```bash
