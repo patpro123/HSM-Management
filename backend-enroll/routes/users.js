@@ -94,7 +94,7 @@ router.get('/:id', authenticateJWT, authorizeRole(['admin']), async (req, res) =
 
 // Update user (activate/deactivate)
 router.put('/:id', authenticateJWT, authorizeRole(['admin']), async (req, res) => {
-  const client = await db.getClient();
+  const client = await db.connect();
   
   try {
     const { id } = req.params;
@@ -129,7 +129,7 @@ router.put('/:id', authenticateJWT, authorizeRole(['admin']), async (req, res) =
 
 // Assign role to user
 router.post('/:id/roles', authenticateJWT, authorizeRole(['admin']), async (req, res) => {
-  const client = await db.getClient();
+  const client = await db.connect();
   
   try {
     const { id } = req.params;
@@ -182,7 +182,7 @@ router.post('/:id/roles', authenticateJWT, authorizeRole(['admin']), async (req,
 
 // Revoke role from user
 router.delete('/:id/roles/:role', authenticateJWT, authorizeRole(['admin']), async (req, res) => {
-  const client = await db.getClient();
+  const client = await db.connect();
   
   try {
     const { id, role } = req.params;
@@ -216,7 +216,7 @@ router.delete('/:id/roles/:role', authenticateJWT, authorizeRole(['admin']), asy
 
 // Link user to teacher or student
 router.post('/:id/link', authenticateJWT, authorizeRole(['admin']), async (req, res) => {
-  const client = await db.getClient();
+  const client = await db.connect();
   
   try {
     const { id } = req.params;
@@ -333,7 +333,7 @@ router.post('/:id/link', authenticateJWT, authorizeRole(['admin']), async (req, 
 
 // Unlink user from teacher or student
 router.delete('/:id/link/:entityType/:entityId', authenticateJWT, authorizeRole(['admin']), async (req, res) => {
-  const client = await db.getClient();
+  const client = await db.connect();
   
   try {
     const { id, entityType, entityId } = req.params;

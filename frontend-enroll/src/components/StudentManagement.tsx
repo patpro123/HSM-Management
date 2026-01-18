@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Student, Batch, Instrument, PaymentFrequency } from '../types';
 import { apiPost, apiDelete } from '../api';
-import { authenticatedFetch } from '../auth';
+import { authenticatedFetch, getCurrentUser } from '../auth';
 import { API_BASE_URL } from '../config';
 
 interface StudentManagementProps {
@@ -19,7 +19,7 @@ interface EnrollmentSelection {
 
 const StudentManagement: React.FC<StudentManagementProps> = ({ students, batches, instruments, onRefresh }) => {
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterInstruments, setFilterInstruments] = useState<number[]>([]);
+  const [filterInstruments, setFilterInstruments] = useState<(string | number)[]>([]);
   const [filterBatch, setFilterBatch] = useState<string>('all');
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingStudent, setEditingStudent] = useState<Student | null>(null);
@@ -36,28 +36,41 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students, batches
   });
   const [selectedBatches, setSelectedBatches] = useState<EnrollmentSelection[]>([]);
 
+  // Get logged-in user from existing auth system
+  const user = getCurrentUser();
+  const userEmail = user?.email?.toLowerCase();
+  const isAdmin = user && user.roles.includes('admin');
+
+  // Debug logs
+  console.log('StudentManagement Debug:');
+  console.log('- Logged in user:', user);
+  console.log('- User email (lowercase):', userEmail);
+  console.log('- Is admin:', isAdmin);
+  console.log('- User roles:', user?.roles);
+  console.log('- Total students received:', students.length);
+
+  // Filter students based on role:
+  // - Admin users: show all students
+  // - Student/Parent users: show only the student whose email matches the logged-in user's email
   const filteredStudents = students.filter(student => {
-    const fullName = student.first_name && student.last_name 
-      ? `${student.first_name} ${student.last_name}` 
-      : (student as any).name || '';
-    const metadata = (student as any).metadata || {};
-    const email = student.email || metadata.email || '';
-    const matchesSearch = fullName.toLowerCase().includes(searchTerm.toLowerCase()) 
-      || email.toLowerCase().includes(searchTerm.toLowerCase());
-    
-    // Filter by instrument based on student enrollments
-    let matchesInstrument = true;
-    if (filterInstruments.length > 0) {
-      const studentEnrollments = (student as any).enrollments || [];
-      const studentBatchIds = studentEnrollments.map((e: any) => String(e.batch_id || e.enrollment_id));
-      const studentInstruments = batches
-        .filter(b => studentBatchIds.includes(String(b.id)))
-        .map(b => String(b.instrument_id));
-      matchesInstrument = filterInstruments.some(instId => studentInstruments.includes(String(instId)));
+    if (isAdmin) {
+      return true; // Admin sees all students
     }
     
-    return matchesSearch && matchesInstrument;
+    // For non-admin users, filter by matching email
+    const metadata = (student as any).metadata || {};
+    const email = (student.email || metadata.email || '').toLowerCase();
+    
+    console.log('- Checking student:', (student as any).name || 'Unknown');
+    console.log('  - Student email:', student.email);
+    console.log('  - Student metadata email:', metadata.email);
+    console.log('  - Final email (lowercase):', email);
+    console.log('  - Email match:', userEmail && email === userEmail);
+    
+    return userEmail && email === userEmail;
   });
+
+  console.log('- Filtered students count:', filteredStudents.length);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -107,8 +120,8 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students, batches
     e.preventDefault();
     try {
       const url = editingStudent 
-        ? `${API_BASE_URL}/api/students/${editingStudent.id}`
-        : `${API_BASE_URL}/api/students`;
+        ? `/api/students/${editingStudent.id}`
+        : `/api/students`;
       
       const method = editingStudent ? 'PUT' : 'POST';
       
@@ -167,7 +180,7 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students, batches
     }
   };
 
-  const handleInstrumentToggle = (instrumentId: number) => {
+  const handleInstrumentToggle = (instrumentId: string | number) => {
     setFilterInstruments(prev => 
       prev.includes(instrumentId) 
         ? prev.filter(id => id !== instrumentId)

@@ -1,5 +1,8 @@
 
 import React, { useState, useEffect } from 'react';
+import StudentSummary from './components/StudentSummary';
+import StudentDetails from './components/StudentDetails';
+import StudentProfile from './components/StudentProfile';
 import { 
   Student, 
   Batch, 
@@ -21,7 +24,8 @@ import PaymentModule from './components/PaymentModule';
 import hsmLogo from './images/hsmLogo.jpg';
 
 const App: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'stats' | 'students' | 'attendance' | 'payments' | 'teachers' | 'users'>('stats');
+  // Add new profile page states
+  const [activeTab, setActiveTab] = useState<'stats' | 'students' | 'attendance' | 'payments' | 'teachers' | 'users' | 'student-profile'>('stats');
   const [students, setStudents] = useState<Student[]>([]);
   const [batches, setBatches] = useState<Batch[]>([]);
   const [instruments, setInstruments] = useState<Instrument[]>([]);
@@ -42,25 +46,62 @@ const App: React.FC = () => {
     setAuthChecked(true);
   }, []);
 
+  // On login/profile change, set default tab by role
+  useEffect(() => {
+    if (user) {
+      console.log('User roles:', user.roles);
+      if (user.roles.includes('admin')) {
+          console.log('Setting tab to stats for admin');
+        setActiveTab('stats');
+      } else {
+        console.log('Setting tab to student-profile for student/parent');
+        setActiveTab('student-profile');
+      }
+    }
+  }, [user]);
+
   const fetchData = async () => {
     try {
       setLoading(true);
       setError(null);
 
-      // Fetch all data in parallel using authenticated API calls
-      const [studentsData, batchesData, instrumentsData, paymentsData, attendanceData] = await Promise.all([
-        apiGet('/api/students'),
-        apiGet('/api/batches'),
-        apiGet('/api/instruments'),
-        apiGet('/api/payments'),
-        apiGet('/api/attendance')
-      ]);
+      const currentUser = getCurrentUser();
+      const isAdminOrTeacher = currentUser && (currentUser.roles.includes('admin') || currentUser.roles.includes('teacher'));
 
-      setStudents(studentsData.students || []);
-      setBatches(batchesData.batches || []);
-      setInstruments(instrumentsData.instruments || []);
-      setPayments(paymentsData.payments || []);
-      setAttendance(attendanceData.attendance || []);
+      // For admin/teacher: fetch all data
+      // For student/parent: fetch only essential data they have access to
+      if (isAdminOrTeacher) {
+        // Fetch all data in parallel using authenticated API calls
+        const [studentsData, batchesData, instrumentsData, paymentsData, attendanceData] = await Promise.all([
+          apiGet('/api/students'),
+          apiGet('/api/batches'),
+          apiGet('/api/instruments'),
+          apiGet('/api/payments'),
+          apiGet('/api/attendance')
+        ]);
+
+        setStudents(studentsData.students || []);
+        setBatches(batchesData.batches || []);
+        setInstruments(instrumentsData.instruments || []);
+        setPayments(paymentsData.payments || []);
+        setAttendance(attendanceData.attendance || []);
+      } else {
+        // For student/parent users, fetch only what they need and have access to
+        try {
+          // Try to fetch students (they might have limited access)
+          const studentsData = await apiGet('/api/students');
+          setStudents(studentsData.students || []);
+        } catch (error) {
+          console.warn('Could not fetch students data:', error);
+          setStudents([]);
+        }
+
+        // Set empty arrays for data they don't have access to
+        setBatches([]);
+        setInstruments([]);
+        setPayments([]);
+        setAttendance([]);
+      }
     } catch (err) {
       console.error('Error fetching data:', err);
       if (err instanceof Error && err.message.includes('401')) {
@@ -138,156 +179,116 @@ const App: React.FC = () => {
   }
 
   // Main app UI
+  const isAdmin = user && user.roles.includes('admin');
+  const isStudentOrParent = user && !isAdmin && (user.roles.includes('student') || user.roles.includes('parent'));
+
+  // Menu items by role
+  const menuItems = isAdmin
+    ? [
+        { key: 'stats', label: 'Dashboard' },
+        { key: 'students', label: 'Students' },
+        { key: 'attendance', label: 'Attendance' },
+        { key: 'payments', label: 'Payments' },
+        { key: 'teachers', label: 'Teachers' },
+        { key: 'users', label: 'Users' },
+      ]
+    : [
+        { key: 'student-profile', label: 'My Profile' },
+      ];
+
   return (
     <div className="min-h-screen flex flex-col md:flex-row bg-slate-50">
-      {/* Mobile Menu Button */}
-      <button
-        onClick={() => setMobileMenuOpen(true)}
-        className="md:hidden fixed top-4 left-4 z-40 p-3 bg-gradient-to-r from-orange-500 to-amber-500 text-white rounded-lg shadow-lg hover:shadow-xl transition"
-        aria-label="Open menu"
-      >
-        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-        </svg>
-      </button>
-
-      {/* Backdrop Overlay for Mobile */}
-      {mobileMenuOpen && (
-        <div
-          className="md:hidden fixed inset-0 bg-black bg-opacity-50 z-40 transition-opacity"
-          onClick={() => setMobileMenuOpen(false)}
-        />
-      )}
-
-      {/* Sidebar Navigation */}
-      <nav className={`
-        fixed md:relative
-        w-64 h-full
-        bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900 
-        text-white p-6 
-        flex-shrink-0 flex flex-col
-        transition-transform duration-300 ease-in-out
-        z-50
-        ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
-      `}>
-        <div className="flex flex-col items-center gap-4 mb-8 text-center">
-          {/* Close button for mobile */}
-          <button
+      {/* Sidebar Navigation (always visible, but menu items filtered) */}
+      <>
+        {/* Mobile Menu Button */}
+        <button
+          onClick={() => setMobileMenuOpen(true)}
+          className="md:hidden fixed top-4 left-4 z-40 p-3 bg-gradient-to-r from-orange-500 to-amber-500 text-white rounded-lg shadow-lg hover:shadow-xl transition"
+          aria-label="Open menu"
+        >
+          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+          </svg>
+        </button>
+        {/* Backdrop Overlay for Mobile */}
+        {mobileMenuOpen && (
+          <div
+            className="md:hidden fixed inset-0 bg-black bg-opacity-50 z-40 transition-opacity"
             onClick={() => setMobileMenuOpen(false)}
-            className="md:hidden self-end p-2 text-slate-400 hover:text-white transition"
-            aria-label="Close menu"
-          >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-          
-          <div className="w-full bg-white rounded-xl overflow-hidden p-3 flex items-center justify-center shadow-lg">
-            <img 
-              src={hsmLogo} 
-              alt="HSM Logo" 
-              className="w-full h-auto object-contain"
-            />
-          </div>
-          <h1 className="text-sm font-black tracking-widest text-orange-400 uppercase mt-2">HSM Admin Portal</h1>
-        </div>
-        <ul className="space-y-2 flex-1">
-          {/* Overview tab: visible to all authenticated users */}
-          <li>
-            <button onClick={() => handleTabChange('stats')} className={`w-full text-left px-4 py-3 rounded-lg transition-colors font-medium ${activeTab === 'stats' ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-lg shadow-orange-500/30' : 'text-slate-300 hover:bg-slate-800 hover:text-white'}`}>
-              📊 <span className="ml-2">Overview</span>
-            </button>
-          </li>
-          {/* Students tab: visible to admin, teacher, parent */}
-          {user && (user.roles.includes('admin') || user.roles.includes('teacher') || user.roles.includes('parent')) && (
-            <li>
-              <button onClick={() => handleTabChange('students')} className={`w-full text-left px-4 py-3 rounded-lg transition-colors font-medium ${activeTab === 'students' ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-lg shadow-orange-500/30' : 'text-slate-300 hover:bg-slate-800 hover:text-white'}`}>
-                👥 <span className="ml-2">Students</span>
-              </button>
-            </li>
-          )}
-          {/* Attendance tab: visible to admin, teacher */}
-          {user && (user.roles.includes('admin') || user.roles.includes('teacher')) && (
-            <li>
-              <button onClick={() => handleTabChange('attendance')} className={`w-full text-left px-4 py-3 rounded-lg transition-colors font-medium ${activeTab === 'attendance' ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-lg shadow-orange-500/30' : 'text-slate-300 hover:bg-slate-800 hover:text-white'}`}>
-                📅 <span className="ml-2">Attendance</span>
-              </button>
-            </li>
-          )}
-          {/* Payments tab: visible to admin, parent */}
-          {user && (user.roles.includes('admin') || user.roles.includes('parent')) && (
-            <li>
-              <button onClick={() => handleTabChange('payments')} className={`w-full text-left px-4 py-3 rounded-lg transition-colors font-medium ${activeTab === 'payments' ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-lg shadow-orange-500/30' : 'text-slate-300 hover:bg-slate-800 hover:text-white'}`}>
-                💳 <span className="ml-2">Payments</span>
-              </button>
-            </li>
-          )}
-          {/* Teachers tab: visible to admin only */}
-          {user && user.roles.includes('admin') && (
-            <li>
-              <button onClick={() => handleTabChange('teachers')} className={`w-full text-left px-4 py-3 rounded-lg transition-colors font-medium ${activeTab === 'teachers' ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-lg shadow-orange-500/30' : 'text-slate-300 hover:bg-slate-800 hover:text-white'}`}>
-                👨‍🏫 <span className="ml-2">Teachers</span>
-              </button>
-            </li>
-          )}
-          {/* Users tab: visible to admin only */}
-          {user && user.roles.includes('admin') && (
-            <li>
-              <button onClick={() => handleTabChange('users')} className={`w-full text-left px-4 py-3 rounded-lg transition-colors font-medium ${activeTab === 'users' ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-lg shadow-orange-500/30' : 'text-slate-300 hover:bg-slate-800 hover:text-white'}`}>
-                🔐 <span className="ml-2">Users</span>
-              </button>
-            </li>
-          )}
-        </ul>
-        <div className="mt-auto pt-6 border-t border-slate-800">
-          {user && (
-            <div className="px-4 py-3 mb-3 text-xs text-slate-400">
-              <div className="font-semibold mb-1">{user.name || user.email}</div>
-              <div className="text-slate-500">{user.roles.join(', ')}</div>
-            </div>
-          )}
-          {isAuthenticated() && (
+          />
+        )}
+        {/* Sidebar Navigation */}
+        <nav className={`
+          fixed md:relative
+          w-64 h-full
+          bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900 
+          text-white p-6 
+          flex-shrink-0 flex flex-col
+          transition-transform duration-300 ease-in-out
+          z-50
+          ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
+        `}>
+          <div className="flex flex-col items-center gap-4 mb-8 text-center">
+            {/* Close button for mobile */}
             <button
-              onClick={handleLogout}
-              className="w-full px-4 py-3 rounded-lg transition-colors font-medium text-slate-300 hover:bg-red-900 hover:text-white flex items-center gap-2"
+              onClick={() => setMobileMenuOpen(false)}
+              className="md:hidden self-end p-2 text-slate-400 hover:text-white transition"
+              aria-label="Close menu"
             >
-              <span>🚪</span>
-              <span>Logout</span>
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
             </button>
-          )}
-          <div className="mt-4 text-[10px] text-slate-500 font-bold uppercase tracking-widest text-center">
-            Hyderabad School of Music
+            <div className="w-full bg-white rounded-xl overflow-hidden p-3 flex items-center justify-center shadow-lg">
+              <img 
+                src={hsmLogo} 
+                alt="HSM Logo" 
+                className="w-full h-auto object-contain"
+              />
+            </div>
+            <h1 className="text-sm font-black tracking-widest text-orange-400 uppercase mt-2">HSM Admin Portal</h1>
           </div>
-        </div>
-      </nav>
+          <ul className="space-y-2 flex-1">
+            {menuItems.map(item => (
+              <li key={item.key}>
+                <button
+                  className={`w-full text-left px-4 py-3 rounded-lg font-semibold transition-colors ${activeTab === item.key ? 'bg-orange-600 text-white' : 'hover:bg-slate-800 text-slate-200'}`}
+                  onClick={() => {
+                    setActiveTab(item.key as typeof activeTab);
+                    setMobileMenuOpen(false);
+                  }}
+                >
+                  {item.label}
+                </button>
+              </li>
+            ))}
+          </ul>
+          <div className="mt-auto pt-6 border-t border-slate-800">
+            {user && (
+              <div className="px-4 py-3 mb-3 text-xs text-slate-400">
+                <div className="font-semibold mb-1">{user.name || user.email}</div>
+                <div className="text-slate-500">{user.roles.join(', ')}</div>
+              </div>
+            )}
+            {isAuthenticated() && (
+              <button
+                onClick={handleLogout}
+                className="w-full px-4 py-3 rounded-lg transition-colors font-medium text-slate-300 hover:bg-red-900 hover:text-white flex items-center gap-2"
+              >
+                <span>🚪</span>
+                <span>Logout</span>
+              </button>
+            )}
+            <div className="mt-4 text-[10px] text-slate-500 font-bold uppercase tracking-widest text-center">
+              Hyderabad School of Music
+            </div>
+          </div>
+        </nav>
+      </>
 
       <main className="flex-1 p-4 md:p-10 overflow-y-auto max-h-screen md:ml-0">
-        <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8 mt-16 md:mt-0">
-          <div>
-            <h2 className="text-3xl font-bold text-slate-900 capitalize">{activeTab.replace('-', ' ')}</h2>
-            <p className="text-slate-500 font-medium italic">"Unleash the <span className="text-red-500 not-italic font-bold">MUSICIAN</span> in you"</p>
-          </div>
-        </header>
-
-        {loading ? (
-          <div className="flex items-center justify-center py-20">
-            <div className="text-center">
-              <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
-              <p className="mt-4 text-slate-600">Loading...</p>
-            </div>
-          </div>
-        ) : error ? (
-          <div className="bg-red-50 border border-red-200 rounded-xl p-6 text-center">
-            <p className="text-red-800 font-semibold mb-2">⚠️ Error</p>
-            <p className="text-red-600">{error}</p>
-            <button 
-              onClick={() => window.location.reload()} 
-              className="mt-4 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
-            >
-              Retry
-            </button>
-          </div>
-        ) : (
+        {/* Main content by tab */}
+        {isAdmin ? (
           <div className="bg-white rounded-xl p-8 shadow-sm border border-slate-100">
             {activeTab === 'stats' && (
               <StatsOverview 
@@ -298,7 +299,6 @@ const App: React.FC = () => {
                 onNavigate={setActiveTab}
               />
             )}
-          
             {activeTab === 'students' && (
               <StudentManagement 
                 students={students}
@@ -307,11 +307,9 @@ const App: React.FC = () => {
                 onRefresh={fetchData}
               />
             )}
-
             {activeTab === 'attendance' && (
               <AttendanceTab />
             )}
-
             {activeTab === 'payments' && (
               <PaymentModule 
                 students={students}
@@ -319,16 +317,20 @@ const App: React.FC = () => {
                 onRefresh={fetchData}
               />
             )}
-
             {activeTab === 'teachers' && (
               <TeacherManagement
                 instruments={instruments}
                 onRefresh={fetchData}
               />
             )}
-
             {activeTab === 'users' && (
               <UserManagement />
+            )}
+          </div>
+        ) : (
+          <div className="bg-white rounded-xl p-8 shadow-sm border border-slate-100">
+            {activeTab === 'student-profile' && (
+              <StudentProfile />
             )}
           </div>
         )}

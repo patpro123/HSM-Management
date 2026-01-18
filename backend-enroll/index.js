@@ -739,6 +739,197 @@ app.get('/api/students/:id', authenticateJWT, authorizeRole(['admin', 'teacher',
   }
 })
 
+// GET /api/student-profile/:email - Comprehensive student profile for student/parent access
+app.get('/api/student-profile/:email', authenticateJWT, authorizeRole(['student', 'parent']), async (req, res) => {
+  const { email } = req.params
+  try {
+    // Find student by email (email is stored in metadata JSONB column)
+    const studentRes = await pool.query(`
+      SELECT id, name, phone, dob, guardian_contact, metadata, created_at
+      FROM students 
+      WHERE (metadata->>'email') = $1
+    `, [email])
+    
+    if (studentRes.rows.length === 0) {
+      return res.status(404).json({ error: 'Student profile not found' })
+    }
+
+    const student = studentRes.rows[0]
+    const studentId = student.id
+
+    // Get current enrollments with batch details and classes remaining
+    const enrollmentsRes = await pool.query(`
+      SELECT 
+        eb.id as enrollment_batch_id,
+        eb.payment_frequency,
+        eb.classes_remaining,
+        eb.enrolled_on,
+        b.id as batch_id,
+        b.recurrence as batch_schedule,
+        b.start_time,
+        b.end_time,
+        i.name as instrument_name,
+        t.name as teacher_name,
+        e.status as enrollment_status
+      FROM enrollment_batches eb
+      JOIN enrollments e ON eb.enrollment_id = e.id
+      JOIN batches b ON eb.batch_id = b.id
+      JOIN instruments i ON b.instrument_id = i.id
+      LEFT JOIN teachers t ON b.teacher_id = t.id
+      WHERE e.student_id = $1 AND e.status = 'active'
+    `, [studentId])
+
+    // Calculate attendance for current month and last 3 months
+    const currentDate = new Date()
+    const currentMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1)
+    const threeMonthsAgo = new Date(currentDate.getFullYear(), currentDate.getMonth() - 3, 1)
+
+    const attendanceRes = await pool.query(`
+      SELECT 
+        session_date,
+        status,
+        b.id as batch_id,
+        i.name as instrument_name,
+        EXTRACT(YEAR FROM session_date) as year,
+        EXTRACT(MONTH FROM session_date) as month
+      FROM attendance_records a
+      JOIN batches b ON a.batch_id = b.id
+      JOIN instruments i ON b.instrument_id = i.id
+      WHERE a.student_id = $1 
+        AND session_date >= $2
+      ORDER BY session_date DESC
+    `, [studentId, threeMonthsAgo])
+
+    // Process attendance by month
+    const attendanceByMonth = {}
+    let currentMonthAttendance = { present: 0, total: 0 }
+    
+    attendanceRes.rows.forEach(record => {
+      const monthKey = `${record.year}-${String(record.month).padStart(2, '0')}`
+      const currentMonthKey = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`
+      
+      if (!attendanceByMonth[monthKey]) {
+        attendanceByMonth[monthKey] = { present: 0, total: 0 }
+      }
+      
+      attendanceByMonth[monthKey].total++
+      if (record.status === 'present') {
+        attendanceByMonth[monthKey].present++
+      }
+      
+      // Track current month separately
+      if (monthKey === currentMonthKey) {
+        currentMonthAttendance.total++
+        if (record.status === 'present') {
+          currentMonthAttendance.present++
+        }
+      }
+    })
+
+    // Get payment history and calculate next due date
+    const paymentsRes = await pool.query(`
+      SELECT 
+        p.id,
+        p.amount,
+        p.method,
+        p.transaction_id,
+        p.metadata,
+        p.timestamp,
+        pkg.name as package_name,
+        pkg.classes_count
+      FROM payments p
+      LEFT JOIN packages pkg ON p.package_id = pkg.id
+      WHERE p.student_id = $1
+      ORDER BY p.timestamp DESC
+      LIMIT 10
+    `, [studentId])
+
+    // Calculate next payment due date based on most recent payment and payment frequency
+    let nextPaymentDue = null
+    const lastPayment = paymentsRes.rows[0]
+    
+    if (lastPayment && enrollmentsRes.rows.length > 0) {
+      const paymentFrequency = enrollmentsRes.rows[0].payment_frequency
+      const lastPaymentDate = new Date(lastPayment.timestamp)
+      
+      let monthsToAdd = 1 // default monthly
+      if (paymentFrequency === 'quarterly') monthsToAdd = 3
+      else if (paymentFrequency === 'half_yearly') monthsToAdd = 6
+      else if (paymentFrequency === 'yearly') monthsToAdd = 12
+      
+      nextPaymentDue = new Date(lastPaymentDate)
+      nextPaymentDue.setMonth(nextPaymentDue.getMonth() + monthsToAdd)
+    }
+
+    // Compile comprehensive profile
+    const studentProfile = {
+      student: {
+        id: student.id,
+        name: student.name,
+        email: student.metadata && student.metadata.email,
+        phone: student.phone,
+        guardian_contact: student.guardian_contact,
+        guardian_phone: student.metadata && student.metadata.guardian_phone,
+        enrolled_since: student.created_at
+      },
+      enrollments: enrollmentsRes.rows.map(enrollment => ({
+        instrument: enrollment.instrument_name,
+        teacher: enrollment.teacher_name,
+        schedule: enrollment.batch_schedule,
+        time: `${enrollment.start_time} - ${enrollment.end_time}`,
+        classes_remaining: enrollment.classes_remaining,
+        payment_frequency: enrollment.payment_frequency,
+        enrolled_on: enrollment.enrolled_on,
+        status: enrollment.enrollment_status
+      })),
+      attendance: {
+        current_month: {
+          present: currentMonthAttendance.present,
+          total: currentMonthAttendance.total,
+          percentage: currentMonthAttendance.total > 0 
+            ? Math.round((currentMonthAttendance.present / currentMonthAttendance.total) * 100) 
+            : 0
+        },
+        last_3_months: Object.keys(attendanceByMonth)
+          .sort()
+          .reverse()
+          .slice(0, 3)
+          .map(monthKey => ({
+            month: monthKey,
+            present: attendanceByMonth[monthKey].present,
+            total: attendanceByMonth[monthKey].total,
+            percentage: attendanceByMonth[monthKey].total > 0 
+              ? Math.round((attendanceByMonth[monthKey].present / attendanceByMonth[monthKey].total) * 100) 
+              : 0
+          }))
+      },
+      payments: {
+        last_payment: lastPayment ? {
+          amount: lastPayment.amount,
+          date: lastPayment.timestamp,
+          method: lastPayment.method,
+          transaction_id: lastPayment.transaction_id
+        } : null,
+        next_due_date: nextPaymentDue,
+        payment_history: paymentsRes.rows.map(payment => ({
+          id: payment.id,
+          amount: payment.amount,
+          date: payment.timestamp,
+          method: payment.method,
+          package_name: payment.package_name,
+          classes_count: payment.classes_count
+        }))
+      }
+    }
+
+    res.json(studentProfile)
+
+  } catch (err) {
+    console.error('Get student profile error:', err)
+    res.status(500).json({ error: 'Failed to fetch student profile' })
+  }
+})
+
 // POST /api/students - Create new student
 app.post('/api/students', authenticateJWT, authorizeRole(['admin']), async (req, res) => {
   const { name, dob, phone, guardian_contact, metadata } = req.body

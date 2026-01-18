@@ -71,11 +71,9 @@ const EnrollmentForm: React.FC<EnrollmentFormProps> = ({ students, batches, inst
       setSearchTerm('');
       onRefresh();
     } catch (error: any) {
-        alert(`Enrollment failed: ${errorData.error || 'Unknown error'}`);
-      }
-    } catch (error) {
       console.error('Error enrolling student:', error);
-      alert('Error enrolling student');
+      const errorData = error.response?.data || {};
+      alert(`Enrollment failed: ${errorData.error || 'Unknown error'}`);
     }
   };
 
