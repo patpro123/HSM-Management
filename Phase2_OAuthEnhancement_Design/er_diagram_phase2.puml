@@ -1,0 +1,361 @@
+@startuml
+' ER diagram for Hyderabad School of Music (HSM) - Phase 2 Auth Enhancement
+' This includes all existing tables PLUS new authentication/authorization tables
+
+hide circle
+skinparam linetype ortho
+skinparam backgroundColor #FEFEFE
+skinparam class {
+  BackgroundColor<<new>> LightYellow
+  BorderColor<<new>> Orange
+}
+
+' ==================== EXISTING ENTITIES ====================
+
+entity "Student" as Student {
+  * id : uuid <<PK>>
+  --
+  * name : string
+  dob : date
+  phone : string
+  guardian_contact : string
+  metadata : jsonb
+  created_at : timestamptz
+  updated_at : timestamptz
+}
+
+entity "Teacher" as Teacher {
+  * id : uuid <<PK>>
+  --
+  * name : string
+  phone : string
+  role : enum (teacher, admin)
+  payout_terms : jsonb
+  payout_type : enum (fixed, per_class)
+  rate : numeric(10,2)
+  is_active : boolean
+  created_at : timestamptz
+  updated_at : timestamptz
+}
+
+entity "Instrument" as Instrument {
+  * id : uuid <<PK>>
+  --
+  * name : string <<unique>>
+  * max_batch_size : integer
+  online_supported : boolean
+  created_at : timestamptz
+  updated_at : timestamptz
+}
+
+entity "Batch" as Batch {
+  * id : uuid <<PK>>
+  --
+  * instrument_id : uuid <<FK>>
+  * teacher_id : uuid <<FK>>
+  recurrence : string
+  capacity : integer
+  is_makeup : boolean
+  start_time : time
+  end_time : time
+  created_at : timestamptz
+  updated_at : timestamptz
+}
+
+entity "Enrollment" as Enrollment {
+  * id : uuid <<PK>>
+  --
+  * student_id : uuid <<FK>>
+  instrument_id : uuid <<FK>> (nullable - legacy)
+  status : enum (active, paused, completed)
+  classes_remaining : integer
+  enrolled_on : date
+  created_at : timestamptz
+  updated_at : timestamptz
+}
+
+entity "EnrollmentBatch" as EnrollmentBatch {
+  * id : uuid <<PK>>
+  --
+  * enrollment_id : uuid <<FK>>
+  * batch_id : uuid <<FK>>
+  payment_frequency : enum (monthly, quarterly)
+  assigned_on : date
+  created_at : timestamptz
+}
+
+entity "AttendanceRecord" as AttendanceRecord {
+  * id : uuid <<PK>>
+  --
+  * session_date : date
+  * batch_id : uuid <<FK>>
+  * student_id : uuid <<FK>>
+  status : enum (present, absent, excused)
+  source : enum (whatsapp, web, manual, dashboard)
+  finalized_at : timestamptz
+  confidence : numeric(5,2)
+  notes : text
+  created_at : timestamptz
+}
+
+entity "Package" as Package {
+  * id : uuid <<PK>>
+  --
+  * instrument_id : uuid <<FK>>
+  * name : string
+  * classes_count : integer
+  * price : numeric(10,2)
+  created_at : timestamptz
+  updated_at : timestamptz
+}
+
+entity "Payment" as Payment {
+  * id : uuid <<PK>>
+  --
+  * student_id : uuid <<FK>>
+  * package_id : uuid <<FK>>
+  amount : numeric(10,2)
+  method : string
+  transaction_id : string
+  timestamp : timestamptz
+  created_at : timestamptz
+}
+
+entity "TeacherPayout" as TeacherPayout {
+  * id : uuid <<PK>>
+  --
+  * teacher_id : uuid <<FK>>
+  amount : numeric(10,2)
+  method : string
+  period_start : date
+  period_end : date
+  linked_classes_count : integer
+  status : enum (pending, paid)
+  paid_at : timestamptz
+  created_at : timestamptz
+}
+
+entity "Holiday" as Holiday {
+  * id : uuid <<PK>>
+  --
+  * date : date
+  scope : enum (school, teacher, batch)
+  reason : string
+  affected_batch_id : uuid <<FK>>
+  created_at : timestamptz
+}
+
+entity "AuditLog" as AuditLog {
+  * id : uuid <<PK>>
+  --
+  actor_id : uuid (user_id or NULL for system)
+  actor_role : string
+  action : string
+  entity_type : string
+  entity_id : uuid
+  payload : jsonb
+  timestamp : timestamptz
+  ip_address : string
+}
+
+' ==================== NEW AUTH ENTITIES ====================
+
+entity "User" as User <<new>> {
+  * id : uuid <<PK>>
+  --
+  * google_id : string <<unique>>
+  * email : string <<unique>>
+  * name : string
+  profile_picture : string (URL)
+  email_verified : boolean
+  locale : string
+  last_login : timestamptz
+  is_active : boolean
+  created_at : timestamptz
+  updated_at : timestamptz
+  --
+  Indexes:
+  idx_google_id
+  idx_email
+}
+
+entity "UserRole" as UserRole <<new>> {
+  * id : uuid <<PK>>
+  --
+  * user_id : uuid <<FK>>
+  * role : enum (admin, teacher, parent, student)
+  granted_at : timestamptz
+  granted_by : uuid (user_id)
+  revoked_at : timestamptz
+  --
+  Constraints:
+  unique(user_id, role)
+  Indexes:
+  idx_user_role
+}
+
+entity "TeacherUser" as TeacherUser <<new>> {
+  * id : uuid <<PK>>
+  --
+  * teacher_id : uuid <<FK>>
+  * user_id : uuid <<FK>>
+  linked_at : timestamptz
+  linked_by : uuid (admin user_id)
+  is_active : boolean
+  --
+  Constraints:
+  unique(teacher_id, user_id)
+  unique(teacher_id) -- One teacher = One user
+  Indexes:
+  idx_teacher_user
+  idx_user_teacher
+}
+
+entity "StudentGuardian" as StudentGuardian <<new>> {
+  * id : uuid <<PK>>
+  --
+  * student_id : uuid <<FK>>
+  * user_id : uuid <<FK>>
+  relationship : enum (parent, guardian, self)
+  is_primary : boolean
+  linked_at : timestamptz
+  linked_by : uuid (admin user_id)
+  is_active : boolean
+  --
+  Constraints:
+  unique(student_id, user_id)
+  Indexes:
+  idx_student_guardian
+  idx_user_students
+}
+
+entity "RefreshToken" as RefreshToken <<new>> {
+  * id : uuid <<PK>>
+  --
+  * user_id : uuid <<FK>>
+  * token : string <<unique>>
+  expires_at : timestamptz
+  created_at : timestamptz
+  revoked_at : timestamptz
+  revoked_reason : string
+  --
+  Indexes:
+  idx_token
+  idx_user_active_tokens
+}
+
+entity "LoginHistory" as LoginHistory <<new>> {
+  * id : uuid <<PK>>
+  --
+  * user_id : uuid <<FK>>
+  login_timestamp : timestamptz
+  ip_address : string
+  user_agent : string
+  login_method : enum (google_oauth)
+  success : boolean
+  failure_reason : string
+  --
+  Indexes:
+  idx_user_login_time
+  idx_login_timestamp
+}
+
+' ==================== EXISTING RELATIONSHIPS ====================
+
+Student ||--o{ Enrollment : "has"
+Enrollment ||--o{ EnrollmentBatch : "assigned to"
+Batch ||--o{ EnrollmentBatch : "contains"
+Batch }o--|| Teacher : "taught by"
+Batch }o--|| Instrument : "for"
+Enrollment }o--o| Instrument : "for (legacy, nullable)"
+AttendanceRecord }o--|| Batch : "for"
+AttendanceRecord }o--|| Student : "of"
+Payment }o--|| Student : "by"
+Payment }o--|| Package : "for"
+Package }o--|| Instrument : "applies to"
+TeacherPayout }o--|| Teacher : "to"
+Holiday }o--o| Batch : "may affect"
+
+' AuditLog tracks various entities (dotted lines)
+AuditLog ..> Student : "tracks"
+AuditLog ..> AttendanceRecord : "tracks"
+AuditLog ..> Payment : "tracks"
+AuditLog ..> Teacher : "tracks"
+
+' ==================== NEW AUTH RELATIONSHIPS ====================
+
+' User to Roles (1:N - one user can have multiple roles)
+User ||--o{ UserRole : "has"
+
+' User to Teacher linkage (1:1 - one teacher = one user)
+User ||--o| TeacherUser : "linked as"
+Teacher ||--|| TeacherUser : "has user"
+
+' User to Student linkage (N:M - many guardians per student, many students per guardian)
+User ||--o{ StudentGuardian : "guardian of"
+Student ||--o{ StudentGuardian : "has guardians"
+
+' User session management
+User ||--o{ RefreshToken : "has tokens"
+User ||--o{ LoginHistory : "login history"
+
+' Audit log references user as actor
+User ||--o{ AuditLog : "performs actions"
+
+' Role grants tracked by user
+User ||--o{ UserRole : "grants roles to others" : granted_by
+
+' User links tracked by admin
+User ||--o{ TeacherUser : "links teachers" : linked_by
+User ||--o{ StudentGuardian : "links guardians" : linked_by
+
+note right of User
+  <b>Primary Authentication Entity</b>
+  - Stores Google OAuth profile
+  - One user can have multiple roles
+  - Can be linked to teacher and/or students
+  - Central identity for all auth
+end note
+
+note right of UserRole
+  <b>Multi-Role Support</b>
+  Examples:
+  - User A: [admin]
+  - User B: [teacher, parent]
+  - User C: [parent]
+  - User D: [student]
+  
+  A user with multiple roles
+  can switch context in UI
+end note
+
+note right of TeacherUser
+  <b>1:1 Relationship</b>
+  - One teacher record = One user account
+  - Used to identify which batches
+    teacher can access
+  - Required for teacher login
+end note
+
+note right of StudentGuardian
+  <b>N:M Relationship</b>
+  - One student can have multiple guardians
+  - One user can be guardian of multiple students
+  - Relationship types: parent, guardian, self
+  - is_primary flag for main contact
+end note
+
+legend right
+  <b>Color Legend:</b>
+  <#LightYellow>|= New tables for Phase 2 (Auth) |
+  <#White>|= Existing tables from Phase 1 (MVP) |
+  
+  <b>Relationship Types:</b>
+  ||--|| : One to One
+  ||--o{ : One to Many
+  }o--|| : Many to One
+  }o--o{ : Many to Many
+  ..> : Tracks/References (loose coupling)
+endlegend
+
+@enduml

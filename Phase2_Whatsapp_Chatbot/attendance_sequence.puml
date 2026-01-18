@@ -1,0 +1,137 @@
+@startuml attendance_sequence
+!theme plain
+skinparam backgroundColor #FEFEFE
+skinparam sequenceMessageAlign center
+
+title Attendance Marking Sequence - Complete Flow
+
+actor "Teacher" as teacher
+participant "WhatsApp API" as whatsapp
+participant "Bot Service" as bot
+participant "Session Manager" as session
+participant "OpenAI" as ai
+participant "Backend API" as backend
+database "PostgreSQL" as db
+
+== Initial Request ==
+teacher -> whatsapp : "Mark attendance for\nGuitar 5pm batch"
+activate whatsapp
+whatsapp -> bot : POST /webhook\n{message, phone}
+activate bot
+
+bot -> session : getSession(phone)
+activate session
+session -> session : Check Redis cache
+session --> bot : session_data
+deactivate session
+
+bot -> ai : detectIntent(message,\ncontext)
+activate ai
+ai -> ai : Classify: "mark_attendance"\nExtract: {instrument: Guitar}
+ai --> bot : intent + entities
+deactivate ai
+
+== Fetch Batch Information ==
+bot -> backend : GET /api/teachers/:id/batches?\ndate=today
+activate backend
+backend -> db : SELECT * FROM batches\nWHERE teacher_id=...
+activate db
+db --> backend : [{batch_id, instrument,\ntime, student_count}]
+deactivate db
+backend --> bot : batches_list
+deactivate backend
+
+bot -> bot : Filter by "Guitar" + "5pm"
+bot -> session : updateSession(\ncontext: {batch_id})
+session -> session : Save to Redis
+
+bot -> whatsapp : sendMessage(\n"Guitar 5pm batch (8 students).\nWho was present today?")
+whatsapp --> teacher : 🎸 Guitar 5pm batch\n(8 students).\n\nWho was present today?
+deactivate bot
+deactivate whatsapp
+
+== Teacher Response ==
+teacher -> whatsapp : "John, Mary, Ahmed\nwere present"
+activate whatsapp
+whatsapp -> bot : POST /webhook
+activate bot
+
+bot -> session : getSession(phone)
+session --> bot : {batch_id: uuid}
+
+bot -> backend : GET /api/batches/:id/students
+activate backend
+backend -> db : SELECT students.*\nFROM enrollment_batches...
+db --> backend : [{id, name}, ...]
+backend --> bot : students_list
+deactivate backend
+
+== Name Parsing with AI ==
+bot -> ai : parseStudentNames(\n"John, Mary, Ahmed",\nstudents_list)
+activate ai
+ai -> ai : Match names to IDs:\nJohn -> uuid1\nMary -> uuid2\nAhmed -> uuid3
+ai --> bot : matched_students:\n[uuid1, uuid2, uuid3]
+deactivate ai
+
+== Create Draft ==
+bot -> db : INSERT INTO attendance_drafts\n(batch_id, teacher_id,\npresent, absent)
+activate db
+db -> db : Generate draft_id
+db --> bot : draft_id
+deactivate db
+
+bot -> session : updateSession(\ncontext: {draft_id})
+
+bot -> bot : formatConfirmation(\npresent, absent)
+
+bot -> whatsapp : sendMessage(\n"Confirming attendance...")
+whatsapp --> teacher : ✅ Confirming attendance:\n\n✓ John\n✓ Mary\n✓ Ahmed\n✗ Sarah\n✗ David\n\nIs this correct?\nReply YES to confirm
+deactivate bot
+deactivate whatsapp
+
+== Confirmation ==
+teacher -> whatsapp : "Yes"
+activate whatsapp
+whatsapp -> bot : POST /webhook {message: "Yes"}
+activate bot
+
+bot -> session : getSession(phone)
+session --> bot : {draft_id: uuid}
+
+bot -> db : SELECT * FROM\nattendance_drafts\nWHERE id=draft_id
+activate db
+db --> bot : draft_data
+deactivate db
+
+== Finalize Attendance ==
+bot -> backend : POST /api/attendance\n{batch_id, date,\nstudent_attendance: [...]}
+activate backend
+backend -> db : BEGIN TRANSACTION
+backend -> db : INSERT INTO attendance...
+backend -> db : UPDATE enrollments\nSET classes_remaining\n= classes_remaining - 1
+backend -> db : COMMIT
+db --> backend : success
+backend --> bot : attendance_id
+deactivate backend
+
+bot -> db : UPDATE attendance_drafts\nSET status='confirmed'
+db --> bot : OK
+
+bot -> session : clearSession(phone)
+session -> session : Delete from Redis
+
+bot -> whatsapp : sendMessage(\n"✅ Attendance saved")
+whatsapp --> teacher : ✅ Attendance saved\nfor Guitar 5pm batch!\n\n3 present, 2 absent\nClasses updated ✓
+deactivate bot
+deactivate whatsapp
+
+== Alternative: Correction Flow ==
+note over teacher, db
+  If teacher replies "No" or corrections:
+  1. Bot asks: "Please tell me the corrections"
+  2. Teacher: "Sarah was also present"
+  3. Bot updates draft and re-confirms
+  4. Loop until teacher confirms "Yes"
+end note
+
+@enduml

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { API_BASE_URL } from '../config';
+import { apiPost } from '../api';
 import { Student, Batch, Instrument, PaymentFrequency } from '../types';
 
 interface EnrollmentFormProps {
@@ -63,21 +63,14 @@ const EnrollmentForm: React.FC<EnrollmentFormProps> = ({ students, batches, inst
     }
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/enroll`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(enrollmentData)
-      });
-
-      if (response.ok) {
-        alert('Enrollment successful!');
-        setStep(1);
-        setSelectedStudent(null);
-        setEnrollmentData({ student_id: null, enrollments: [] });
-        setSearchTerm('');
-        onRefresh();
-      } else {
-        const errorData = await response.json();
+      await apiPost('/api/enroll', enrollmentData);
+      alert('Enrollment successful!');
+      setStep(1);
+      setSelectedStudent(null);
+      setEnrollmentData({ student_id: null, enrollments: [] });
+      setSearchTerm('');
+      onRefresh();
+    } catch (error: any) {
         alert(`Enrollment failed: ${errorData.error || 'Unknown error'}`);
       }
     } catch (error) {

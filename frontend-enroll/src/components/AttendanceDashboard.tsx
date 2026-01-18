@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { API_BASE_URL } from '../config';
+import { apiGet, apiPost } from '../api';
 import { Batch, AttendanceStatus } from '../types';
 
 interface AttendanceDashboardProps {
@@ -29,17 +29,14 @@ const AttendanceDashboard: React.FC<AttendanceDashboardProps> = ({ batches, onRe
   const fetchBatchStudents = async (batchId: number) => {
     try {
       setLoading(true);
-      const response = await fetch(`${API_BASE_URL}/api/batches/${batchId}/students`);
-      if (response.ok) {
-        const data = await response.json();
-        setBatchStudents(
-          data.students.map((s: any) => ({
-            student_id: s.student_id,
-            student_name: s.student_name,
-            status: 'present' as AttendanceStatus
-          }))
-        );
-      }
+      const data = await apiGet(`/api/batches/${batchId}/students`);
+      setBatchStudents(
+        data.students.map((s: any) => ({
+          student_id: s.student_id,
+          student_name: s.student_name,
+          status: 'present' as AttendanceStatus
+        }))
+      );
     } catch (error) {
       console.error('Error fetching batch students:', error);
     } finally {
@@ -72,18 +69,9 @@ const AttendanceDashboard: React.FC<AttendanceDashboardProps> = ({ batches, onRe
         status: s.status
       }));
 
-      const response = await fetch(`${API_BASE_URL}/api/attendance`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ records: attendanceRecords })
-      });
-
-      if (response.ok) {
-        alert('Attendance saved successfully!');
-        onRefresh();
-      } else {
-        alert('Failed to save attendance');
-      }
+      await apiPost('/api/attendance', { records: attendanceRecords });
+      alert('Attendance saved successfully!');
+      onRefresh();
     } catch (error) {
       console.error('Error saving attendance:', error);
       alert('Error saving attendance');

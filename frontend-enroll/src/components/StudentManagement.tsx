@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { Student, Batch, Instrument, PaymentFrequency } from '../types';
+import { apiPost, apiDelete } from '../api';
+import { authenticatedFetch } from '../auth';
 import { API_BASE_URL } from '../config';
 
 interface StudentManagementProps {
@@ -123,7 +125,7 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students, batches
         }
       };
       
-      const response = await fetch(url, {
+      const response = await authenticatedFetch(`${API_BASE_URL}${url}`, {
         method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(backendData)
@@ -135,17 +137,9 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students, batches
         
         // If batches are selected and we have a student ID, enroll the student
         if (selectedBatches.length > 0 && studentId) {
-          const enrollResponse = await fetch(`${API_BASE_URL}/api/students/${studentId}/enroll`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              enrollments: selectedBatches
-            })
+          await apiPost(`/api/students/${studentId}/enroll`, {
+            enrollments: selectedBatches
           });
-          
-          if (!enrollResponse.ok) {
-            alert('Student saved but enrollment failed');
-          }
         }
         
         setShowAddModal(false);
@@ -165,15 +159,8 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students, batches
     }
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/students/${id}`, {
-        method: 'DELETE'
-      });
-
-      if (response.ok) {
-        onRefresh();
-      } else {
-        alert('Failed to delete student');
-      }
+      await apiDelete(`/api/students/${id}`);
+      onRefresh();
     } catch (error) {
       console.error('Error deleting student:', error);
       alert('Error deleting student');

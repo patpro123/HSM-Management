@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { API_BASE_URL } from '../config';
+import { apiPost } from '../api';
 import { Student, PaymentRecord, PaymentFrequency } from '../types';
 
 interface PaymentModuleProps {
@@ -45,32 +45,24 @@ const PaymentModule: React.FC<PaymentModuleProps> = ({ students, payments, onRef
     try {
       const classCredits = calculateClassCredits(formData.payment_frequency);
       
-      const response = await fetch(`${API_BASE_URL}/api/payments`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...formData,
-          student_id: parseInt(formData.student_id),
-          amount: parseFloat(formData.amount),
-          class_credits: classCredits
-        })
+      await apiPost('/api/payments', {
+        ...formData,
+        student_id: parseInt(formData.student_id),
+        amount: parseFloat(formData.amount),
+        class_credits: classCredits
       });
 
-      if (response.ok) {
-        alert('Payment recorded successfully!');
-        setShowAddModal(false);
-        setFormData({
-          student_id: '',
-          amount: '',
-          payment_method: 'cash',
-          payment_for: 'tuition',
-          notes: '',
-          payment_frequency: 'monthly' as PaymentFrequency
-        });
-        onRefresh();
-      } else {
-        alert('Failed to record payment');
-      }
+      alert('Payment recorded successfully!');
+      setShowAddModal(false);
+      setFormData({
+        student_id: '',
+        amount: '',
+        payment_method: 'cash',
+        payment_for: 'tuition',
+        notes: '',
+        payment_frequency: 'monthly' as PaymentFrequency
+      });
+      onRefresh();
     } catch (error) {
       console.error('Error recording payment:', error);
       alert('Error recording payment');

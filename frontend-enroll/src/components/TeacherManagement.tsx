@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { API_BASE_URL } from '../config';
+import { apiGet, apiPost, apiPut } from '../api';
 import { Instrument } from '../types';
 
 interface Teacher {
@@ -73,9 +73,7 @@ export default function TeacherManagement({ instruments, onRefresh }: TeacherMan
   async function fetchTeachers() {
     try {
       setLoading(true);
-      const response = await fetch(`${API_BASE_URL}/api/teachers`);
-      if (!response.ok) throw new Error('Failed to fetch teachers');
-      const data = await response.json();
+      const data = await apiGet('/api/teachers');
       setTeachers(data.teachers || []);
     } catch (err) {
       console.error('Error fetching teachers:', err);
@@ -87,9 +85,7 @@ export default function TeacherManagement({ instruments, onRefresh }: TeacherMan
 
   async function fetchBatches() {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/batches`);
-      if (!response.ok) throw new Error('Failed to fetch batches');
-      const data = await response.json();
+      const data = await apiGet('/api/batches');
       setBatches(data.batches || []);
     } catch (err) {
       console.error('Error fetching batches:', err);
@@ -160,9 +156,7 @@ export default function TeacherManagement({ instruments, onRefresh }: TeacherMan
 
   async function fetchTeacherBatches(teacherId: string) {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/teachers/${teacherId}/batches`);
-      if (!response.ok) throw new Error('Failed to fetch teacher batches');
-      const data = await response.json();
+      const data = await apiGet(`/api/teachers/${teacherId}/batches`);
       setTeacherBatches(prev => ({ ...prev, [teacherId]: data.batches || [] }));
     } catch (err) {
       console.error('Error fetching teacher batches:', err);
@@ -187,13 +181,7 @@ export default function TeacherManagement({ instruments, onRefresh }: TeacherMan
     }
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/teachers`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(teacherForm)
-      });
-
-      if (!response.ok) throw new Error('Failed to add teacher');
+      await apiPost('/api/teachers', teacherForm);
       
       setSuccess('Teacher added successfully!');
       setShowAddModal(false);
@@ -210,13 +198,7 @@ export default function TeacherManagement({ instruments, onRefresh }: TeacherMan
     if (!selectedTeacher) return;
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/teachers/${selectedTeacher.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(teacherForm)
-      });
-
-      if (!response.ok) throw new Error('Failed to update teacher');
+      await apiPut(`/api/teachers/${selectedTeacher.id}`, teacherForm);
       
       setSuccess('Teacher updated successfully!');
       setShowEditModal(false);
@@ -258,13 +240,7 @@ export default function TeacherManagement({ instruments, onRefresh }: TeacherMan
         capacity: batchForm.capacity
       };
 
-      const response = await fetch(`${API_BASE_URL}/api/batches`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(batchData)
-      });
-
-      if (!response.ok) throw new Error('Failed to create batch');
+      await apiPost('/api/batches', batchData);
       
       setSuccess('Batch created successfully!');
       setShowBatchModal(false);
@@ -300,13 +276,7 @@ export default function TeacherManagement({ instruments, onRefresh }: TeacherMan
         capacity: batchForm.capacity
       };
 
-      const response = await fetch(`${API_BASE_URL}/api/batches/${selectedBatch.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(batchData)
-      });
-
-      if (!response.ok) throw new Error('Failed to update batch');
+      await apiPut(`/api/batches/${selectedBatch.id}`, batchData);
       
       setSuccess('Batch updated successfully!');
       setShowEditBatchModal(false);

@@ -5,7 +5,14 @@ const morgan = require('morgan')
 const crypto = require('crypto')
 const http = require('http')
 const https = require('https')
+const passport = require('passport')
+const session = require('express-session')
+const cookieParser = require('cookie-parser')
 const pool = require('./db')
+
+// Configure Google OAuth strategy
+const { configureGoogleStrategy } = require('./auth/googleStrategy')
+configureGoogleStrategy(passport)
 
 const app = express()
 
@@ -24,7 +31,34 @@ const corsOptions = {
 
 app.use(cors(corsOptions))
 app.use(express.json())
+app.use(cookieParser())
 app.use(morgan('dev'))
+
+// Session configuration (for OAuth flow only, not for app session)
+app.use(session({
+  secret: process.env.SESSION_SECRET || 'hsm-temp-secret-change-in-production',
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    secure: process.env.NODE_ENV === 'production',
+    httpOnly: true,
+    maxAge: 10 * 60 * 1000 // 10 minutes, just for OAuth flow
+  }
+}))
+
+// Initialize Passport
+app.use(passport.initialize())
+app.use(passport.session())
+
+// Import authentication and authorization middleware
+const { authenticateJWT, optionalAuth } = require('./auth/jwtMiddleware')
+const { 
+  authorizeRole, 
+  filterTeacherData, 
+  filterParentData,
+  verifyBatchOwnership,
+  restrictToTodayForTeachers 
+} = require('./auth/rbacMiddleware')
 
 // Conversational enrollment agent state and helpers
 const enrollmentSessions = new Map()
@@ -166,7 +200,7 @@ const buildPrompt = (message, collected) => {
 }
 
 // GET /api/instruments - fetch all instruments for checkbox display
-app.get('/api/instruments', async (req, res) => {
+app.get('/api/instruments', authenticateJWT, authorizeRole(['admin', 'teacher']), async (req, res) => {
   try {
     const result = await pool.query('SELECT * FROM instruments ORDER BY name')
     res.json({ instruments: result.rows })
@@ -177,7 +211,7 @@ app.get('/api/instruments', async (req, res) => {
 })
 
 // GET /api/batches - fetch all batches with instrument and teacher details
-app.get('/api/batches', async (req, res) => {
+app.get('/api/batches', authenticateJWT, authorizeRole(['admin', 'teacher']), filterTeacherData, async (req, res) => {
   try {
     const result = await pool.query(`
       SELECT 
@@ -205,7 +239,7 @@ app.get('/api/batches', async (req, res) => {
 })
 
 // GET /api/teachers/:id/batches - fetch batches for a specific teacher
-app.get('/api/teachers/:id/batches', async (req, res) => {
+app.get('/api/teachers/:id/batches', authenticateJWT, authorizeRole(['admin', 'teacher']), async (req, res) => {
   const { id } = req.params
   try {
     const result = await pool.query(`
@@ -393,7 +427,7 @@ app.post('/api/students/:id/enroll', async (req, res) => {
   }
 })
 
-app.post('/api/enroll', async (req, res) => {
+app.post('/api/enroll', authenticateJWT, authorizeRole(['admin']), async (req, res) => {
   const payload = req.body
   if(!payload || !payload.answers) return res.status(400).json({error: 'invalid payload'})
 
@@ -548,7 +582,7 @@ app.post('/api/enroll', async (req, res) => {
   }
 })
 
-app.get('/api/enrollments', async (req, res)=>{
+app.get('/api/enrollments', authenticateJWT, authorizeRole(['admin', 'teacher']), async (req, res)=>{
   try{
     const result = await pool.query(`
       SELECT 
@@ -621,7 +655,7 @@ app.post('/api/students/:studentId/image', async (req, res) => {
 // ==================== STUDENTS API ====================
 
 // GET /api/students - List all students with enrollment details
-app.get('/api/students', async (req, res) => {
+app.get('/api/students', authenticateJWT, authorizeRole(['admin', 'teacher', 'parent']), filterParentData, async (req, res) => {
   try {
     const result = await pool.query(`
       SELECT 
@@ -659,7 +693,7 @@ app.get('/api/students', async (req, res) => {
 })
 
 // GET /api/students/:id - Get single student with full details
-app.get('/api/students/:id', async (req, res) => {
+app.get('/api/students/:id', authenticateJWT, authorizeRole(['admin', 'teacher', 'parent']), async (req, res) => {
   const { id } = req.params
   try {
     const studentRes = await pool.query('SELECT * FROM students WHERE id = $1', [id])
@@ -706,7 +740,7 @@ app.get('/api/students/:id', async (req, res) => {
 })
 
 // POST /api/students - Create new student
-app.post('/api/students', async (req, res) => {
+app.post('/api/students', authenticateJWT, authorizeRole(['admin']), async (req, res) => {
   const { name, dob, phone, guardian_contact, metadata } = req.body
   if (!name || !phone) {
     return res.status(400).json({ error: 'name and phone are required' })
@@ -725,7 +759,7 @@ app.post('/api/students', async (req, res) => {
 })
 
 // PUT /api/students/:id - Update student
-app.put('/api/students/:id', async (req, res) => {
+app.put('/api/students/:id', authenticateJWT, authorizeRole(['admin']), async (req, res) => {
   const { id } = req.params
   const { name, dob, phone, guardian_contact, metadata } = req.body
   try {
@@ -752,7 +786,7 @@ app.put('/api/students/:id', async (req, res) => {
 })
 
 // DELETE /api/students/:id - Delete student (cascades to enrollments)
-app.delete('/api/students/:id', async (req, res) => {
+app.delete('/api/students/:id', authenticateJWT, authorizeRole(['admin']), async (req, res) => {
   const { id } = req.params
   try {
     const result = await pool.query('DELETE FROM students WHERE id = $1 RETURNING id', [id])
@@ -769,7 +803,7 @@ app.delete('/api/students/:id', async (req, res) => {
 // ==================== TEACHERS API ====================
 
 // GET /api/teachers - List all teachers
-app.get('/api/teachers', async (req, res) => {
+app.get('/api/teachers', authenticateJWT, authorizeRole(['admin', 'teacher']), async (req, res) => {
   try {
     const result = await pool.query(`
       SELECT 
@@ -795,7 +829,7 @@ app.get('/api/teachers', async (req, res) => {
 })
 
 // GET /api/teachers/:id - Get single teacher with batches
-app.get('/api/teachers/:id', async (req, res) => {
+app.get('/api/teachers/:id', authenticateJWT, authorizeRole(['admin', 'teacher']), async (req, res) => {
   const { id } = req.params
   try {
     const teacherRes = await pool.query('SELECT * FROM teachers WHERE id = $1', [id])
@@ -828,7 +862,7 @@ app.get('/api/teachers/:id', async (req, res) => {
 })
 
 // POST /api/teachers - Create new teacher
-app.post('/api/teachers', async (req, res) => {
+app.post('/api/teachers', authenticateJWT, authorizeRole(['admin']), async (req, res) => {
   const { name, phone, email, payout_type, rate } = req.body
   if (!name) {
     return res.status(400).json({ error: 'name is required' })
@@ -846,7 +880,7 @@ app.post('/api/teachers', async (req, res) => {
     res.status(500).json({ error: 'Failed to create teacher' })
   }
 })// PUT /api/teachers/:id - Update teacher
-app.put('/api/teachers/:id', async (req, res) => {
+app.put('/api/teachers/:id', authenticateJWT, authorizeRole(['admin']), async (req, res) => {
   const { id } = req.params
   const { name, phone, email, payout_type, rate, is_active } = req.body
   try {
@@ -876,7 +910,7 @@ app.put('/api/teachers/:id', async (req, res) => {
 })
 
 // GET /api/teachers/:id/payouts - Calculate teacher payouts
-app.get('/api/teachers/:id/payouts', async (req, res) => {
+app.get('/api/teachers/:id/payouts', authenticateJWT, authorizeRole(['admin', 'teacher']), async (req, res) => {
   const { id } = req.params
   const { month, year } = req.query
   
@@ -940,7 +974,7 @@ app.get('/api/teachers/:id/payouts', async (req, res) => {
 // ==================== BATCHES API (Additional) ====================
 
 // POST /api/batches - Create new batch
-app.post('/api/batches', async (req, res) => {
+app.post('/api/batches', authenticateJWT, authorizeRole(['admin']), async (req, res) => {
   const { instrument_id, teacher_id, recurrence, start_time, end_time, capacity } = req.body
   if (!instrument_id || !recurrence || !capacity) {
     return res.status(400).json({ error: 'instrument_id, recurrence, and capacity are required' })
@@ -960,7 +994,7 @@ app.post('/api/batches', async (req, res) => {
 })
 
 // PUT /api/batches/:id - Update batch
-app.put('/api/batches/:id', async (req, res) => {
+app.put('/api/batches/:id', authenticateJWT, authorizeRole(['admin']), async (req, res) => {
   const { id } = req.params
   const { teacher_id, recurrence, start_time, end_time, capacity } = req.body
   try {
@@ -987,7 +1021,7 @@ app.put('/api/batches/:id', async (req, res) => {
 })
 
 // GET /api/batches/:id/students - Get students in a batch
-app.get('/api/batches/:id/students', async (req, res) => {
+app.get('/api/batches/:id/students', authenticateJWT, authorizeRole(['admin', 'teacher']), verifyBatchOwnership, async (req, res) => {
   const { id } = req.params
   try {
     const result = await pool.query(`
@@ -1013,7 +1047,7 @@ app.get('/api/batches/:id/students', async (req, res) => {
 // ==================== ATTENDANCE API ====================
 
 // POST /api/attendance - Mark attendance (bulk)
-app.post('/api/attendance', async (req, res) => {
+app.post('/api/attendance', authenticateJWT, authorizeRole(['admin', 'teacher']), restrictToTodayForTeachers, async (req, res) => {
   const { records } = req.body
   if (!Array.isArray(records) || records.length === 0) {
     return res.status(400).json({ error: 'records array is required' })
@@ -1059,7 +1093,7 @@ app.post('/api/attendance', async (req, res) => {
 })
 
 // GET /api/attendance - Get attendance records
-app.get('/api/attendance', async (req, res) => {
+app.get('/api/attendance', authenticateJWT, authorizeRole(['admin', 'teacher']), async (req, res) => {
   const { batch_id, student_id, date_from, date_to } = req.query
   try {
     let query = `
@@ -1115,7 +1149,7 @@ app.get('/api/attendance', async (req, res) => {
 })
 
 // GET /api/attendance/batch/:id - Get attendance for specific batch
-app.get('/api/attendance/batch/:id', async (req, res) => {
+app.get('/api/attendance/batch/:id', authenticateJWT, authorizeRole(['admin', 'teacher']), verifyBatchOwnership, async (req, res) => {
   const { id } = req.params
   const { date } = req.query
   try {
@@ -1150,7 +1184,7 @@ app.get('/api/attendance/batch/:id', async (req, res) => {
 // ==================== PAYMENTS API ====================
 
 // POST /api/payments - Record payment
-app.post('/api/payments', async (req, res) => {
+app.post('/api/payments', authenticateJWT, authorizeRole(['admin']), async (req, res) => {
   const { student_id, amount, classes_count, method } = req.body
   if (!student_id || !amount || !classes_count) {
     return res.status(400).json({ error: 'student_id, amount, and classes_count are required' })
@@ -1196,7 +1230,7 @@ app.post('/api/payments', async (req, res) => {
 })
 
 // GET /api/payments - List all payments
-app.get('/api/payments', async (req, res) => {
+app.get('/api/payments', authenticateJWT, authorizeRole(['admin', 'parent']), async (req, res) => {
   try {
     const result = await pool.query(`
       SELECT 
@@ -1220,7 +1254,7 @@ app.get('/api/payments', async (req, res) => {
 })
 
 // GET /api/payments/student/:id - Get payment history for student
-app.get('/api/payments/student/:id', async (req, res) => {
+app.get('/api/payments/student/:id', authenticateJWT, authorizeRole(['admin', 'parent']), async (req, res) => {
   const { id } = req.params
   try {
     const result = await pool.query(`
@@ -1245,7 +1279,7 @@ app.get('/api/payments/student/:id', async (req, res) => {
 // ==================== STATS API ====================
 
 // GET /api/stats - Dashboard statistics
-app.get('/api/stats', async (req, res) => {
+app.get('/api/stats', authenticateJWT, authorizeRole(['admin']), async (req, res) => {
   try {
     const studentsCount = await pool.query('SELECT COUNT(*) as count FROM students')
     const teachersCount = await pool.query('SELECT COUNT(*) as count FROM teachers WHERE is_active = true')
@@ -1277,6 +1311,22 @@ app.get('/api/stats', async (req, res) => {
     res.status(500).json({ error: 'Failed to fetch statistics' })
   }
 })
+
+// ============================================
+// Authentication Routes
+// ============================================
+const authRoutes = require('./routes/auth')
+app.use('/api/auth', authRoutes)
+
+// ============================================
+// User Management Routes
+// ============================================
+const usersRoutes = require('./routes/users')
+app.use('/api/users', usersRoutes)
+
+// ============================================
+// End Authentication Routes
+// ============================================
 
 const PORT = process.env.PORT || 3000
 app.listen(PORT, ()=> console.log(`Enroll API listening on http://localhost:${PORT}`))

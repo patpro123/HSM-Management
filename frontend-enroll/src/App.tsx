@@ -9,16 +9,19 @@ import {
   Instrument
 } from './types';
 import { API_BASE_URL } from './config';
+import { getCurrentUser, login, logout, handleOAuthCallback, isAuthenticated } from './auth';
+import { apiGet } from './api';
 import StatsOverview from './components/StatsOverview';
 import StudentManagement from './components/StudentManagement';
 import TeacherManagement from './components/TeacherManagement';
+import UserManagement from './components/UserManagement';
 // @ts-ignore - JSX component
 import AttendanceTab from './components/Attendance/AttendanceTab';
 import PaymentModule from './components/PaymentModule';
 import hsmLogo from './images/hsmLogo.jpg';
 
 const App: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'stats' | 'students' | 'attendance' | 'payments' | 'teachers'>('stats');
+  const [activeTab, setActiveTab] = useState<'stats' | 'students' | 'attendance' | 'payments' | 'teachers' | 'users'>('stats');
   const [students, setStudents] = useState<Student[]>([]);
   const [batches, setBatches] = useState<Batch[]>([]);
   const [instruments, setInstruments] = useState<Instrument[]>([]);
@@ -28,31 +31,29 @@ const App: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [user, setUser] = useState(getCurrentUser());
+  const [authChecked, setAuthChecked] = useState(false);
+
+  // Handle OAuth callback on mount
+  useEffect(() => {
+    if (handleOAuthCallback()) {
+      setUser(getCurrentUser());
+    }
+    setAuthChecked(true);
+  }, []);
 
   const fetchData = async () => {
     try {
       setLoading(true);
       setError(null);
 
-      // Fetch all data in parallel
-      const [studentsRes, batchesRes, instrumentsRes, paymentsRes, attendanceRes] = await Promise.all([
-        fetch(`${API_BASE_URL}/api/students`),
-        fetch(`${API_BASE_URL}/api/batches`),
-        fetch(`${API_BASE_URL}/api/instruments`),
-        fetch(`${API_BASE_URL}/api/payments`),
-        fetch(`${API_BASE_URL}/api/attendance`)
-      ]);
-
-      if (!studentsRes.ok || !batchesRes.ok || !instrumentsRes.ok) {
-        throw new Error('Failed to fetch data');
-      }
-
+      // Fetch all data in parallel using authenticated API calls
       const [studentsData, batchesData, instrumentsData, paymentsData, attendanceData] = await Promise.all([
-        studentsRes.json(),
-        batchesRes.json(),
-        instrumentsRes.json(),
-        paymentsRes.json(),
-        attendanceRes.json()
+        apiGet('/api/students'),
+        apiGet('/api/batches'),
+        apiGet('/api/instruments'),
+        apiGet('/api/payments'),
+        apiGet('/api/attendance')
       ]);
 
       setStudents(studentsData.students || []);
@@ -62,21 +63,81 @@ const App: React.FC = () => {
       setAttendance(attendanceData.attendance || []);
     } catch (err) {
       console.error('Error fetching data:', err);
-      setError('Failed to load data. Please check if the backend server is running.');
+      if (err instanceof Error && err.message.includes('401')) {
+        setError('Session expired. Please login again.');
+        setTimeout(() => login(API_BASE_URL), 2000);
+      } else {
+        setError('Failed to load data. Please check if the backend server is running.');
+      }
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchData();
-  }, []);
+    // Only fetch data if authenticated
+    if (authChecked && isAuthenticated()) {
+      fetchData();
+    } else if (authChecked) {
+      setLoading(false);
+    }
+  }, [authChecked]);
 
   const handleTabChange = (tab: typeof activeTab) => {
     setActiveTab(tab);
     setMobileMenuOpen(false); // Close mobile menu when tab changes
   };
 
+  const handleLogout = () => {
+    logout();
+    setUser(null);
+    // Will trigger login screen to show since isAuthenticated() will return false
+    window.location.href = '/';
+  };
+
+  // Show loading while checking auth
+  if (!authChecked) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
+        <div className="text-center">
+          <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500"></div>
+          <p className="mt-4 text-slate-300">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show login screen if not authenticated
+  if (!isAuthenticated()) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-4">
+        <div className="bg-white rounded-2xl shadow-2xl p-8 md:p-12 max-w-md w-full">
+          <div className="text-center mb-8">
+            <img src={hsmLogo} alt="HSM Logo" className="w-24 h-24 mx-auto mb-4 rounded-full shadow-lg" />
+            <h1 className="text-3xl font-bold text-slate-900 mb-2">HSM Management</h1>
+            <p className="text-slate-600 italic">"Unleash the <span className="text-red-500 not-italic font-bold">MUSICIAN</span> in you"</p>
+          </div>
+          <button
+            onClick={() => login(API_BASE_URL)}
+            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-4 px-6 rounded-lg transition-colors flex items-center justify-center gap-3 shadow-lg"
+          >
+            <svg className="w-6 h-6" viewBox="0 0 24 24">
+              <path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+              <path fill="currentColor" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+              <path fill="currentColor" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+              <path fill="currentColor" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+            </svg>
+            Sign in with Google
+          </button>
+          <p className="mt-6 text-center text-sm text-slate-500">
+            Secure authentication powered by Google OAuth
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // Main app UI
   return (
     <div className="min-h-screen flex flex-col md:flex-row bg-slate-50">
       {/* Mobile Menu Button */}
@@ -156,9 +217,33 @@ const App: React.FC = () => {
               👨‍🏫 <span className="ml-2">Teachers</span>
             </button>
           </li>
+          {user && user.roles.includes('admin') && (
+            <li>
+              <button onClick={() => handleTabChange('users')} className={`w-full text-left px-4 py-3 rounded-lg transition-colors font-medium ${activeTab === 'users' ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-lg shadow-orange-500/30' : 'text-slate-300 hover:bg-slate-800 hover:text-white'}`}>
+                🔐 <span className="ml-2">Users</span>
+              </button>
+            </li>
+          )}
         </ul>
-        <div className="mt-auto pt-6 text-[10px] text-slate-500 font-bold uppercase tracking-widest text-center border-t border-slate-800">
-          Hyderabad School of Music
+        <div className="mt-auto pt-6 border-t border-slate-800">
+          {user && (
+            <div className="px-4 py-3 mb-3 text-xs text-slate-400">
+              <div className="font-semibold mb-1">{user.name || user.email}</div>
+              <div className="text-slate-500">{user.roles.join(', ')}</div>
+            </div>
+          )}
+          {isAuthenticated() && (
+            <button
+              onClick={handleLogout}
+              className="w-full px-4 py-3 rounded-lg transition-colors font-medium text-slate-300 hover:bg-red-900 hover:text-white flex items-center gap-2"
+            >
+              <span>🚪</span>
+              <span>Logout</span>
+            </button>
+          )}
+          <div className="mt-4 text-[10px] text-slate-500 font-bold uppercase tracking-widest text-center">
+            Hyderabad School of Music
+          </div>
         </div>
       </nav>
 
@@ -226,6 +311,10 @@ const App: React.FC = () => {
                 instruments={instruments}
                 onRefresh={fetchData}
               />
+            )}
+
+            {activeTab === 'users' && (
+              <UserManagement />
             )}
           </div>
         )}
