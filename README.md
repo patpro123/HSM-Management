@@ -1,6 +1,20 @@
 # Hyderabad School of Music — Management System 🎵
 
+**Version 1.0** — Production-Ready MVP
+
 Complete school management software for music education with enrollment, batch management, attendance tracking, payment processing, and teacher payouts.
+
+## 🚀 Live Deployment
+
+- **Frontend:** [https://hsm-management-frontend.vercel.app](https://hsm-management-frontend.vercel.app)
+- **Backend API:** [https://hsm-management-backend.onrender.com](https://hsm-management-backend.onrender.com)
+- **Database:** Neon PostgreSQL (Serverless)
+
+### Production Stack
+- **Frontend Hosting:** Vercel (automatic deploys from GitHub)
+- **Backend Hosting:** Render.com (Node.js web service)
+- **Database:** Neon.tech (PostgreSQL serverless)
+- **CI/CD:** GitHub → Vercel/Render auto-deploy
 
 ## 📋 Quick Links
 
@@ -10,6 +24,7 @@ Complete school management software for music education with enrollment, batch m
 - [Implementation Summary](IMPLEMENTATION_SUMMARY.md) — Latest changes and testing
 - [Checklist](CHECKLIST.md) — Development status and next steps
 - [Database Setup](db/README.md) — PostgreSQL setup and migrations
+- [Vercel Deployment](VERCEL_DEPLOYMENT.md) — Production deployment guide
 
 ## 🎯 Features
 
@@ -134,12 +149,24 @@ HSM-Management/
 
 ### Technology Stack
 - **Backend:** Node.js 18+, Express.js, PostgreSQL 15
-- **Frontend:** React 18, TypeScript, Vite
-- **Database:** PostgreSQL with pgcrypto extension
-- **DevOps:** Docker Compose, Shell scripts
+- **Frontend:** React 18, TypeScript, Vite, TailwindCSS
+- **Database:** PostgreSQL (Neon serverless in production)
+- **Hosting:** Vercel (frontend), Render (backend), Neon (database)
+- **DevOps:** Docker Compose (local), GitHub Actions (CI/CD)
 - **Future:** Ollama LLM integration for WhatsApp attendance
 
 ## 🚀 Quick Start
+
+### Production Environment
+
+The application is deployed and accessible at:
+- **Frontend:** https://hsm-management-frontend.vercel.app
+- **Backend API:** https://hsm-management-backend.onrender.com/api
+- **Database:** Neon PostgreSQL (managed)
+
+No local setup required for production use!
+
+### Local Development Setup
 
 ### 1. Start the Database
 ```bash
@@ -338,6 +365,7 @@ System supports both models via `payout_terms` JSONB field.
 
 ## 🔐 Environment Variables
 
+### Local Development
 Create `backend-enroll/.env`:
 ```env
 DB_HOST=localhost
@@ -347,6 +375,43 @@ DB_USER=hsm_admin
 DB_PASSWORD=secret
 PORT=3000
 ```
+
+### Production (Render + Neon)
+Set these in Render dashboard:
+```env
+DATABASE_URL=postgresql://user:pass@host.neon.tech/dbname?sslmode=require
+PORT=3000
+NODE_ENV=production
+```
+
+Frontend (Vercel) automatically uses build-time environment variables from `vercel.json`.
+
+## 📦 Deployment
+
+### Frontend (Vercel)
+```bash
+cd frontend-enroll
+vercel --prod
+```
+
+**Auto-deploy:** Push to `main` branch triggers automatic deployment
+
+### Backend (Render)
+1. Connect GitHub repository to Render
+2. Set environment variables (DATABASE_URL, PORT)
+3. Deploy from dashboard or via git push
+
+**Auto-deploy:** Push to `main` branch triggers automatic deployment
+
+### Database (Neon)
+1. Create project at [neon.tech](https://neon.tech)
+2. Copy connection string
+3. Run migrations: `psql $DATABASE_URL < db/schema.sql`
+4. Seed data: `psql $DATABASE_URL < db/seed.sql`
+
+See [VERCEL_DEPLOYMENT.md](VERCEL_DEPLOYMENT.md) for detailed deployment instructions.
+
+## 🔐 Environment Variables
 
 ## 🐛 Troubleshooting
 
@@ -381,8 +446,28 @@ npm install pg express cors morgan dotenv
 
 1. Create a feature branch
 2. Update relevant documentation
-3. Test with `node test-api.js`
+3. Test locally with `node test-api.js`
 4. Submit PR with description
+5. Auto-deploy to production on merge to `main`
+
+## 🎯 Version 1.0 Release Notes
+
+**What's Included:**
+- ✅ Complete student, teacher, and batch management
+- ✅ Attendance tracking with historical records
+- ✅ Payment processing and payout calculations
+- ✅ Full-stack production deployment (Vercel + Render + Neon)
+- ✅ Mobile-responsive UI with modern design
+- ✅ RESTful API with 35+ endpoints
+- ✅ PostgreSQL with migrations and seed data
+
+**Future Upgrades (v2.0+):**
+- AI-assisted attendance via WhatsApp
+- Automated recurring invoices and reminders
+- Parent portal dashboard
+- Advanced analytics and reporting
+- SMS/Email notifications
+- Mobile apps (iOS/Android)
 
 ## 📝 License
 
@@ -390,6 +475,8 @@ Proprietary — Hyderabad School of Music
 
 ---
 
-**Status:** Phase 1 MVP Complete ✅  
-**Next:** Frontend integration with new APIs  
-**Last Updated:** 2026-01-04
+**Version:** 1.0 (HSM_Management_1.0)  
+**Status:** Production Ready ✅  
+**Deployed:** January 2026  
+**Future Development:** All upgrades will be built on top of this stable v1.0 foundation  
+**Last Updated:** 2026-01-18
