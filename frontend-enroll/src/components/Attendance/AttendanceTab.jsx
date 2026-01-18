@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import { API_BASE_URL } from '../../config'
 import BatchSelector from './BatchSelector'
 import AttendanceList from './AttendanceList'
 import './AttendanceTab.css'
