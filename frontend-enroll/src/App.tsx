@@ -8,6 +8,7 @@ import {
   BatchAssignment,
   Instrument
 } from './types';
+import { API_BASE_URL } from './config';
 import StatsOverview from './components/StatsOverview';
 import StudentManagement from './components/StudentManagement';
 import TeacherManagement from './components/TeacherManagement';
@@ -15,8 +16,6 @@ import TeacherManagement from './components/TeacherManagement';
 import AttendanceTab from './components/Attendance/AttendanceTab';
 import PaymentModule from './components/PaymentModule';
 import hsmLogo from './images/hsmLogo.jpg';
-
-const API_BASE = '/api';
 
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'stats' | 'students' | 'attendance' | 'payments' | 'teachers'>('stats');
@@ -37,11 +36,11 @@ const App: React.FC = () => {
 
       // Fetch all data in parallel
       const [studentsRes, batchesRes, instrumentsRes, paymentsRes, attendanceRes] = await Promise.all([
-        fetch(`${API_BASE}/students`),
-        fetch(`${API_BASE}/batches`),
-        fetch(`${API_BASE}/instruments`),
-        fetch(`${API_BASE}/payments`),
-        fetch(`${API_BASE}/attendance`)
+        fetch(`${API_BASE_URL}/api/students`),
+        fetch(`${API_BASE_URL}/api/batches`),
+        fetch(`${API_BASE_URL}/api/instruments`),
+        fetch(`${API_BASE_URL}/api/payments`),
+        fetch(`${API_BASE_URL}/api/attendance`)
       ]);
 
       if (!studentsRes.ok || !batchesRes.ok || !instrumentsRes.ok) {
