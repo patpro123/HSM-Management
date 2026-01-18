@@ -105,8 +105,8 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students, batches
     e.preventDefault();
     try {
       const url = editingStudent 
-        ? `/api/students/${editingStudent.id}`
-        : '/api/students';
+        ? `${API_BASE_URL}/api/students/${editingStudent.id}`
+        : `${API_BASE_URL}/api/students`;
       
       const method = editingStudent ? 'PUT' : 'POST';
       

@@ -109,7 +109,7 @@ export default function AttendanceTab() {
 
       // Fetch existing attendance for selected date
       const attendanceResponse = await fetch(
-        `http://localhost:3000/api/attendance/batch/${batchId}?date=${selectedDate}`
+        `${API_BASE_URL}/api/attendance/batch/${batchId}?date=${selectedDate}`
       )
       
       const initAttendance = {}
