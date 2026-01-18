@@ -257,10 +257,10 @@ router.post('/link/teacher',
 
       // Add teacher role if not present
       await pool.query(
-        `INSERT INTO user_roles (user_id, role_name, assigned_by)
+        `INSERT INTO user_roles (user_id, role, granted_by)
          VALUES ($1, 'teacher', $2)
-         ON CONFLICT (user_id, role_name) 
-         DO UPDATE SET is_active = true, assigned_at = now()`,
+         ON CONFLICT (user_id, role) 
+         DO UPDATE SET revoked_at = NULL, granted_at = now()`,
         [user_id, req.user.id]
       )
 
@@ -342,10 +342,10 @@ router.post('/link/student',
 
       // Add parent role if not present
       await pool.query(
-        `INSERT INTO user_roles (user_id, role_name, assigned_by)
+        `INSERT INTO user_roles (user_id, role, granted_by)
          VALUES ($1, 'parent', $2)
-         ON CONFLICT (user_id, role_name) 
-         DO UPDATE SET is_active = true, assigned_at = now()`,
+         ON CONFLICT (user_id, role) 
+         DO UPDATE SET revoked_at = NULL, granted_at = now()`,
         [user_id, req.user.id]
       )
 
