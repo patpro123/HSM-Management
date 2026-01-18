@@ -1,18 +1,28 @@
 // Apply Migration 004 using Node.js
 const fs = require('fs')
 const { Client } = require('pg')
+require('dotenv').config({ path: './backend-enroll/.env' })
 
 async function applyMigration() {
-  const client = new Client({
-    host: 'localhost',
-    port: 5432,
-    database: 'hsm_dev',
-    user: 'hsm_admin',
-    password: 'secret'
-  })
+  // Use DATABASE_URL from .env, fallback to localhost
+  const connectionString = process.env.DATABASE_URL
+  
+  const client = connectionString 
+    ? new Client({
+        connectionString,
+        ssl: { rejectUnauthorized: false }
+      })
+    : new Client({
+        host: 'localhost',
+        port: 5432,
+        database: 'hsm_dev',
+        user: 'hsm_admin',
+        password: 'secret'
+      })
 
   try {
     console.log('Connecting to database...')
+    console.log(connectionString ? '(Using DATABASE_URL from .env)' : '(Using localhost)')
     await client.connect()
     console.log('✓ Connected successfully')
     console.log('')

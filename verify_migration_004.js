@@ -1,20 +1,30 @@
 // Verify Migration 004: Authentication Tables
 const { Client } = require('pg')
+require('dotenv').config({ path: './backend-enroll/.env' })
 
 async function verifyMigration() {
-  const client = new Client({
-    host: 'localhost',
-    port: 5432,
-    database: 'hsm_dev',
-    user: 'hsm_admin',
-    password: 'secret'
-  })
+  // Use DATABASE_URL from .env, fallback to localhost
+  const connectionString = process.env.DATABASE_URL
+  
+  const client = connectionString 
+    ? new Client({
+        connectionString,
+        ssl: { rejectUnauthorized: false }
+      })
+    : new Client({
+        host: 'localhost',
+        port: 5432,
+        database: 'hsm_dev',
+        user: 'hsm_admin',
+        password: 'secret'
+      })
 
   try {
     console.log('==================================================')
     console.log('Migration 004 Verification Script')
     console.log('==================================================\n')
 
+    console.log(connectionString ? 'Connecting to Neon database...' : 'Connecting to localhost...')
     await client.connect()
     console.log('✓ Connected to database\n')
 
