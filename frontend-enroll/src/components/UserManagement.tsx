@@ -95,15 +95,27 @@ const UserManagement: React.FC = () => {
     if (!selectedUser || !newRole) return;
 
     try {
-      await apiPost(`/api/users/${selectedUser.id}/roles`, { role: newRole });
+      const response = await apiPost(`/api/users/${selectedUser.id}/roles`, { role: newRole });
+      // If backend returns error, show it
+      if (response && response.error) {
+        setError(response.error);
+        return;
+      }
       await fetchUsers();
       setShowRoleModal(false);
       setNewRole('');
       setSelectedUser(null);
       setError('');
     } catch (error: any) {
+      // Try to extract backend error message
+      let errorMsg = 'Failed to assign role';
+      if (error?.response?.data?.error) {
+        errorMsg = error.response.data.error;
+      } else if (error?.message) {
+        errorMsg = error.message;
+      }
+      setError(errorMsg);
       console.error('Error assigning role:', error);
-      setError(error.response?.data?.error || 'Failed to assign role');
     }
   };
 
@@ -126,18 +138,29 @@ const UserManagement: React.FC = () => {
     if (!selectedUser || !linkEntityId) return;
 
     try {
-      await apiPost(`/api/users/${selectedUser.id}/link`, {
+      const response = await apiPost(`/api/users/${selectedUser.id}/link`, {
         entity_type: linkEntityType,
         entity_id: parseInt(linkEntityId)
       });
+      // If backend returns error, show it
+      if (response && response.error) {
+        setError(response.error);
+        return;
+      }
       await fetchUsers();
       setShowLinkModal(false);
       setLinkEntityId('');
       setSelectedUser(null);
       setError('');
     } catch (error: any) {
+      let errorMsg = 'Failed to link entity';
+      if (error?.response?.data?.error) {
+        errorMsg = error.response.data.error;
+      } else if (error?.message) {
+        errorMsg = error.message;
+      }
+      setError(errorMsg);
       console.error('Error linking entity:', error);
-      setError(error.response?.data?.error || 'Failed to link entity');
     }
   };
 
@@ -331,16 +354,19 @@ const UserManagement: React.FC = () => {
                   {user.last_login ? formatDate(user.last_login) : 'Never'}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                  <button
-                    onClick={() => handleToggleActive(user)}
-                    className={`${
-                      user.is_active
-                        ? 'text-red-600 hover:text-red-900'
-                        : 'text-green-600 hover:text-green-900'
-                    }`}
-                  >
-                    {user.is_active ? 'Deactivate' : 'Activate'}
-                  </button>
+                  {/* Only show to admin users */}
+                  {user.roles.some(r => r.role === 'admin') && (
+                    <button
+                      onClick={() => handleToggleActive(user)}
+                      className={`$
+                        user.is_active
+                          ? 'text-red-600 hover:text-red-900'
+                          : 'text-green-600 hover:text-green-900'
+                      }`}
+                    >
+                      {user.is_active ? 'Disable' : 'Enable'}
+                    </button>
+                  )}
                 </td>
               </tr>
             ))}

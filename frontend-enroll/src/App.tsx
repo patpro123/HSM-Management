@@ -192,31 +192,45 @@ const App: React.FC = () => {
           <h1 className="text-sm font-black tracking-widest text-orange-400 uppercase mt-2">HSM Admin Portal</h1>
         </div>
         <ul className="space-y-2 flex-1">
+          {/* Overview tab: visible to all authenticated users */}
           <li>
             <button onClick={() => handleTabChange('stats')} className={`w-full text-left px-4 py-3 rounded-lg transition-colors font-medium ${activeTab === 'stats' ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-lg shadow-orange-500/30' : 'text-slate-300 hover:bg-slate-800 hover:text-white'}`}>
               📊 <span className="ml-2">Overview</span>
             </button>
           </li>
-          <li>
-            <button onClick={() => handleTabChange('students')} className={`w-full text-left px-4 py-3 rounded-lg transition-colors font-medium ${activeTab === 'students' ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-lg shadow-orange-500/30' : 'text-slate-300 hover:bg-slate-800 hover:text-white'}`}>
-              👥 <span className="ml-2">Students</span>
-            </button>
-          </li>
-          <li>
-            <button onClick={() => handleTabChange('attendance')} className={`w-full text-left px-4 py-3 rounded-lg transition-colors font-medium ${activeTab === 'attendance' ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-lg shadow-orange-500/30' : 'text-slate-300 hover:bg-slate-800 hover:text-white'}`}>
-              📅 <span className="ml-2">Attendance</span>
-            </button>
-          </li>
-          <li>
-            <button onClick={() => handleTabChange('payments')} className={`w-full text-left px-4 py-3 rounded-lg transition-colors font-medium ${activeTab === 'payments' ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-lg shadow-orange-500/30' : 'text-slate-300 hover:bg-slate-800 hover:text-white'}`}>
-              💳 <span className="ml-2">Payments</span>
-            </button>
-          </li>
-          <li>
-            <button onClick={() => handleTabChange('teachers')} className={`w-full text-left px-4 py-3 rounded-lg transition-colors font-medium ${activeTab === 'teachers' ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-lg shadow-orange-500/30' : 'text-slate-300 hover:bg-slate-800 hover:text-white'}`}>
-              👨‍🏫 <span className="ml-2">Teachers</span>
-            </button>
-          </li>
+          {/* Students tab: visible to admin, teacher, parent */}
+          {user && (user.roles.includes('admin') || user.roles.includes('teacher') || user.roles.includes('parent')) && (
+            <li>
+              <button onClick={() => handleTabChange('students')} className={`w-full text-left px-4 py-3 rounded-lg transition-colors font-medium ${activeTab === 'students' ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-lg shadow-orange-500/30' : 'text-slate-300 hover:bg-slate-800 hover:text-white'}`}>
+                👥 <span className="ml-2">Students</span>
+              </button>
+            </li>
+          )}
+          {/* Attendance tab: visible to admin, teacher */}
+          {user && (user.roles.includes('admin') || user.roles.includes('teacher')) && (
+            <li>
+              <button onClick={() => handleTabChange('attendance')} className={`w-full text-left px-4 py-3 rounded-lg transition-colors font-medium ${activeTab === 'attendance' ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-lg shadow-orange-500/30' : 'text-slate-300 hover:bg-slate-800 hover:text-white'}`}>
+                📅 <span className="ml-2">Attendance</span>
+              </button>
+            </li>
+          )}
+          {/* Payments tab: visible to admin, parent */}
+          {user && (user.roles.includes('admin') || user.roles.includes('parent')) && (
+            <li>
+              <button onClick={() => handleTabChange('payments')} className={`w-full text-left px-4 py-3 rounded-lg transition-colors font-medium ${activeTab === 'payments' ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-lg shadow-orange-500/30' : 'text-slate-300 hover:bg-slate-800 hover:text-white'}`}>
+                💳 <span className="ml-2">Payments</span>
+              </button>
+            </li>
+          )}
+          {/* Teachers tab: visible to admin only */}
+          {user && user.roles.includes('admin') && (
+            <li>
+              <button onClick={() => handleTabChange('teachers')} className={`w-full text-left px-4 py-3 rounded-lg transition-colors font-medium ${activeTab === 'teachers' ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-lg shadow-orange-500/30' : 'text-slate-300 hover:bg-slate-800 hover:text-white'}`}>
+                👨‍🏫 <span className="ml-2">Teachers</span>
+              </button>
+            </li>
+          )}
+          {/* Users tab: visible to admin only */}
           {user && user.roles.includes('admin') && (
             <li>
               <button onClick={() => handleTabChange('users')} className={`w-full text-left px-4 py-3 rounded-lg transition-colors font-medium ${activeTab === 'users' ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-lg shadow-orange-500/30' : 'text-slate-300 hover:bg-slate-800 hover:text-white'}`}>
