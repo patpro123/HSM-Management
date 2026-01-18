@@ -43,3 +43,8 @@ backend-enroll/.env
 # Frontend specific
 frontend-enroll/.env
 frontend-enroll/dist/
+
+# Prevent sensitive files from being committed
+backend-enroll/.env
+backend-enroll/env.txt
+backend-enroll/admin-token.txt
