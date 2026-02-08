@@ -27,6 +27,11 @@ export const apiRequest = async (
     throw new Error(error.message || error.error || 'Request failed');
   }
 
+  // Handle 204 No Content response
+  if (response.status === 204) {
+    return null;
+  }
+
   return response.json();
 };
 

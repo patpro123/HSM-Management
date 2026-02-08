@@ -16,7 +16,7 @@ export default function HistoricalAttendance() {
     setLoading(true)
     setError('')
     try {
-      const response = await fetch(`${API_BASE_URL}/api/attendance?date=${selectedDate}`)
+      const response = await fetch(`http://localhost:3000/api/attendance?date=${selectedDate}`)
       if (!response.ok) throw new Error('Failed to fetch records')
       const data = await response.json()
       setRecords(data.records || [])

@@ -1,69 +1,209 @@
-import React, { useState } from 'react';
-import { Student } from '../types';
+import React, { useState, useEffect } from 'react';
+import { Student, Batch, Instrument, PaymentFrequency } from '../types';
 
-interface StudentDetailsProps {
-  student: Student;
-  onUpdate: (updated: Student) => void;
+export interface EnrollmentSelection {
+  batch_id: number | string;
+  payment_frequency: PaymentFrequency;
+  enrollment_date: string;
 }
 
-const StudentDetails: React.FC<StudentDetailsProps> = ({ student, onUpdate }) => {
-  const [form, setForm] = useState({
-    first_name: student.first_name || '',
-    last_name: student.last_name || '',
-    email: student.email || '',
-    phone: student.phone || '',
-    address: student.address || '',
-    guardian_name: student.guardian_name || '',
-    guardian_phone: student.guardian_phone || '',
+interface StudentDetailsProps {
+  student?: Student | null;
+  batches: Batch[];
+  instruments: Instrument[];
+  onSave: (data: any, enrollments: EnrollmentSelection[]) => void;
+  onCancel: () => void;
+}
+
+const StudentDetails: React.FC<StudentDetailsProps> = ({ student, batches, instruments, onSave, onCancel }) => {
+  const [formData, setFormData] = useState({
+    first_name: '',
+    last_name: '',
+    date_of_birth: '',
+    email: '',
+    phone: '',
+    guardian_name: '',
+    guardian_phone: '',
+    address: ''
   });
-  const [saving, setSaving] = useState(false);
+  const [selectedBatches, setSelectedBatches] = useState<EnrollmentSelection[]>([]);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setForm({ ...form, [e.target.name]: e.target.value });
+  useEffect(() => {
+    if (student) {
+      const name = (student as any).name || '';
+      const nameParts = name.split(' ');
+      const firstName = student.first_name || nameParts[0] || '';
+      const lastName = student.last_name || (nameParts.length > 1 ? nameParts.slice(1).join(' ') : '');
+      const metadata = (student as any).metadata || {};
+
+      setFormData({
+        first_name: firstName,
+        last_name: lastName,
+        date_of_birth: student.date_of_birth || (student as any).dob?.split('T')[0] || '',
+        email: metadata.email || student.email || '',
+        phone: student.phone || '',
+        guardian_name: metadata.guardian_name || student.guardian_name || (student as any).guardian_contact || '',
+        guardian_phone: metadata.guardian_phone || student.guardian_phone || '',
+        address: metadata.address || student.address || ''
+      });
+
+      // Pre-select batches and payment modes if editing
+      if (Array.isArray(student.enrollments)) {
+        setSelectedBatches(
+          student.enrollments.map((enr: any) => ({
+            batch_id: enr.batch_id || enr.batchId || '',
+            payment_frequency: enr.payment_frequency || 'monthly',
+            enrollment_date: enr.enrolled_on ? enr.enrolled_on.split('T')[0] : ''
+          }))
+        );
+      } else {
+        setSelectedBatches([]);
+      }
+    } else {
+      setFormData({
+        first_name: '',
+        last_name: '',
+        date_of_birth: '',
+        email: '',
+        phone: '',
+        guardian_name: '',
+        guardian_phone: '',
+        address: ''
+      });
+      setSelectedBatches([]);
+    }
+  }, [student]);
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleBatchToggle = (batchId: number | string) => {
+    setSelectedBatches(prev => {
+      const exists = prev.find(e => String(e.batch_id) === String(batchId));
+      if (exists) {
+        return prev.filter(e => String(e.batch_id) !== String(batchId));
+      } else {
+        const today = new Date().toISOString().split('T')[0];
+        return [...prev, { batch_id: batchId, payment_frequency: 'monthly' as PaymentFrequency, enrollment_date: today }];
+      }
+    });
+  };
+
+  const handlePaymentFrequencyChange = (batchId: number | string, frequency: PaymentFrequency) => {
+    setSelectedBatches(prev =>
+      prev.map(e => (String(e.batch_id) === String(batchId) ? { ...e, payment_frequency: frequency } : e))
+    );
+  };
+
+  const handleEnrollmentDateChange = (batchId: number | string, date: string) => {
+    setSelectedBatches(prev =>
+      prev.map(e => (String(e.batch_id) === String(batchId) ? { ...e, enrollment_date: date } : e))
+    );
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSaving(true);
-    // Call onUpdate with new data
-    onUpdate({ ...student, ...form });
-    setSaving(false);
+    console.log('📝 [StudentDetails] Submitting form:', { formData, selectedBatches });
+    onSave(formData, selectedBatches);
   };
+
+  // Group batches by instrument
+  const batchesByInstrument = (instruments || []).map(instrument => ({
+    instrument,
+    batches: (batches || []).filter(batch => String(batch.instrument_id) === String(instrument.id))
+  }));
 
   return (
-    <form className="max-w-xl mx-auto bg-white rounded-xl shadow p-8 mt-10" onSubmit={handleSubmit}>
-      <h2 className="text-2xl font-bold mb-4">Student Details</h2>
-      <div className="mb-4">
-        <label className="block font-semibold mb-1">First Name</label>
-        <input name="first_name" value={form.first_name} onChange={handleChange} className="w-full border rounded p-2" />
+    <form onSubmit={handleSubmit} className="p-6 space-y-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label className="block text-sm font-semibold text-slate-700 mb-2">First Name *</label>
+          <input name="first_name" value={formData.first_name} onChange={handleInputChange} required className="w-full px-4 py-2 rounded-lg border border-slate-300 focus:border-orange-500 focus:ring-2 focus:ring-orange-200 outline-none" />
+        </div>
+        <div>
+          <label className="block text-sm font-semibold text-slate-700 mb-2">Last Name *</label>
+          <input name="last_name" value={formData.last_name} onChange={handleInputChange} required className="w-full px-4 py-2 rounded-lg border border-slate-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none" />
+        </div>
+        <div>
+          <label className="block text-sm font-semibold text-slate-700 mb-2">Date of Birth</label>
+          <input type="date" name="date_of_birth" value={formData.date_of_birth} onChange={handleInputChange} className="w-full px-4 py-2 rounded-lg border border-slate-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none" />
+        </div>
+        <div>
+          <label className="block text-sm font-semibold text-slate-700 mb-2">Email</label>
+          <input type="email" name="email" value={formData.email} onChange={handleInputChange} className="w-full px-4 py-2 rounded-lg border border-slate-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none" />
+        </div>
+        <div>
+          <label className="block text-sm font-semibold text-slate-700 mb-2">Phone</label>
+          <input type="tel" name="phone" value={formData.phone} onChange={handleInputChange} className="w-full px-4 py-2 rounded-lg border border-slate-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none" />
+        </div>
+        <div>
+          <label className="block text-sm font-semibold text-slate-700 mb-2">Guardian Name</label>
+          <input name="guardian_name" value={formData.guardian_name} onChange={handleInputChange} className="w-full px-4 py-2 rounded-lg border border-slate-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none" />
+        </div>
+        <div>
+          <label className="block text-sm font-semibold text-slate-700 mb-2">Guardian Phone</label>
+          <input type="tel" name="guardian_phone" value={formData.guardian_phone} onChange={handleInputChange} className="w-full px-4 py-2 rounded-lg border border-slate-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none" />
+        </div>
       </div>
-      <div className="mb-4">
-        <label className="block font-semibold mb-1">Last Name</label>
-        <input name="last_name" value={form.last_name} onChange={handleChange} className="w-full border rounded p-2" />
+      <div>
+        <label className="block text-sm font-semibold text-slate-700 mb-2">Address</label>
+        <textarea name="address" value={formData.address} onChange={handleInputChange} rows={3} className="w-full px-4 py-2 rounded-lg border border-slate-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none" />
       </div>
-      <div className="mb-4">
-        <label className="block font-semibold mb-1">Email</label>
-        <input name="email" value={form.email} onChange={handleChange} className="w-full border rounded p-2" />
+
+      <div className="border-t border-slate-200 pt-4">
+        <h3 className="text-lg font-bold text-slate-800 mb-3">Enroll in Batches <span className="text-red-500">*</span></h3>
+        <p className="text-sm text-slate-600 mb-4">Select the batches and payment plan for this student</p>
+        <div className="space-y-4 max-h-64 overflow-y-auto">
+          {batchesByInstrument.map(({ instrument, batches: instrumentBatches }) => (
+            <div key={instrument.id} className="bg-slate-50 rounded-lg p-4 border border-slate-200">
+              <h4 className="text-sm font-bold text-slate-800 mb-3 flex items-center gap-2">🎵 {instrument.name}</h4>
+              {instrumentBatches.length === 0 ? (
+                <p className="text-xs text-slate-500 italic">No active batches available.</p>
+              ) : (
+                <div className="space-y-2">
+                  {instrumentBatches.map(batch => {
+                    const isSelected = selectedBatches.some(e => String(e.batch_id) === String(batch.id));
+                    const enrollment = selectedBatches.find(e => String(e.batch_id) === String(batch.id));
+                    return (
+                      <div key={batch.id} className={`p-3 rounded-lg border transition ${isSelected ? 'border-orange-500 bg-orange-50' : 'border-slate-200 bg-white'}`}>
+                        <div className="flex items-start gap-2">
+                          <input type="checkbox" checked={isSelected} onChange={() => handleBatchToggle(batch.id)} className="mt-1 w-4 h-4 text-orange-600 rounded focus:ring-2 focus:ring-orange-500" />
+                          <div className="flex-1">
+                            <p className="font-semibold text-slate-900 text-sm">{batch.recurrence}</p>
+                            <p className="text-xs text-slate-600">{batch.day_of_week} • {batch.start_time} - {batch.end_time}</p>
+                            {isSelected && (
+                              <div className="mt-2 space-y-2">
+                                <div>
+                                  <label className="block text-xs font-semibold text-slate-700 mb-1">Enrollment Date</label>
+                                  <input type="date" value={enrollment?.enrollment_date || ''} onChange={(e) => handleEnrollmentDateChange(batch.id, e.target.value)} className="text-xs px-2 py-1 rounded border border-slate-300 focus:border-indigo-500 outline-none w-full" />
+                                </div>
+                                <div>
+                                  <label className="block text-xs font-semibold text-slate-700 mb-1">Payment Frequency</label>
+                                  <select value={enrollment?.payment_frequency || 'monthly'} onChange={(e) => handlePaymentFrequencyChange(batch.id, e.target.value as PaymentFrequency)} className="text-xs px-2 py-1 rounded border border-slate-300 focus:border-indigo-500 outline-none w-full">
+                                    <option value="monthly">Monthly (8 classes)</option>
+                                    <option value="quarterly">Quarterly (24 classes)</option>
+                                    <option value="half_yearly">Half-Yearly (48 classes)</option>
+                                  </select>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
       </div>
-      <div className="mb-4">
-        <label className="block font-semibold mb-1">Phone</label>
-        <input name="phone" value={form.phone} onChange={handleChange} className="w-full border rounded p-2" />
+
+      <div className="flex gap-3 pt-4">
+        <button type="button" onClick={onCancel} className="flex-1 px-4 py-3 bg-slate-200 text-slate-700 rounded-lg font-semibold hover:bg-slate-300 transition">Cancel</button>
+        <button type="submit" className="flex-1 px-4 py-3 bg-gradient-to-r from-orange-500 to-amber-500 text-white rounded-lg font-semibold hover:from-orange-600 hover:to-amber-600 transition shadow-lg">{student ? 'Save Changes' : 'Add Student & Enroll'}</button>
       </div>
-      <div className="mb-4">
-        <label className="block font-semibold mb-1">Address</label>
-        <input name="address" value={form.address} onChange={handleChange} className="w-full border rounded p-2" />
-      </div>
-      <div className="mb-4">
-        <label className="block font-semibold mb-1">Guardian Name</label>
-        <input name="guardian_name" value={form.guardian_name} onChange={handleChange} className="w-full border rounded p-2" />
-      </div>
-      <div className="mb-4">
-        <label className="block font-semibold mb-1">Guardian Phone</label>
-        <input name="guardian_phone" value={form.guardian_phone} onChange={handleChange} className="w-full border rounded p-2" />
-      </div>
-      <button type="submit" className="bg-blue-600 text-white px-6 py-2 rounded" disabled={saving}>
-        {saving ? 'Saving...' : 'Update'}
-      </button>
     </form>
   );
 };

@@ -1,13 +1,13 @@
-# Hyderabad School of Music — Requirements (MVP)
+# Hyderabad School of Music — Requirements (Core App)
 
-> Status: Prioritizing Enrollment, Payments and AI-assisted Attendance (WhatsApp-based). This document captures functional and non-functional requirements, data model, workflows, and acceptance criteria for the initial MVP.
+> Status: Prioritizing Enrollment, Payments, and Core Attendance (Dashboard). AI/WhatsApp features are paused. This document captures functional and non-functional requirements for the Core App.
 
 ---
 
 ## 1. Summary ✨
 Hyderabad School of Music (HSM) offers courses in Keyboard, Guitar, Piano, Drums, Tabla, Violin, Hindustani vocals, and Carnatic vocals. Most classes are offline at the school; online options exist for Guitar and Keyboard.
 
-Priority for the MVP: 1) Enrollment, 2) Payments, 3) Attendance (AI-assisted via WhatsApp).
+Priority for the Core App: 1) Enrollment, 2) Payments, 3) Attendance (Dashboard-based), 4) Teacher Payouts.
 
 ---
 
@@ -48,13 +48,13 @@ Acceptance criteria:
   - **Monthly:** 8 classes per month
   - **Quarterly:** 24 classes (discounted per-class compared to monthly)
 - Payment gateway integration (recommended: Razorpay or Stripe based on region).
-- Payment record updates `classes_remaining` for student/enrollment upon successful payment.
+- Payment record updates `classes_remaining` for the specific **Batch Assignment** (Instrument) upon successful payment.
 - Generate receipts/invoices and store transactions for reconciliation.
 - Track payments to teachers (payout ledger): the system supports both fixed-salary and per-class payout models. Current school setup: 2 teachers on fixed salary and 3 teachers on per-class basis.
 
 Acceptance criteria:
 - Can define packages per instrument with price and classes_count.
-- On payment success, classes_remaining is set/updated and a receipt is generated.
+- On payment success, `classes_remaining` for the specific instrument/batch is updated.
 
 ### 3.3 Attendance Capture (Hybrid: Dashboard + WhatsApp)
 
@@ -68,21 +68,18 @@ Acceptance criteria:
   - Teachers: Mark attendance only for current day and their assigned batches.
   - Admin: Mark/edit attendance for any past or current day, any batch (with audit trail).
 
-**Secondary Flow (WhatsApp AI-Assisted):**
-- Teachers can optionally submit attendance via WhatsApp text message (e.g., "Present: John, Mary, Ahmed").
-- System generates **draft attendance** using AI/parsing pipeline and sends back for confirmation.
-- Teacher confirms via WhatsApp reply or reviews/edits in dashboard.
-- WhatsApp flow augments dashboard; both methods supported.
+**Secondary Flow (WhatsApp AI-Assisted) — [PAUSED]:**
+- Feature deferred. Focus is currently on the Dashboard UI.
 
 **Makeup Classes:**
-- When student misses a regular class (marked Absent), `classes_remaining` is **not** decremented.
-- System tracks missed classes and allows admin to schedule makeup classes.
-- When student attends makeup class (marked Present), `classes_remaining` is decremented.
-- Makeup class attendance captured separately with flag `is_makeup=true` in batch.
+- **Scenario:** Occurs when the school is closed or the teacher is not present (class cancelled).
+- **Student Logic:** The cancelled class does not decrement `classes_remaining`. The credit is preserved for the makeup class.
+- **Teacher Logic:** Teachers are **not** paid for the cancelled/missed session. They are paid only for the makeup class (replacement).
+- **Execution:** Admin schedules a batch with `is_makeup=true`. When the student attends this makeup class (marked Present), `classes_remaining` is decremented.
 
 **Attendance Finalization:**
 - Attendance records finalized at end-of-day (23:59 local time) or on teacher submission.
-- Finalized attendance decrements `classes_remaining` only for Present students in regular (non-makeup) classes.
+- Finalized attendance decrements `classes_remaining` for Present students.
 - Holidays/teacher leaves stored in central calendar; classes on these days do not decrement `classes_remaining`.
 
 **Future Enhancement (Low Priority):**
@@ -91,10 +88,29 @@ Acceptance criteria:
 Acceptance criteria:
 - Mobile-responsive batch attendance UI with "Mark All Present" and individual toggle options.
 - Teachers can mark attendance for current day; admin can mark/edit any day with audit log.
-- WhatsApp integration for attendance submission with AI draft generation and confirmation flow.
-- Makeup classes tracked separately; `classes_remaining` logic correctly handles regular vs makeup attendance.
+- Makeup classes tracked separately; `classes_remaining` logic correctly handles cancelled vs makeup attendance.
 - System prevents duplicate attendance for same student/batch/date.
 - Finalized attendance cannot be edited by teachers; admin can reopen with audit trail.
+
+### 3.4 Student 360 View & Evaluations
+
+**Student 360 View:**
+- A comprehensive dashboard view accessible to Admins, Teachers, and Parents/Students.
+- **Key Metrics:**
+  - Total classes attended (Attendance history).
+  - Classes remaining (Current balance).
+  - Current Payment Plan (Monthly/Quarterly).
+  - Next scheduled class.
+- **Evaluations & Reports:**
+  - Teachers provide monthly feedback/progress reports.
+  - Track major milestones (e.g., Trinity certifications).
+  - Upload capability for external report files (PDF/Images).
+  - "Upcoming Evaluation" indicator.
+
+Acceptance criteria:
+- Clicking a student card opens the 360 view.
+- Teachers can add/edit evaluations.
+- Parents see read-only view of evaluations and stats.
 
 ---
 
@@ -120,19 +136,9 @@ Acceptance criteria:
 
 ---
 
-## 5. AI & Integration Design (Attendance) 🤖
-- Ingest: WhatsApp Business Cloud API (webhook) or Twilio.
-- Parsing pipeline:
-  1. Preprocess teacher message (normalize punctuation, known tokens like "present:").
-  2. Use regex + light NER parsing to extract name tokens.
-  3. Fuzzy match tokens to enrolled students for the day's related batches (Levenshtein, token set ratio).
-  4. Create draft attendance with confidence scores; ambiguous matches flagged.
-- UX: send a quick interactive WhatsApp message with proposed `Present` list and options: Confirm / Edit / Reject (or use a small reply flow). Alternative web dashboard approval is available.
-- Finalization: system waits until cutoff and finalizes absentees (unless holiday/leave flag set for that batch/day).
-- Privacy & compliance: collect teacher consent for WhatsApp processing; minimize PII in LLM prompts; store logs for audits.
-
-Notes:
-- Optional enhancements: audio-to-text parsing, automated face matching for in-person classes (requires explicit consent), and automated feedback for student recordings.
+## 5. AI & Integration Design (Attendance) — [PAUSED] 🤖
+- This module is deferred to a future phase.
+- Focus is on manual attendance entry via the Web Dashboard.
 
 ---
 
@@ -152,10 +158,10 @@ Notes:
 
 ---
 
-## 8. MVP Roadmap (3 phases) 🗺️
-- Phase 1 (MVP): Enrollment, Packages & Payments, WhatsApp ingestion + AI draft attendance, end-of-day finalization, holiday handling, basic reports.
-- Phase 2: Teacher payouts automation, parent portal, improved attendance UIs and interactive WhatsApp confirmations, recurring invoices.
-- Phase 3: Automated feedback on student recordings, analytics (churn prediction), advanced scheduling & marketplace features.
+## 8. Roadmap 🗺️
+- Phase 1 (Core): Enrollment, Packages & Payments, Dashboard Attendance, Teacher Payouts, Holiday handling.
+- Phase 2 (Growth): Parent portal, Recurring invoices, WhatsApp AI Attendance.
+- Phase 3 (Advanced): Automated feedback on student recordings, analytics (churn prediction).
 
 ---
 

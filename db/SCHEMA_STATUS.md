@@ -1,7 +1,7 @@
 # Database Schema Status
 
-**Last Updated:** 2026-01-17  
-**Schema Version:** v1.3 (with all migrations applied)
+**Last Updated:** 2026-01-19  
+**Schema Version:** v2.0 (with authentication migration 004 deployed)
 
 ## Current State
 
@@ -71,6 +71,14 @@ Changes:
 - Added `classes_remaining` column to enrollment_batches
 - Added `enrolled_on` column to enrollment_batches
 - Added column comments for clarity
+
+### Migration 006: Student 360 Enhancements
+**File:** `migrations/006_student_360_enhancements.sql`
+**Applied:** 2026-01-20
+
+Changes:
+- Promoted `email` to top-level column in `students` table
+- Created `student_evaluations` table for reviews, certificates, and homework
 
 ## Setup Instructions
 

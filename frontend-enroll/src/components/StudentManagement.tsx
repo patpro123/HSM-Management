@@ -1,8 +1,10 @@
-import React, { useState } from 'react';
-import { Student, Batch, Instrument, PaymentFrequency } from '../types';
-import { apiPost, apiDelete } from '../api';
+import React, { useState, useEffect } from 'react';
+import { Student, Batch, Instrument } from '../types';
+import { apiDelete, apiGet } from '../api';
 import { authenticatedFetch, getCurrentUser } from '../auth';
 import { API_BASE_URL } from '../config';
+import Student360View from './Student360View';
+import StudentDetails, { EnrollmentSelection } from './StudentDetails';
 
 interface StudentManagementProps {
   students: Student[];
@@ -11,30 +13,29 @@ interface StudentManagementProps {
   onRefresh: () => void;
 }
 
-interface EnrollmentSelection {
-  batch_id: number | string;
-  payment_frequency: PaymentFrequency;
-  enrollment_date: string;
-}
-
-const StudentManagement: React.FC<StudentManagementProps> = ({ students, batches, instruments, onRefresh }) => {
-  const [searchTerm, setSearchTerm] = useState('');
+const StudentManagement: React.FC<StudentManagementProps> = ({ students: propStudents, batches, instruments, onRefresh }) => {
+  const [successBanner, setSuccessBanner] = useState('');
+  const [errorBanner, setErrorBanner] = useState('');
+  const [students, setStudents] = useState<Student[]>(propStudents || []);
+  const [teachers, setTeachers] = useState<any[]>([]);
+  // Default filter to Keyboard instrument if present
   const [filterInstruments, setFilterInstruments] = useState<(string | number)[]>([]);
-  const [filterBatch, setFilterBatch] = useState<string>('all');
+
+  useEffect(() => {
+    setStudents(propStudents || []);
+  }, [propStudents]);
+
+  const [filterTeacher, setFilterTeacher] = useState<string>('all');
+  const [searchTerm, setSearchTerm] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingStudent, setEditingStudent] = useState<Student | null>(null);
   const [viewMode, setViewMode] = useState<'card' | 'table'>('card');
-  const [formData, setFormData] = useState({
-    first_name: '',
-    last_name: '',
-    date_of_birth: '',
-    email: '',
-    phone: '',
-    guardian_name: '',
-    guardian_phone: '',
-    address: ''
-  });
-  const [selectedBatches, setSelectedBatches] = useState<EnrollmentSelection[]>([]);
+  const [selectedStudentId, setSelectedStudentId] = useState<string | number | null>(null);
+
+  // Fetch teachers on mount
+  useEffect(() => {
+    apiGet('/api/teachers').then(res => setTeachers(res.teachers || []));
+  }, []);
 
   // Get logged-in user from existing auth system
   const user = getCurrentUser();
@@ -48,96 +49,112 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students, batches
   console.log('- Is admin:', isAdmin);
   console.log('- User roles:', user?.roles);
   console.log('- Total students received:', students.length);
+  console.log('- Instruments received:', instruments?.length, instruments);
+  console.log('- Batches received:', batches?.length, batches);
 
-  // Filter students based on role:
-  // - Admin users: show all students
-  // - Student/Parent users: show only the student whose email matches the logged-in user's email
+  // Filter students by instrument, teacher, and search term
   const filteredStudents = students.filter(student => {
-    if (isAdmin) {
-      return true; // Admin sees all students
+    const studentBatches = (student as any).batches || [];
+
+    // Search term filter
+    if (searchTerm) {
+      const lowerSearch = searchTerm.toLowerCase();
+      const nameMatch = ((student as any).name || '').toLowerCase().includes(lowerSearch);
+      const emailMatch = (student.email || ((student as any).metadata?.email) || '').toLowerCase().includes(lowerSearch);
+      if (!nameMatch && !emailMatch) {
+        return false;
+      }
     }
-    
-    // For non-admin users, filter by matching email
-    const metadata = (student as any).metadata || {};
-    const email = (student.email || metadata.email || '').toLowerCase();
-    
-    console.log('- Checking student:', (student as any).name || 'Unknown');
-    console.log('  - Student email:', student.email);
-    console.log('  - Student metadata email:', metadata.email);
-    console.log('  - Final email (lowercase):', email);
-    console.log('  - Email match:', userEmail && email === userEmail);
-    
-    return userEmail && email === userEmail;
+
+    // Instrument filter
+    if (filterInstruments.length > 0) {
+      const hasInstrument = studentBatches.some((batch: any) => batch.instrument_id && filterInstruments.includes(batch.instrument_id));
+      if (!hasInstrument) return false;
+    }
+
+    // Teacher filter
+    if (filterTeacher !== 'all') {
+      // This relies on `teacher_id` being present in the student's batch data, which will require a backend adjustment.
+      const hasTeacher = studentBatches.some((batch: any) => batch.teacher_id && String(batch.teacher_id) === filterTeacher);
+      if (!hasTeacher) return false;
+    }
+
+    // Role-based filter for non-admins
+    if (!isAdmin) {
+      const email = (student.email || (student as any).metadata?.email || '').toLowerCase();
+      return userEmail && email === userEmail;
+    }
+
+    return true; // If all filters pass, include the student
   });
 
   console.log('- Filtered students count:', filteredStudents.length);
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
-  };
-
   const handleAddStudent = () => {
     setEditingStudent(null);
-    setFormData({
-      first_name: '',
-      last_name: '',
-      date_of_birth: '',
-      email: '',
-      phone: '',
-      guardian_name: '',
-      guardian_phone: '',
-      address: ''
-    });
-    setSelectedBatches([]);
     setShowAddModal(true);
   };
 
   const handleEditStudent = (student: Student) => {
     setEditingStudent(student);
-    
-    // Parse the backend data structure
-    const name = (student as any).name || '';
-    const nameParts = name.split(' ');
-    const firstName = student.first_name || nameParts[0] || '';
-    const lastName = student.last_name || (nameParts.length > 1 ? nameParts.slice(1).join(' ') : '');
-    
-    const metadata = (student as any).metadata || {};
-    
-    setFormData({
-      first_name: firstName,
-      last_name: lastName,
-      date_of_birth: student.date_of_birth || (student as any).dob?.split('T')[0] || '',
-      email: student.email || metadata.email || '',
-      phone: student.phone || '',
-      guardian_name: student.guardian_name || (student as any).guardian_contact || '',
-      guardian_phone: student.guardian_phone || metadata.guardian_phone || '',
-      address: student.address || metadata.address || ''
-    });
     setShowAddModal(true);
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSaveStudent = async (formData: any, selectedBatches: EnrollmentSelection[]) => {
+    // Validate batch selection for new students
+    if (!editingStudent && selectedBatches.length === 0) {
+      setErrorBanner('Please select at least one batch. A student must be enrolled in a batch.');
+      setTimeout(() => setErrorBanner(''), 3000);
+      return;
+    }
+
     try {
-      const url = editingStudent 
-        ? `/api/students/${editingStudent.id}`
-        : `/api/students`;
-      
-      const method = editingStudent ? 'PUT' : 'POST';
+      let url = '/api/students';
+      let method = 'POST';
+      if (editingStudent) {
+        // Defensive: fallback to student.id if editingStudent.id is missing
+        const studentId = editingStudent.id || (editingStudent as any)?.student_id;
+        if (!studentId) {
+          setErrorBanner('Cannot update: student ID is missing.');
+          return;
+        }
+        url = `/api/students/${studentId}`;
+        method = 'PUT';
+      }
       
       // Format data for backend: combine first_name + last_name into name field
       const backendData = {
+        first_name: formData.first_name,
+        last_name: formData.last_name,
         name: `${formData.first_name} ${formData.last_name}`.trim(),
+        email: formData.email || null,
+        date_of_birth: formData.date_of_birth || null,
         dob: formData.date_of_birth || null,
         phone: formData.phone,
+        guardian_name: formData.guardian_name || null,
         guardian_contact: formData.guardian_name || null,
+        guardian_phone: formData.guardian_phone || null,
+        address: formData.address || null,
         metadata: {
           email: formData.email || null,
           address: formData.address || null,
+          guardian_name: formData.guardian_name || null,
           guardian_phone: formData.guardian_phone || null
-        }
+        },
+        batches: selectedBatches.map(batch => {
+          // Find instrument_id from batches prop
+          const batchObj = batches.find(b => String(b.id) === String(batch.batch_id));
+          return {
+            batch_id: batch.batch_id,
+            instrument_id: batchObj?.instrument_id || null,
+            payment_frequency: batch.payment_frequency,
+            enrolled_on: batch.enrollment_date || new Date()
+          };
+        })
       };
       
+      console.log('🚀 [StudentManagement] Sending payload:', { url, method, backendData });
+
       const response = await authenticatedFetch(`${API_BASE_URL}${url}`, {
         method,
         headers: { 'Content-Type': 'application/json' },
@@ -145,24 +162,25 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students, batches
       });
 
       if (response.ok) {
-        const result = await response.json();
-        const studentId = editingStudent?.id || result.student?.id;
-        
-        // If batches are selected and we have a student ID, enroll the student
-        if (selectedBatches.length > 0 && studentId) {
-          await apiPost(`/api/students/${studentId}/enroll`, {
-            enrollments: selectedBatches
-          });
-        }
-        
         setShowAddModal(false);
+        setSuccessBanner('Student added successfully!');
         onRefresh();
+        setTimeout(() => setSuccessBanner(''), 3000);
       } else {
-        alert('Failed to save student');
+        console.error('❌ [StudentManagement] Save failed:', response.status, response.statusText);
+        try {
+          const errorBody = await response.text();
+          console.error('❌ [StudentManagement] Error body:', errorBody);
+        } catch (e) {
+          console.error('❌ [StudentManagement] Could not read error body');
+        }
+        setErrorBanner(`Failed to save student: ${response.statusText}`);
+        setTimeout(() => setErrorBanner(''), 3000);
       }
     } catch (error) {
-      console.error('Error saving student:', error);
-      alert('Error saving student');
+      console.error('❌ [StudentManagement] Exception saving student:', error);
+      setErrorBanner('Error saving student');
+      setTimeout(() => setErrorBanner(''), 3000);
     }
   };
 
@@ -173,10 +191,13 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students, batches
 
     try {
       await apiDelete(`/api/students/${id}`);
+      setSuccessBanner('Student deleted successfully!');
       onRefresh();
+      setTimeout(() => setSuccessBanner(''), 3000);
     } catch (error) {
       console.error('Error deleting student:', error);
-      alert('Error deleting student');
+      setErrorBanner('Error deleting student');
+      setTimeout(() => setErrorBanner(''), 3000);
     }
   };
 
@@ -188,38 +209,18 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students, batches
     );
   };
 
-  const handleBatchToggle = (batchId: number | string) => {
-    setSelectedBatches(prev => {
-      const exists = prev.find(e => String(e.batch_id) === String(batchId));
-      if (exists) {
-        return prev.filter(e => String(e.batch_id) !== String(batchId));
-      } else {
-        const today = new Date().toISOString().split('T')[0];
-        return [...prev, { batch_id: batchId, payment_frequency: 'monthly' as PaymentFrequency, enrollment_date: today }];
-      }
-    });
-  };
-
-  const handlePaymentFrequencyChange = (batchId: number | string, frequency: PaymentFrequency) => {
-    setSelectedBatches(prev =>
-      prev.map(e => (String(e.batch_id) === String(batchId) ? { ...e, payment_frequency: frequency } : e))
-    );
-  };
-
-  const handleEnrollmentDateChange = (batchId: number | string, date: string) => {
-    setSelectedBatches(prev =>
-      prev.map(e => (String(e.batch_id) === String(batchId) ? { ...e, enrollment_date: date } : e))
-    );
-  };
-
-  // Group batches by instrument
-  const batchesByInstrument = instruments.map(instrument => ({
-    instrument,
-    batches: batches.filter(batch => batch.instrument_id === instrument.id)
-  })).filter(group => group.batches.length > 0);
-
   return (
     <div className="space-y-6">
+      {successBanner && (
+        <div className="mb-4 px-4 py-3 bg-green-100 text-green-800 rounded-lg font-semibold text-center">
+          {successBanner}
+        </div>
+      )}
+      {errorBanner && (
+        <div className="mb-4 px-4 py-3 bg-red-100 text-red-800 rounded-lg font-semibold text-center">
+          {errorBanner}
+        </div>
+      )}
       <div className="flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
         <div className="flex-1 w-full md:w-auto">
           <input
@@ -260,29 +261,44 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students, batches
       </div>
 
       {/* Filters */}
-      <div className="bg-slate-50 border border-slate-200 rounded-xl p-4">
-        <h3 className="text-sm font-bold text-slate-700 mb-3">Filter by Instruments</h3>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          {instruments.map(inst => (
-            <label key={inst.id} className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={filterInstruments.includes(inst.id)}
-                onChange={() => handleInstrumentToggle(inst.id)}
-                className="w-4 h-4 text-orange-600 rounded focus:ring-2 focus:ring-orange-500"
-              />
-              <span className="text-sm text-slate-700">{inst.name}</span>
-            </label>
-          ))}
+      <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-4">
+        <div>
+          <h3 className="text-sm font-bold text-slate-700 mb-3">Filter by Instrument</h3>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {(instruments || []).map(inst => (
+              <label key={inst.id} className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={filterInstruments.includes(inst.id)}
+                  onChange={() => handleInstrumentToggle(inst.id)}
+                  className="w-4 h-4 text-orange-600 rounded focus:ring-2 focus:ring-orange-500"
+                />
+                <span className="text-sm text-slate-700">{inst.name}</span>
+              </label>
+            ))}
+          </div>
+          {filterInstruments.length > 0 && (
+            <button
+              onClick={() => setFilterInstruments([])}
+              className="mt-3 text-xs text-orange-600 hover:text-orange-800 font-medium"
+            >
+              Clear filters
+            </button>
+          )}
         </div>
-        {filterInstruments.length > 0 && (
-          <button
-            onClick={() => setFilterInstruments([])}
-            className="mt-3 text-xs text-orange-600 hover:text-orange-800 font-medium"
+        <div>
+          <h3 className="text-sm font-bold text-slate-700 mb-3">Filter by Teacher</h3>
+          <select
+            value={filterTeacher}
+            onChange={e => setFilterTeacher(e.target.value)}
+            className="w-full md:w-64 px-4 py-2 rounded-lg border border-slate-300 focus:border-orange-500 focus:ring-2 focus:ring-orange-200 outline-none"
           >
-            Clear filters
-          </button>
-        )}
+            <option value="all">All Teachers</option>
+            {teachers.map(teacher => (
+              <option key={teacher.id} value={teacher.id}>{teacher.name}</option>
+            ))}
+          </select>
+        </div>
       </div>
 
       {/* Students Display */}
@@ -311,7 +327,7 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students, batches
                     <h3 className="font-bold text-slate-900">
                       {student.first_name && student.last_name ? `${student.first_name} ${student.last_name}` : (student as any).name || 'Unknown'}
                     </h3>
-                    <p className="text-xs text-slate-500">{student.email || ((student as any).metadata?.email) || 'No email'}</p>
+                    <p className="text-xs text-slate-500">{((student as any).metadata?.email) || student.email || 'No email'}</p>
                   </div>
                 </div>
               </div>
@@ -323,40 +339,39 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students, batches
                 </div>
                 <div className="flex items-center gap-2 text-slate-600">
                   <span>👤</span>
-                  <span>{student.guardian_name || (student as any).guardian_contact || 'N/A'}</span>
+                  <span>{((student as any).metadata?.guardian_name) || student.guardian_name || (student as any).guardian_contact || 'N/A'}</span>
                 </div>
                 <div className="flex items-center gap-2 text-slate-600">
                   <span>📞</span>
-                  <span>{student.guardian_phone || ((student as any).metadata?.guardian_phone) || 'N/A'}</span>
+                  <span>{((student as any).metadata?.guardian_phone) || student.guardian_phone || 'N/A'}</span>
+                </div>
+                <div className="flex items-start gap-2 text-slate-600">
+                  <span className="mt-1">📍</span>
+                  <span className="flex-1">{((student as any).metadata?.address) || student.address || 'No address provided'}</span>
                 </div>
               </div>
 
-              {/* Show enrolled batches */}
-              {(student as any).enrollments && (student as any).enrollments.length > 0 && (
+              {/* Show enrolled instruments */}
+              {(student as any).batches && (student as any).batches.length > 0 && (
                 <div className="mb-4 pb-4 border-b border-slate-100">
-                  <p className="text-xs font-semibold text-slate-600 mb-2">Enrolled in:</p>
-                  <div className="space-y-1">
-                    {(student as any).enrollments.map((enrollment: any, idx: number) => {
-                      // Match batch_id from enrollment with batches (handle string comparison)
-                      const batch = batches.find(b => String(b.id) === String(enrollment.batch_id));
-                      const instrument = batch ? instruments.find(i => String(i.id) === String(batch.instrument_id)) : null;
-                      const enrolledDate = enrollment.enrolled_on ? new Date(enrollment.enrolled_on).toLocaleDateString() : 'N/A';
-                      return (
-                        <div key={idx} className="flex items-center justify-between gap-2">
-                          <span className="px-2 py-1 bg-orange-100 text-orange-700 rounded text-xs font-medium">
-                            {instrument?.name || batch?.instrument_name || 'Unknown'}
-                          </span>
-                          <span className="text-xs text-slate-500">
-                            Joined: {enrolledDate}
-                          </span>
-                        </div>
-                      );
-                    })}
+                  <p className="text-xs font-semibold text-slate-600 mb-2">Instruments:</p>
+                  <div className="flex flex-wrap gap-2">
+                    {[...new Set((student as any).batches.map((b: any) => b.instrument).filter(Boolean))].map((instrument, idx) => (
+                      <span key={idx} className="px-2 py-1 bg-orange-100 text-orange-800 rounded-full text-xs font-semibold">
+                        {instrument}
+                      </span>
+                    ))}
                   </div>
                 </div>
               )}
 
               <div className="flex gap-2 pt-4 border-t border-slate-100">
+                <button
+                  onClick={() => setSelectedStudentId(student.id || (student as any).student_id)}
+                  className="flex-1 px-3 py-2 bg-blue-50 text-blue-600 rounded-lg font-medium hover:bg-blue-100 transition"
+                >
+                  View 360°
+                </button>
                 <button
                   onClick={() => handleEditStudent(student)}
                   className="flex-1 px-3 py-2 bg-orange-50 text-orange-600 rounded-lg font-medium hover:bg-orange-100 transition"
@@ -364,7 +379,7 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students, batches
                   ✏️ Edit
                 </button>
                 <button
-                  onClick={() => handleDeleteStudent(student.id)}
+                  onClick={() => handleDeleteStudent((student as any).student_id)}
                   className="flex-1 px-3 py-2 bg-red-50 text-red-600 rounded-lg font-medium hover:bg-red-100 transition"
                 >
                   🗑️ Delete
@@ -412,7 +427,7 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students, batches
                             <div className="font-semibold text-slate-900">
                               {student.first_name && student.last_name ? `${student.first_name} ${student.last_name}` : (student as any).name || 'Unknown'}
                             </div>
-                            <div className="text-xs text-slate-500">{student.email || ((student as any).metadata?.email) || 'No email'}</div>
+                            <div className="text-xs text-slate-500">{((student as any).metadata?.email) || student.email || 'No email'}</div>
                           </div>
                         </div>
                       </td>
@@ -423,28 +438,24 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students, batches
                       </td>
                       <td className="px-6 py-4">
                         <div className="text-sm text-slate-600">
-                          <div>{student.guardian_name || (student as any).guardian_contact || 'N/A'}</div>
-                          <div className="text-xs text-slate-500">{student.guardian_phone || ((student as any).metadata?.guardian_phone) || 'N/A'}</div>
+                          <div>{((student as any).metadata?.guardian_name) || student.guardian_name || (student as any).guardian_contact || 'N/A'}</div>
+                          <div className="text-xs text-slate-500">{((student as any).metadata?.guardian_phone) || student.guardian_phone || 'N/A'}</div>
+                           <div className="text-xs text-slate-500">{((student as any).metadata?.address) || student.address || ''}</div>
                         </div>
                       </td>
                       <td className="px-6 py-4">
-                        {(student as any).enrollments && (student as any).enrollments.length > 0 ? (
+                        {(student as any).batches && (student as any).batches.length > 0 ? (
                           <div className="space-y-1">
-                            {(student as any).enrollments.map((enrollment: any, idx: number) => {
-                              const batch = batches.find(b => String(b.id) === String(enrollment.batch_id));
-                              const instrument = batch ? instruments.find(i => String(i.id) === String(batch.instrument_id)) : null;
-                              const enrolledDate = enrollment.enrolled_on ? new Date(enrollment.enrolled_on).toLocaleDateString() : 'N/A';
-                              return (
-                                <div key={idx} className="flex items-center gap-2">
-                                  <span className="px-2 py-0.5 bg-orange-100 text-orange-700 rounded text-xs font-medium">
-                                    {instrument?.name || batch?.instrument_name || 'Unknown'}
-                                  </span>
-                                  <span className="text-xs text-slate-500">
-                                    {enrolledDate}
-                                  </span>
-                                </div>
-                              );
-                            })}
+                            {(student as any).batches.map((batch: any, idx: number) => (
+                              <div key={idx} className="flex items-center gap-2">
+                                <span className="px-2 py-0.5 bg-blue-100 text-blue-800 rounded text-xs font-medium">
+                                  {batch.instrument || 'Unknown'}
+                                </span>
+                                <span className="text-xs text-slate-500">
+                                  {batch.teacher || 'No teacher'}
+                                </span>
+                              </div>
+                            ))}
                           </div>
                         ) : (
                           <span className="text-xs text-slate-400 italic">Not enrolled</span>
@@ -453,13 +464,19 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students, batches
                       <td className="px-6 py-4">
                         <div className="flex gap-2">
                           <button
+                            onClick={() => setSelectedStudentId(student.id || (student as any).student_id)}
+                            className="px-3 py-1.5 bg-blue-50 text-blue-600 rounded-lg text-sm font-medium hover:bg-blue-100 transition"
+                          >
+                            360°
+                          </button>
+                          <button
                             onClick={() => handleEditStudent(student)}
                             className="px-3 py-1.5 bg-orange-50 text-orange-600 rounded-lg text-sm font-medium hover:bg-orange-100 transition"
                           >
                             ✏️ Edit
                           </button>
                           <button
-                            onClick={() => handleDeleteStudent(student.id)}
+                            onClick={() => handleDeleteStudent((student as any).student_id)}
                             className="px-3 py-1.5 bg-red-50 text-red-600 rounded-lg text-sm font-medium hover:bg-red-100 transition"
                           >
                             🗑️
@@ -485,190 +502,23 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students, batches
               </h2>
             </div>
 
-            <form onSubmit={handleSubmit} className="p-6 space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-2">First Name *</label>
-                  <input
-                    type="text"
-                    name="first_name"
-                    value={formData.first_name}
-                    onChange={handleInputChange}
-                    required
-                    className="w-full px-4 py-2 rounded-lg border border-slate-300 focus:border-orange-500 focus:ring-2 focus:ring-orange-200 outline-none"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-2">Last Name *</label>
-                  <input
-                    type="text"
-                    name="last_name"
-                    value={formData.last_name}
-                    onChange={handleInputChange}
-                    required
-                    className="w-full px-4 py-2 rounded-lg border border-slate-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-2">Date of Birth</label>
-                  <input
-                    type="date"
-                    name="date_of_birth"
-                    value={formData.date_of_birth}
-                    onChange={handleInputChange}
-                    className="w-full px-4 py-2 rounded-lg border border-slate-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-2">Email</label>
-                  <input
-                    type="email"
-                    name="email"
-                    value={formData.email}
-                    onChange={handleInputChange}
-                    className="w-full px-4 py-2 rounded-lg border border-slate-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-2">Phone</label>
-                  <input
-                    type="tel"
-                    name="phone"
-                    value={formData.phone}
-                    onChange={handleInputChange}
-                    className="w-full px-4 py-2 rounded-lg border border-slate-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-2">Guardian Name</label>
-                  <input
-                    type="text"
-                    name="guardian_name"
-                    value={formData.guardian_name}
-                    onChange={handleInputChange}
-                    className="w-full px-4 py-2 rounded-lg border border-slate-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-2">Guardian Phone</label>
-                  <input
-                    type="tel"
-                    name="guardian_phone"
-                    value={formData.guardian_phone}
-                    onChange={handleInputChange}
-                    className="w-full px-4 py-2 rounded-lg border border-slate-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-2">Address</label>
-                <textarea
-                  name="address"
-                  value={formData.address}
-                  onChange={handleInputChange}
-                  rows={3}
-                  className="w-full px-4 py-2 rounded-lg border border-slate-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none"
-                />
-              </div>
-
-              {/* Batch Selection Section */}
-              <div className="border-t border-slate-200 pt-4">
-                <h3 className="text-lg font-bold text-slate-800 mb-3">Enroll in Batches (Optional)</h3>
-                <p className="text-sm text-slate-600 mb-4">Select the batches and payment plan for this student</p>
-                
-                <div className="space-y-4 max-h-64 overflow-y-auto">
-                  {batchesByInstrument.map(({ instrument, batches: instrumentBatches }) => (
-                    <div key={instrument.id} className="bg-slate-50 rounded-lg p-4 border border-slate-200">
-                      <h4 className="text-sm font-bold text-slate-800 mb-3 flex items-center gap-2">
-                        🎵 {instrument.name}
-                      </h4>
-                      <div className="space-y-2">
-                        {instrumentBatches.map(batch => {
-                          const isSelected = selectedBatches.some(e => String(e.batch_id) === String(batch.id));
-                          const enrollment = selectedBatches.find(e => String(e.batch_id) === String(batch.id));
-
-                          return (
-                            <div
-                              key={batch.id}
-                              className={`p-3 rounded-lg border transition ${
-                                isSelected ? 'border-orange-500 bg-orange-50' : 'border-slate-200 bg-white'
-                              }`}
-                            >
-                              <div className="flex items-start gap-2">
-                                <input
-                                  type="checkbox"
-                                  checked={isSelected}
-                                  onChange={() => handleBatchToggle(batch.id)}
-                                  className="mt-1 w-4 h-4 text-orange-600 rounded focus:ring-2 focus:ring-orange-500"
-                                />
-                                <div className="flex-1">
-                                  <p className="font-semibold text-slate-900 text-sm">Batch {batch.id}</p>
-                                  <p className="text-xs text-slate-600">
-                                    {batch.day_of_week} • {batch.start_time} - {batch.end_time}
-                                  </p>
-
-                                  {isSelected && (
-                                    <div className="mt-2 space-y-2">
-                                      <div>
-                                        <label className="block text-xs font-semibold text-slate-700 mb-1">Enrollment Date</label>
-                                        <input
-                                          type="date"
-                                          value={enrollment?.enrollment_date || ''}
-                                          onChange={(e) => handleEnrollmentDateChange(batch.id, e.target.value)}
-                                          className="text-xs px-2 py-1 rounded border border-slate-300 focus:border-indigo-500 outline-none w-full"
-                                        />
-                                      </div>
-                                      <div>
-                                        <label className="block text-xs font-semibold text-slate-700 mb-1">Payment Frequency</label>
-                                        <select
-                                          value={enrollment?.payment_frequency || 'monthly'}
-                                          onChange={(e) => handlePaymentFrequencyChange(batch.id, e.target.value as PaymentFrequency)}
-                                          className="text-xs px-2 py-1 rounded border border-slate-300 focus:border-indigo-500 outline-none w-full"
-                                        >
-                                          <option value="monthly">Monthly (8 classes)</option>
-                                          <option value="quarterly">Quarterly (24 classes)</option>
-                                          <option value="half_yearly">Half-Yearly (48 classes)</option>
-                                          <option value="yearly">Yearly (96 classes)</option>
-                                        </select>
-                                      </div>
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="flex gap-3 pt-4">
-                <button
-                  type="button"
-                  onClick={() => setShowAddModal(false)}
-                  className="flex-1 px-4 py-3 bg-slate-200 text-slate-700 rounded-lg font-semibold hover:bg-slate-300 transition"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="flex-1 px-4 py-3 bg-gradient-to-r from-orange-500 to-amber-500 text-white rounded-lg font-semibold hover:from-orange-600 hover:to-amber-600 transition shadow-lg"
-                >
-                  {editingStudent ? 'Save Changes' : 'Add Student & Enroll'}
-                </button>
-              </div>
-            </form>
+            <StudentDetails
+              student={editingStudent}
+              batches={batches}
+              instruments={instruments}
+              onSave={handleSaveStudent}
+              onCancel={() => setShowAddModal(false)}
+            />
           </div>
         </div>
+      )}
+
+      {selectedStudentId && (
+        <Student360View 
+          studentId={selectedStudentId} 
+          onClose={() => setSelectedStudentId(null)} 
+          isModal={true}
+        />
       )}
     </div>
   );

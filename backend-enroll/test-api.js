@@ -18,6 +18,39 @@ function testEndpoint(path) {
   });
 }
 
+function postEndpoint(path, payload) {
+  return new Promise((resolve, reject) => {
+    const data = JSON.stringify(payload);
+    const options = {
+      hostname: 'localhost',
+      port: 3000,
+      path: path,
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Length': data.length,
+      },
+    };
+
+    const req = http.request(options, (res) => {
+      let body = '';
+      res.on('data', (chunk) => (body += chunk));
+      res.on('end', () => {
+        try {
+          resolve(JSON.parse(body));
+        } catch (e) {
+          resolve(body);
+        }
+      });
+    });
+
+    req.on('error', reject);
+    req.write(data);
+    req.end();
+  });
+}
+
+
 async function main() {
   console.log('Testing Enrollment API endpoints...\n');
   
@@ -39,6 +72,20 @@ async function main() {
     console.log('\n3. GET /api/enrollments');
     const enrollments = await testEndpoint('/api/enrollments');
     console.log(`   Found ${enrollments.enrollments?.length || 0} enrollments`);
+
+    console.log('\n4. POST /api/students (Create Student)');
+    const newStudentPayload = {
+      first_name: 'Test',
+      last_name: `User-${Date.now()}`,
+      email: `test.user.${Date.now()}@example.com`,
+    };
+    const newStudentResult = await postEndpoint('/api/students', newStudentPayload);
+    if (newStudentResult && newStudentResult.student && newStudentResult.student.id) {
+      console.log(`   ✅ Student created successfully with ID: ${newStudentResult.student.id}`);
+    } else {
+      console.error('   ❌ Failed to create student.', newStudentResult);
+      throw new Error('Student creation failed');
+    }
     
     console.log('\n✅ All endpoints working!');
   } catch(err) {

@@ -1,8 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import StudentSummary from './components/StudentSummary';
-import StudentDetails from './components/StudentDetails';
-import StudentProfile from './components/StudentProfile';
+import StudentProfile from './pages/StudentProfile';
 import { 
   Student, 
   Batch, 
@@ -12,12 +10,14 @@ import {
   Instrument
 } from './types';
 import { API_BASE_URL } from './config';
-import { getCurrentUser, login, logout, handleOAuthCallback, isAuthenticated } from './auth';
+import { getCurrentUser, login, logout, handleOAuthCallback, isAuthenticated, setToken } from './auth';
 import { apiGet } from './api';
 import StatsOverview from './components/StatsOverview';
-import StudentManagement from './components/StudentManagement';
+// @ts-ignore - Explicitly import .tsx to avoid resolving to the legacy .jsx file
+import StudentManagement from './components/StudentManagement.tsx';
 import TeacherManagement from './components/TeacherManagement';
 import UserManagement from './components/UserManagement';
+import EnrollmentForm from './components/EnrollmentForm';
 // @ts-ignore - JSX component
 import AttendanceTab from './components/Attendance/AttendanceTab';
 import PaymentModule from './components/PaymentModule';
@@ -25,7 +25,9 @@ import hsmLogo from './images/hsmLogo.jpg';
 
 const App: React.FC = () => {
   // Add new profile page states
-  const [activeTab, setActiveTab] = useState<'stats' | 'students' | 'attendance' | 'payments' | 'teachers' | 'users' | 'student-profile'>('stats');
+  const [activeTab, setActiveTab] = useState<'stats' | 'students' | 'attendance' | 'payments' | 'teachers' | 'users' | 'student-profile' | 'enrollment'>(
+    getCurrentUser()?.roles?.includes('admin') ? 'students' : 'student-profile'
+  );
   const [students, setStudents] = useState<Student[]>([]);
   const [batches, setBatches] = useState<Batch[]>([]);
   const [instruments, setInstruments] = useState<Instrument[]>([]);
@@ -37,28 +39,47 @@ const App: React.FC = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [user, setUser] = useState(getCurrentUser());
   const [authChecked, setAuthChecked] = useState(false);
+  const [oauthBypassed, setOauthBypassed] = useState(false);
 
   // Handle OAuth callback on mount
   useEffect(() => {
-    if (handleOAuthCallback()) {
-      setUser(getCurrentUser());
-    }
-    setAuthChecked(true);
+    // Check backend config for OAuth bypass
+    fetch(`${API_BASE_URL}/api/auth/config`)
+      .then(res => res.json())
+      .then(data => {
+        if (data.authDisabled && data.user) {
+          setOauthBypassed(true);
+          // Create a fake JWT token for localStorage
+          const fakePayload = {
+            userId: data.user.id,
+            email: data.user.email,
+            name: data.user.name,
+            roles: data.user.roles,
+            exp: Math.floor(Date.now() / 1000) + 86400 // 1 day expiry
+          };
+          const fakeToken = [
+            'header',
+            btoa(JSON.stringify(fakePayload)),
+            'signature'
+          ].join('.');
+          setToken(fakeToken);
+          setUser(data.user);
+          setAuthChecked(true);
+        } else {
+          // Normal OAuth flow
+          if (handleOAuthCallback()) {
+            setUser(getCurrentUser());
+          }
+          setAuthChecked(true);
+        }
+      })
+      .catch(() => {
+        setAuthChecked(true);
+      });
   }, []);
 
   // On login/profile change, set default tab by role
-  useEffect(() => {
-    if (user) {
-      console.log('User roles:', user.roles);
-      if (user.roles.includes('admin')) {
-          console.log('Setting tab to stats for admin');
-        setActiveTab('stats');
-      } else {
-        console.log('Setting tab to student-profile for student/parent');
-        setActiveTab('student-profile');
-      }
-    }
-  }, [user]);
+  // Remove useEffect that overrides tab selection
 
   const fetchData = async () => {
     try {
@@ -72,15 +93,16 @@ const App: React.FC = () => {
       // For student/parent: fetch only essential data they have access to
       if (isAdminOrTeacher) {
         // Fetch all data in parallel using authenticated API calls
+        // We catch errors individually so one failure doesn't break the entire dashboard
         const [studentsData, batchesData, instrumentsData, paymentsData, attendanceData] = await Promise.all([
-          apiGet('/api/students'),
-          apiGet('/api/batches'),
-          apiGet('/api/instruments'),
-          apiGet('/api/payments'),
-          apiGet('/api/attendance')
+          apiGet('/api/enrollments').catch(e => { console.error('Enrollments fetch failed', e); return { enrollments: [] }; }),
+          apiGet('/api/batches').catch(e => { console.error('Batches fetch failed', e); return { batches: [] }; }),
+          apiGet('/api/instruments').catch(e => { console.error('Instruments fetch failed', e); return { instruments: [] }; }),
+          apiGet('/api/payments').catch(e => { console.error('Payments fetch failed', e); return { payments: [] }; }),
+          apiGet('/api/attendance').catch(e => { console.error('Attendance fetch failed', e); return { attendance: [] }; })
         ]);
 
-        setStudents(studentsData.students || []);
+        setStudents(studentsData.enrollments || []);
         setBatches(batchesData.batches || []);
         setInstruments(instrumentsData.instruments || []);
         setPayments(paymentsData.payments || []);
@@ -149,7 +171,7 @@ const App: React.FC = () => {
   }
 
   // Show login screen if not authenticated
-  if (!isAuthenticated()) {
+  if (!isAuthenticated() && !oauthBypassed) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-4">
         <div className="bg-white rounded-2xl shadow-2xl p-8 md:p-12 max-w-md w-full">
@@ -325,6 +347,14 @@ const App: React.FC = () => {
             )}
             {activeTab === 'users' && (
               <UserManagement />
+            )}
+            {activeTab === 'enrollment' && (
+              <EnrollmentForm
+                students={students}
+                batches={batches}
+                instruments={instruments}
+                onRefresh={fetchData}
+              />
             )}
           </div>
         ) : (
