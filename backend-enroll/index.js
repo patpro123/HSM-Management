@@ -20,14 +20,24 @@ require('./auth/googleStrategy')
 // --- AUTHENTICATION BYPASS (LOCAL DEV) ---
 const IS_DEV = process.env.NODE_ENV !== 'production'
 const DISABLE_AUTH = IS_DEV && process.env.DISABLE_AUTH === 'true'
+const DEV_PROFILE = process.env.DEV_PROFILE || 'student'
 
 app.use((req, res, next) => {
   if (DISABLE_AUTH) {
-    req.user = {
-      id: '00000000-0000-0000-0000-000000000000',
-      email: 'a.r@gmail.com',
-      name: 'Local Student',
-      roles: ['student']
+    if (DEV_PROFILE === 'admin') {
+      req.user = {
+        id: '11111111-1111-1111-1111-111111111111',
+        email: 'partho.protim@gmail.com',
+        name: 'Local Admin',
+        roles: ['admin']
+      }
+    } else {
+      req.user = {
+        id: '00000000-0000-0000-0000-000000000000',
+        email: 'a.r@gmail.com',
+        name: 'Local Student',
+        roles: ['student']
+      }
     }
   }
   next()
@@ -37,7 +47,8 @@ app.use((req, res, next) => {
 app.get('/api/auth/config', (req, res) => {
   res.json({
     authDisabled: DISABLE_AUTH,
-    user: req.user || null
+    user: req.user || null,
+    profile: DEV_PROFILE
   })
 })
 // -----------------------------------------

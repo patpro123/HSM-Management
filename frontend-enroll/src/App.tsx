@@ -26,7 +26,7 @@ import hsmLogo from './images/hsmLogo.jpg';
 const App: React.FC = () => {
   // Add new profile page states
   const [activeTab, setActiveTab] = useState<'stats' | 'students' | 'attendance' | 'payments' | 'teachers' | 'users' | 'student-profile' | 'enrollment'>(
-    getCurrentUser()?.roles?.includes('admin') ? 'students' : 'student-profile'
+    getCurrentUser()?.roles?.includes('admin') ? 'stats' : 'student-profile'
   );
   const [students, setStudents] = useState<Student[]>([]);
   const [batches, setBatches] = useState<Batch[]>([]);
@@ -79,7 +79,19 @@ const App: React.FC = () => {
   }, []);
 
   // On login/profile change, set default tab by role
-  // Remove useEffect that overrides tab selection
+  useEffect(() => {
+    if (user) {
+      const isAdminRole = user.roles.includes('admin');
+      // If admin is on student profile (default), switch to dashboard to avoid blank page
+      if (isAdminRole && activeTab === 'student-profile') {
+        setActiveTab('stats');
+      }
+      // If student is on admin tabs, switch to profile
+      if (!isAdminRole && activeTab !== 'student-profile') {
+        setActiveTab('student-profile');
+      }
+    }
+  }, [user, activeTab]);
 
   const fetchData = async () => {
     try {

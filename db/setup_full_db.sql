@@ -416,11 +416,11 @@ BEGIN
 
     -- Create Admin User (for Auth testing)
     INSERT INTO users (google_id, email, name, is_active)
-    VALUES ('google_123456789', 'admin@hsm.local', 'Admin User', true);
+    VALUES ('google_123456789', 'partho.protim@gmail.com', 'Partho Admin', true);
     
     -- Assign Admin Role
     INSERT INTO user_roles (user_id, role)
-    VALUES ((SELECT id FROM users WHERE email='admin@hsm.local'), 'admin');
+    VALUES ((SELECT id FROM users WHERE email='partho.protim@gmail.com'), 'admin');
 
     -- Create Student User (for Portal testing)
     INSERT INTO users (google_id, email, name, is_active)
