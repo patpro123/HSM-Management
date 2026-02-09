@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Student, Batch, Instrument } from '../types';
-import { apiDelete, apiGet } from '../api';
+import { apiDelete, apiGet, apiPost } from '../api';
 import { authenticatedFetch, getCurrentUser } from '../auth';
 import { API_BASE_URL } from '../config';
 import Student360View from './Student360View';
@@ -27,6 +27,7 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students: propStu
   }, [propStudents]);
 
   const [filterTeacher, setFilterTeacher] = useState<string>('all');
+  const [filterStatus, setFilterStatus] = useState<'active' | 'inactive' | 'all'>('active');
   const [searchTerm, setSearchTerm] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingStudent, setEditingStudent] = useState<Student | null>(null);
@@ -65,6 +66,13 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students: propStu
   // Filter students by instrument, teacher, and search term
   const filteredStudents = students.filter(student => {
     const studentBatches = (student as any).batches || [];
+    const isActive = (student as any).is_active !== false;
+
+    // Status filter
+    if (filterStatus !== 'all') {
+      if (filterStatus === 'active' && !isActive) return false;
+      if (filterStatus === 'inactive' && isActive) return false;
+    }
 
     // Search term filter
     if (searchTerm) {
@@ -75,6 +83,15 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students: propStu
         return false;
       }
     }
+
+    // Role-based filter for non-admins
+    if (!isAdmin) {
+      const email = (student.email || (student as any).metadata?.email || '').toLowerCase();
+      if (!userEmail || email !== userEmail) return false;
+    }
+
+    // If student is inactive, skip batch/instrument/teacher filters as they have no active enrollments
+    if (!isActive) return true;
 
     // Instrument filter
     if (filterInstruments.length > 0) {
@@ -93,12 +110,6 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students: propStu
       // This relies on `teacher_id` being present in the student's batch data, which will require a backend adjustment.
       const hasTeacher = studentBatches.some((batch: any) => batch.teacher_id && String(batch.teacher_id) === filterTeacher);
       if (!hasTeacher) return false;
-    }
-
-    // Role-based filter for non-admins
-    if (!isAdmin) {
-      const email = (student.email || (student as any).metadata?.email || '').toLowerCase();
-      return userEmail && email === userEmail;
     }
 
     return true; // If all filters pass, include the student
@@ -217,6 +228,19 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students: propStu
     }
   };
 
+  const handleRestoreStudent = async (id: number | string) => {
+    if (!confirm('Are you sure you want to restore this student?')) return;
+
+    try {
+      await apiPost(`/api/students/${id}/restore`, {});
+      setSuccessBanner('Student restored successfully!');
+      onRefresh();
+      setTimeout(() => setSuccessBanner(''), 3000);
+    } catch (error) {
+      setErrorBanner('Error restoring student');
+    }
+  };
+
   const handleInstrumentToggle = (instrumentId: string | number) => {
     setFilterInstruments(prev => 
       prev.includes(instrumentId) 
@@ -288,6 +312,17 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students: propStu
 
       {/* Filters */}
       <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-4">
+        <div>
+          <h3 className="text-sm font-bold text-slate-700 mb-3">Filter by Status</h3>
+          <div className="flex gap-4">
+            {['active', 'inactive', 'all'].map(status => (
+              <label key={status} className="flex items-center gap-2 cursor-pointer">
+                <input type="radio" name="status" checked={filterStatus === status} onChange={() => setFilterStatus(status as any)} className="text-orange-600 focus:ring-orange-500" />
+                <span className="text-sm text-slate-700 capitalize">{status}</span>
+              </label>
+            ))}
+          </div>
+        </div>
         <div>
           <h3 className="text-sm font-bold text-slate-700 mb-3">Filter by Instrument</h3>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -367,7 +402,7 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students: propStu
           ) : (
             filteredStudents.map(student => (
             <div key={student.id} className="bg-white border border-slate-200 rounded-xl p-6 hover:shadow-lg transition-shadow">
-              <div className="flex items-start justify-between mb-4">
+              <div className="flex items-start justify-between mb-2">
                 <div className="flex items-center gap-3">
                   <div className="w-12 h-12 rounded-full bg-gradient-to-br from-orange-500 to-amber-500 text-white flex items-center justify-center font-bold text-lg shadow-lg">
                     {(() => {
@@ -387,6 +422,11 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students: propStu
                   </div>
                 </div>
               </div>
+              {(student as any).is_active === false && (
+                <div className="mb-4">
+                  <span className="px-2 py-1 bg-red-100 text-red-800 text-xs font-bold rounded-full">Inactive</span>
+                </div>
+              )}
 
               <div className="space-y-2 text-sm mb-4">
                 <div className="flex items-center gap-2 text-slate-600">
@@ -434,12 +474,21 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students: propStu
                 >
                   ✏️ Edit
                 </button>
-                <button
-                  onClick={() => handleDeleteStudent((student as any).student_id)}
-                  className="flex-1 px-3 py-2 bg-red-50 text-red-600 rounded-lg font-medium hover:bg-red-100 transition"
-                >
-                  🗑️ Delete
-                </button>
+                {(student as any).is_active !== false ? (
+                  <button
+                    onClick={() => handleDeleteStudent((student as any).student_id)}
+                    className="flex-1 px-3 py-2 bg-red-50 text-red-600 rounded-lg font-medium hover:bg-red-100 transition"
+                  >
+                    🗑️
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => handleRestoreStudent((student as any).student_id)}
+                    className="flex-1 px-3 py-2 bg-green-50 text-green-600 rounded-lg font-medium hover:bg-green-100 transition"
+                  >
+                    ♻️ Restore
+                  </button>
+                )}
               </div>
             </div>
           ))
@@ -482,6 +531,9 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students: propStu
                           <div>
                             <div className="font-semibold text-slate-900">
                               {student.first_name && student.last_name ? `${student.first_name} ${student.last_name}` : (student as any).name || 'Unknown'}
+                              {(student as any).is_active === false && (
+                                <span className="ml-2 px-2 py-0.5 bg-red-100 text-red-800 text-xs rounded-full">Inactive</span>
+                              )}
                             </div>
                             <div className="text-xs text-slate-500">{((student as any).metadata?.email) || student.email || 'No email'}</div>
                           </div>
@@ -531,12 +583,21 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students: propStu
                           >
                             ✏️ Edit
                           </button>
-                          <button
-                            onClick={() => handleDeleteStudent((student as any).student_id)}
-                            className="px-3 py-1.5 bg-red-50 text-red-600 rounded-lg text-sm font-medium hover:bg-red-100 transition"
-                          >
-                            🗑️
-                          </button>
+                          {(student as any).is_active !== false ? (
+                            <button
+                              onClick={() => handleDeleteStudent((student as any).student_id)}
+                              className="px-3 py-1.5 bg-red-50 text-red-600 rounded-lg text-sm font-medium hover:bg-red-100 transition"
+                            >
+                              🗑️
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => handleRestoreStudent((student as any).student_id)}
+                              className="px-3 py-1.5 bg-green-50 text-green-600 rounded-lg text-sm font-medium hover:bg-green-100 transition"
+                            >
+                              ♻️
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>

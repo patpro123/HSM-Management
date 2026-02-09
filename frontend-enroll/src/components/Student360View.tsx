@@ -26,9 +26,11 @@ interface Student360Data {
   payment: {
     history: any[];
     summary: {
+      total_credits?: number;
       classes_attended: number;
       classes_remaining: number;
       classes_missed: number;
+      classes_excused?: number;
     };
   };
 }
@@ -204,13 +206,13 @@ const Student360View: React.FC<Student360ViewProps> = ({ email, studentId, onClo
               <div className="space-y-8">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
-                    <div className="text-sm text-blue-600 font-medium">Classes Paid For</div>
+                    <div className="text-sm text-blue-600 font-medium">Total Credits Bought</div>
                     <div className="text-2xl font-bold text-blue-800 mt-1">
-                      {data.payment.summary.classes_attended + data.payment.summary.classes_remaining + data.payment.summary.classes_missed}
+                      {data.payment.summary.total_credits ?? (data.payment.summary.classes_attended + data.payment.summary.classes_remaining + data.payment.summary.classes_missed)}
                     </div>
                   </div>
                   <div className="bg-green-50 p-4 rounded-lg border border-green-100">
-                    <div className="text-sm text-green-600 font-medium">Classes Remaining</div>
+                    <div className="text-sm text-green-600 font-medium">Available Credit</div>
                     <div className="text-2xl font-bold text-green-800 mt-1">{data.payment.summary.classes_remaining}</div>
                   </div>
                   <div className="bg-orange-50 p-4 rounded-lg border border-orange-100">

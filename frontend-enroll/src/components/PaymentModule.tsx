@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { apiPost } from '../api';
+import { apiPost, apiPut } from '../api';
 import { Student, PaymentRecord, PaymentFrequency } from '../types';
 
 interface PaymentModuleProps {
@@ -10,28 +10,46 @@ interface PaymentModuleProps {
 
 const PaymentModule: React.FC<PaymentModuleProps> = ({ students, payments, onRefresh }) => {
   const [showAddModal, setShowAddModal] = useState(false);
+  const [editingPayment, setEditingPayment] = useState<PaymentRecord | null>(null);
   const [formData, setFormData] = useState({
     student_id: '',
     amount: '',
     payment_method: 'cash',
     payment_for: 'tuition',
     notes: '',
-    payment_frequency: 'monthly' as PaymentFrequency
+    payment_frequency: 'monthly' as PaymentFrequency,
+    payment_date: new Date().toISOString().split('T')[0]
   });
   const [filterStudent, setFilterStudent] = useState<string>('all');
+  const [startDate, setStartDate] = useState<string>('');
+  const [endDate, setEndDate] = useState<string>('');
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  const calculateClassCredits = (frequency: PaymentFrequency): number => {
-    const credits = {
-      monthly: 8,
-      quarterly: 24,
-      half_yearly: 48,
-      yearly: 96
-    };
-    return credits[frequency];
+  const calculateClassCredits = (frequency: string | PaymentFrequency): number => {
+    const lower = (frequency || '').toLowerCase();
+    if (lower.includes('monthly')) return 8;
+    if (lower.includes('quarterly')) return 24;
+    if (lower.includes('half')) return 48;
+    if (lower.includes('yearly')) return 96;
+    return 0;
+  };
+
+  const handleEdit = (payment: PaymentRecord) => {
+    setEditingPayment(payment);
+    const meta = (payment as any).metadata || {};
+    setFormData({
+      student_id: payment.student_id,
+      amount: String(payment.amount),
+      payment_method: (payment as any).method || 'cash',
+      payment_for: meta.payment_for || 'tuition',
+      notes: meta.notes || (payment as any).notes || '',
+      payment_frequency: meta.payment_frequency || 'monthly',
+      payment_date: new Date(payment.timestamp).toISOString().split('T')[0]
+    });
+    setShowAddModal(true);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -43,35 +61,55 @@ const PaymentModule: React.FC<PaymentModuleProps> = ({ students, payments, onRef
     }
 
     try {
-      const classCredits = calculateClassCredits(formData.payment_frequency);
-      
-      await apiPost('/api/payments', {
-        ...formData,
-        student_id: parseInt(formData.student_id),
-        amount: parseFloat(formData.amount),
-        class_credits: classCredits
-      });
+      if (editingPayment) {
+        await apiPut(`/api/payments/${editingPayment.id}`, {
+          payment_date: formData.payment_date,
+          notes: formData.notes,
+          payment_method: formData.payment_method,
+          payment_for: formData.payment_for
+        });
+        alert('Payment updated successfully!');
+      } else {
+        const classCredits = calculateClassCredits(formData.payment_frequency);
+        
+        await apiPost('/api/payments', {
+          ...formData,
+          student_id: formData.student_id,
+          amount: parseFloat(formData.amount),
+          class_credits: classCredits
+        });
+        alert('Payment recorded successfully!');
+      }
 
-      alert('Payment recorded successfully!');
       setShowAddModal(false);
+      setEditingPayment(null);
       setFormData({
         student_id: '',
         amount: '',
         payment_method: 'cash',
         payment_for: 'tuition',
         notes: '',
-        payment_frequency: 'monthly' as PaymentFrequency
+        payment_frequency: 'monthly' as PaymentFrequency,
+        payment_date: new Date().toISOString().split('T')[0]
       });
       onRefresh();
     } catch (error) {
-      console.error('Error recording payment:', error);
-      alert('Error recording payment');
+      console.error('Error saving payment:', error);
+      alert('Error saving payment');
     }
   };
 
-  const filteredPayments = filterStudent === 'all'
-    ? payments
-    : payments.filter(p => Number(p.student_id) === parseInt(filterStudent));
+  const filteredPayments = payments.filter(p => {
+    const matchesStudent = filterStudent === 'all' || String(p.student_id) === String(filterStudent);
+    if (!matchesStudent) return false;
+
+    if (startDate || endDate) {
+      const paymentDate = new Date(p.timestamp).toISOString().split('T')[0];
+      if (startDate && paymentDate < startDate) return false;
+      if (endDate && paymentDate > endDate) return false;
+    }
+    return true;
+  });
 
   const totalRevenue = payments.reduce((acc, p) => acc + parseFloat(String(p.amount || '0')), 0);
   const filteredRevenue = filteredPayments.reduce((acc, p) => acc + parseFloat(String(p.amount || '0')), 0);
@@ -101,23 +139,44 @@ const PaymentModule: React.FC<PaymentModuleProps> = ({ students, payments, onRef
       </div>
 
       <div className="flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
-        <div className="flex-1 w-full md:w-auto">
+        <div className="flex-1 w-full flex flex-col md:flex-row gap-4">
           <select
             value={filterStudent}
             onChange={(e) => setFilterStudent(e.target.value)}
-            className="w-full px-4 py-3 rounded-lg border border-slate-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none"
+            className="w-full md:w-64 px-4 py-3 rounded-lg border border-slate-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none"
           >
             <option value="all">All Students</option>
             {students.map(student => (
-              <option key={student.id} value={student.id}>
+              <option key={student.id || (student as any).student_id} value={student.id || (student as any).student_id}>
                 {student.first_name && student.last_name ? `${student.first_name} ${student.last_name}` : (student as any).name || 'Unknown'}
               </option>
             ))}
           </select>
+          
+          <div className="flex items-center gap-2 w-full md:w-auto">
+            <input
+              type="date"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+              className="flex-1 md:w-40 px-4 py-3 rounded-lg border border-slate-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none"
+              placeholder="Start Date"
+            />
+            <span className="text-slate-400 font-medium">to</span>
+            <input
+              type="date"
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+              className="flex-1 md:w-40 px-4 py-3 rounded-lg border border-slate-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none"
+              placeholder="End Date"
+            />
+          </div>
         </div>
         <button
-          onClick={() => setShowAddModal(true)}
-          className="px-6 py-3 bg-indigo-600 text-white rounded-lg font-semibold hover:bg-indigo-700 transition shadow-lg hover:shadow-xl"
+          onClick={() => {
+            setEditingPayment(null);
+            setShowAddModal(true);
+          }}
+          className="w-full md:w-auto px-6 py-3 bg-indigo-600 text-white rounded-lg font-semibold hover:bg-indigo-700 transition shadow-lg hover:shadow-xl whitespace-nowrap"
         >
           + Record Payment
         </button>
@@ -131,9 +190,10 @@ const PaymentModule: React.FC<PaymentModuleProps> = ({ students, payments, onRef
                 <th className="px-6 py-4 text-left text-sm font-bold text-slate-700">Date</th>
                 <th className="px-6 py-4 text-left text-sm font-bold text-slate-700">Student</th>
                 <th className="px-6 py-4 text-left text-sm font-bold text-slate-700">Amount</th>
-                <th className="px-6 py-4 text-left text-sm font-bold text-slate-700">Method</th>
+                <th className="px-6 py-4 text-left text-sm font-bold text-slate-700">Classes / Due</th>
                 <th className="px-6 py-4 text-left text-sm font-bold text-slate-700">For</th>
                 <th className="px-6 py-4 text-left text-sm font-bold text-slate-700">Notes</th>
+                <th className="px-6 py-4 text-left text-sm font-bold text-slate-700">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200">
@@ -145,7 +205,21 @@ const PaymentModule: React.FC<PaymentModuleProps> = ({ students, payments, onRef
                 </tr>
               ) : (
                 filteredPayments.map(payment => {
-                  const student = students.find(s => s.id === payment.student_id);
+                  const student = students.find(s => (s.id || (s as any).student_id) === payment.student_id);
+                  const meta = (payment as any).metadata || {};
+                  const frequency = meta.payment_frequency || meta.payment_type || '';
+                  const instrument = meta.instrument || '';
+                  const classesCount = calculateClassCredits(frequency);
+                  
+                  // Calculate due date based on 2 classes per week
+                  let dueDate = '-';
+                  if (classesCount > 0) {
+                    const weeks = classesCount / 2;
+                    const date = new Date(payment.timestamp);
+                    date.setDate(date.getDate() + (weeks * 7));
+                    dueDate = date.toLocaleDateString();
+                  }
+
                   return (
                     <tr key={payment.id} className="hover:bg-slate-50 transition">
                       <td className="px-6 py-4 text-slate-600">
@@ -160,12 +234,24 @@ const PaymentModule: React.FC<PaymentModuleProps> = ({ students, payments, onRef
                         <p className="font-bold text-emerald-600">₹{parseFloat(String(payment.amount || '0')).toLocaleString()}</p>
                       </td>
                       <td className="px-6 py-4">
-                        <span className="px-3 py-1 rounded-full text-xs font-semibold bg-indigo-100 text-indigo-700">
-                          {payment.payment_method}
-                        </span>
+                        <div className="text-sm">
+                          <span className="font-semibold text-indigo-700">{classesCount > 0 ? `${classesCount} classes` : '-'}</span>
+                          <div className="text-xs text-slate-500">Due: {dueDate}</div>
+                        </div>
                       </td>
-                      <td className="px-6 py-4 text-slate-600">{payment.payment_for || 'N/A'}</td>
-                      <td className="px-6 py-4 text-slate-500 text-sm">{payment.notes || '-'}</td>
+                      <td className="px-6 py-4 text-slate-600">
+                        {instrument && <span className="block font-medium text-slate-800">{instrument}</span>}
+                        <span className="capitalize">{frequency || meta.payment_for || 'N/A'}</span>
+                      </td>
+                      <td className="px-6 py-4 text-slate-500 text-sm">{meta.notes || payment.notes || '-'}</td>
+                      <td className="px-6 py-4">
+                        <button
+                          onClick={() => handleEdit(payment)}
+                          className="text-indigo-600 hover:text-indigo-800 font-medium text-sm"
+                        >
+                          Edit
+                        </button>
+                      </td>
                     </tr>
                   );
                 })
@@ -180,7 +266,7 @@ const PaymentModule: React.FC<PaymentModuleProps> = ({ students, payments, onRef
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             <div className="p-6 border-b border-slate-200">
-              <h2 className="text-2xl font-bold text-slate-900">Record Payment</h2>
+              <h2 className="text-2xl font-bold text-slate-900">{editingPayment ? 'Edit Payment' : 'Record Payment'}</h2>
             </div>
 
             <form onSubmit={handleSubmit} className="p-6 space-y-4">
@@ -191,11 +277,12 @@ const PaymentModule: React.FC<PaymentModuleProps> = ({ students, payments, onRef
                   value={formData.student_id}
                   onChange={handleInputChange}
                   required
+                  disabled={!!editingPayment}
                   className="w-full px-4 py-2 rounded-lg border border-slate-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none"
                 >
                   <option value="">-- Select a student --</option>
                   {students.map(student => (
-                    <option key={student.id} value={student.id}>
+                    <option key={student.id || (student as any).student_id} value={student.id || (student as any).student_id}>
                       {student.first_name && student.last_name ? `${student.first_name} ${student.last_name}` : (student as any).name || 'Unknown'}
                     </option>
                   ))}
@@ -204,6 +291,17 @@ const PaymentModule: React.FC<PaymentModuleProps> = ({ students, payments, onRef
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-2">Payment Date *</label>
+                  <input
+                    type="date"
+                    name="payment_date"
+                    value={formData.payment_date}
+                    onChange={handleInputChange}
+                    required
+                    className="w-full px-4 py-2 rounded-lg border border-slate-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none"
+                  />
+                </div>
+                <div>
                   <label className="block text-sm font-semibold text-slate-700 mb-2">Amount (₹) *</label>
                   <input
                     type="number"
@@ -211,6 +309,7 @@ const PaymentModule: React.FC<PaymentModuleProps> = ({ students, payments, onRef
                     value={formData.amount}
                     onChange={handleInputChange}
                     required
+                    disabled={!!editingPayment}
                     min="0"
                     step="0.01"
                     className="w-full px-4 py-2 rounded-lg border border-slate-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none"
@@ -255,6 +354,7 @@ const PaymentModule: React.FC<PaymentModuleProps> = ({ students, payments, onRef
                     name="payment_frequency"
                     value={formData.payment_frequency}
                     onChange={handleInputChange}
+                    disabled={!!editingPayment}
                     className="w-full px-4 py-2 rounded-lg border border-slate-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none"
                   >
                     <option value="monthly">Monthly (8 classes)</option>
@@ -265,11 +365,13 @@ const PaymentModule: React.FC<PaymentModuleProps> = ({ students, payments, onRef
                 </div>
               </div>
 
-              <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-4">
-                <p className="text-sm text-indigo-800">
-                  <strong>Class Credits:</strong> {calculateClassCredits(formData.payment_frequency as PaymentFrequency)} classes will be added
-                </p>
-              </div>
+              {!editingPayment && (
+                <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-4">
+                  <p className="text-sm text-indigo-800">
+                    <strong>Class Credits:</strong> {calculateClassCredits(formData.payment_frequency as PaymentFrequency)} classes will be added
+                  </p>
+                </div>
+              )}
 
               <div>
                 <label className="block text-sm font-semibold text-slate-700 mb-2">Notes</label>
@@ -295,7 +397,7 @@ const PaymentModule: React.FC<PaymentModuleProps> = ({ students, payments, onRef
                   type="submit"
                   className="flex-1 px-4 py-3 bg-indigo-600 text-white rounded-lg font-semibold hover:bg-indigo-700 transition"
                 >
-                  💰 Record Payment
+                  {editingPayment ? '💾 Update Payment' : '💰 Record Payment'}
                 </button>
               </div>
             </form>

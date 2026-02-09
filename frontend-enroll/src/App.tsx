@@ -325,7 +325,7 @@ const App: React.FC = () => {
           <div className="bg-white rounded-xl p-8 shadow-sm border border-slate-100">
             {activeTab === 'stats' && (
               <StatsOverview 
-                students={students}
+                students={students.filter(s => (s as any).is_active !== false)}
                 enrollments={enrollments}
                 attendance={attendance}
                 payments={payments}

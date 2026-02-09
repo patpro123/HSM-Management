@@ -58,6 +58,7 @@ CREATE TABLE IF NOT EXISTS students (
   guardian_contact text,
   email text UNIQUE, -- Promoted to top-level column
   metadata jsonb DEFAULT '{}'::jsonb,
+  is_active boolean DEFAULT true,
   created_at timestamptz DEFAULT now(),
   updated_at timestamptz DEFAULT now()
 );

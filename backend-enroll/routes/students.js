@@ -115,18 +115,61 @@ router.post('/', async (req, res) => {
   }
 });
 
-// DELETE /api/students/:id - Delete a student
+// DELETE /api/students/:id - Soft delete a student (unenroll and mark inactive)
 router.delete('/:id', async (req, res) => {
   const { id } = req.params;
+  const client = await pool.connect();
   try {
-    const result = await pool.query('DELETE FROM students WHERE id = $1 RETURNING *', [id]);
-    if (result.rowCount === 0) {
+    await client.query('BEGIN');
+
+    // 1. Mark student as inactive
+    const updateRes = await client.query(
+      'UPDATE students SET is_active = false WHERE id = $1 RETURNING *',
+      [id]
+    );
+
+    if (updateRes.rowCount === 0) {
+      await client.query('ROLLBACK');
       return res.status(404).json({ error: 'Student not found' });
     }
+
+    // 2. Remove batch links (delete from enrollment_batches)
+    await client.query(
+      'DELETE FROM enrollment_batches WHERE enrollment_id IN (SELECT id FROM enrollments WHERE student_id = $1)',
+      [id]
+    );
+
+    // 3. Update enrollment status to completed
+    await client.query("UPDATE enrollments SET status = 'completed' WHERE student_id = $1", [id]);
+
+    await client.query('COMMIT');
     res.status(204).send();
   } catch (err) {
+    await client.query('ROLLBACK');
     console.error(`[DELETE /api/students/${id}] Error:`, err);
     res.status(500).json({ error: 'Failed to delete student' });
+  } finally {
+    client.release();
+  }
+});
+
+// POST /api/students/:id/restore - Restore a soft-deleted student
+router.post('/:id/restore', async (req, res) => {
+  const { id } = req.params;
+  try {
+    const result = await pool.query(
+      'UPDATE students SET is_active = true WHERE id = $1 RETURNING *',
+      [id]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Student not found' });
+    }
+    // Restore enrollment status to active
+    await pool.query("UPDATE enrollments SET status = 'active' WHERE student_id = $1", [id]);
+    
+    res.json({ message: 'Student restored successfully', student: result.rows[0] });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to restore student' });
   }
 });
 

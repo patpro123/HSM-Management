@@ -59,6 +59,8 @@ app.use('/api/students', require('./routes/students-put'));
 app.use('/api/teachers', require('./routes/teachers'));
 const { router: student360Router, fetchStudent360Data } = require('./routes/student360');
 app.use('/api/students', student360Router);
+app.use('/api/payments', require('./routes/payments'));
+app.use('/api/users', require('./routes/users'));
 app.use('/api/auth', require('./routes/auth'));
 
 // Conversational enrollment agent state and helpers
@@ -637,6 +639,7 @@ app.get('/api/enrollments', async (req, res)=>{
         s.phone,
         s.guardian_contact,
         s.metadata,
+        s.is_active,
         e.id as enrollment_id,
         e.status,
         e.classes_remaining,
@@ -660,13 +663,13 @@ app.get('/api/enrollments', async (req, res)=>{
           '[]'::json
         ) as batches
       FROM students s
-      JOIN enrollments e ON s.id = e.student_id
+      LEFT JOIN enrollments e ON s.id = e.student_id
       LEFT JOIN enrollment_batches eb ON e.id = eb.enrollment_id
       LEFT JOIN batches b ON eb.batch_id = b.id
       LEFT JOIN instruments i ON b.instrument_id = i.id
       LEFT JOIN teachers t ON b.teacher_id = t.id
-      GROUP BY s.id, s.name, s.dob, s.phone, s.guardian_contact, s.metadata, e.id, e.status, e.classes_remaining, e.enrolled_on
-      ORDER BY e.created_at DESC
+      GROUP BY s.id, s.name, s.dob, s.phone, s.guardian_contact, s.metadata, s.is_active, e.id, e.status, e.classes_remaining, e.enrolled_on
+      ORDER BY s.name ASC
     `)
     res.json({ enrollments: result.rows })
   }catch(err){

@@ -12,8 +12,52 @@ const fetchStudent360Data = async (studentId) => {
     }
     const student = studentRes.rows[0];
 
-    // 2. Fetch Attendance Summary
-    const attendanceQuery = `
+    // 2. Fetch Payment History (Moved up to determine cycle)
+    const paymentsQuery = `
+      SELECT p.id, p.amount, p.timestamp, p.method, p.package_id, p.metadata, pkg.classes_count
+      FROM payments p
+      LEFT JOIN packages pkg ON p.package_id = pkg.id
+      WHERE p.student_id = $1
+      ORDER BY p.timestamp DESC
+    `;
+    const paymentsRes = await pool.query(paymentsQuery, [studentId]);
+    const payments = paymentsRes.rows;
+
+    // Determine credit calculation basis (Cycle vs Lifetime)
+    let lastPaymentDate = null;
+    let creditsBought = 0;
+    let isCycleBased = false;
+
+    if (payments.length > 0) {
+      const lastPayment = payments[0];
+      // Check if this payment bought credits
+      if (lastPayment.metadata && lastPayment.metadata.credits_bought) {
+        creditsBought = parseInt(lastPayment.metadata.credits_bought);
+        lastPaymentDate = lastPayment.timestamp;
+        isCycleBased = true;
+      } else if (lastPayment.classes_count) {
+        creditsBought = lastPayment.classes_count;
+        lastPaymentDate = lastPayment.timestamp;
+        isCycleBased = true;
+      } else {
+        // Try to infer from frequency in metadata
+        const freq = lastPayment.metadata?.payment_frequency || '';
+        if (freq) {
+           if (freq.includes('monthly')) creditsBought = 8;
+           else if (freq.includes('quarterly')) creditsBought = 24;
+           else if (freq.includes('half')) creditsBought = 48;
+           else if (freq.includes('yearly')) creditsBought = 96;
+           
+           if (creditsBought > 0) {
+             lastPaymentDate = lastPayment.timestamp;
+             isCycleBased = true;
+           }
+        }
+      }
+    }
+
+    // 3. Fetch Attendance Summary
+    let attendanceQuery = `
       SELECT 
         COUNT(*) FILTER (WHERE status = 'present') as present,
         COUNT(*) FILTER (WHERE status = 'absent') as absent,
@@ -21,10 +65,18 @@ const fetchStudent360Data = async (studentId) => {
       FROM attendance_records 
       WHERE student_id = $1
     `;
-    const attendanceRes = await pool.query(attendanceQuery, [studentId]);
+    const attendanceParams = [studentId];
+
+    if (isCycleBased && lastPaymentDate) {
+      // Filter attendance after last payment (inclusive of the payment day)
+      attendanceQuery += ` AND session_date >= $2::date`;
+      attendanceParams.push(lastPaymentDate);
+    }
+
+    const attendanceRes = await pool.query(attendanceQuery, attendanceParams);
     const attendance = attendanceRes.rows[0];
 
-    // 3. Fetch Academic Batches
+    // 4. Fetch Academic Batches
     // Joining enrollments -> enrollment_batches -> batches -> instruments/teachers
     const batchesQuery = `
       SELECT 
@@ -42,22 +94,20 @@ const fetchStudent360Data = async (studentId) => {
     `;
     const batchesRes = await pool.query(batchesQuery, [studentId]);
 
-    // 4. Fetch Payment History
-    const paymentsQuery = `
-      SELECT id, amount, timestamp, method, package_id
-      FROM payments
-      WHERE student_id = $1
-      ORDER BY timestamp DESC
-    `;
-    const paymentsRes = await pool.query(paymentsQuery, [studentId]);
-
     // Calculate Payment Summary
     const classesAttended = parseInt(attendance.present || 0);
     const classesMissed = parseInt(attendance.absent || 0);
+    const classesExcused = parseInt(attendance.excused || 0);
     
+    let totalCredits = 0;
     let classesRemaining;
-    if (student.metadata && student.metadata.total_credits !== undefined) {
-      classesRemaining = parseInt(student.metadata.total_credits) - (classesAttended + classesMissed);
+
+    if (isCycleBased) {
+      totalCredits = creditsBought;
+      classesRemaining = totalCredits - (classesAttended + classesMissed);
+    } else if (student.metadata && student.metadata.total_credits !== undefined) {
+      totalCredits = parseInt(student.metadata.total_credits);
+      classesRemaining = totalCredits - (classesAttended + classesMissed);
     } else {
       classesRemaining = batchesRes.rows.reduce((sum, b) => sum + (b.classes_remaining || 0), 0);
     }
@@ -72,17 +122,23 @@ const fetchStudent360Data = async (studentId) => {
         }
       },
       academic: {
-        batches: batchesRes.rows,
+        // Override classes_remaining in batches with the calculated value
+        batches: batchesRes.rows.map(b => ({
+          ...b,
+          classes_remaining: classesRemaining
+        })),
         reviews: [], // Placeholder
         certificates: [], // Placeholder
         homework: [] // Placeholder
       },
       payment: {
-        history: paymentsRes.rows,
+        history: payments,
         summary: {
+          total_credits: totalCredits,
           classes_attended: classesAttended,
           classes_remaining: classesRemaining,
-          classes_missed: classesMissed
+          classes_missed: classesMissed,
+          classes_excused: classesExcused
         }
       }
     };
