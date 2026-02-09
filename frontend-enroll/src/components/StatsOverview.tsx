@@ -1,5 +1,5 @@
 import React from 'react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend } from 'recharts';
 import { Student, BatchAssignment, AttendanceRecord, PaymentRecord } from '../types';
 
 interface StatsProps {
@@ -40,7 +40,35 @@ const StatsOverview: React.FC<StatsProps> = ({ students, enrollments, attendance
     { name: 'Jan', students: activeStudents },
   ];
 
-  const COLORS = ['#6366f1', '#8b5cf6', '#ec4899', '#f43f5e'];
+
+  const instrumentStats: Record<string, Set<string>> = {};
+  const teacherStats: Record<string, Set<string>> = {};
+
+  students.forEach(student => {
+    const batches = (student as any).batches || [];
+    const studentId = student.id || (student as any).student_id;
+    
+    batches.forEach((batch: any) => {
+      if (batch.instrument) {
+        if (!instrumentStats[batch.instrument]) instrumentStats[batch.instrument] = new Set();
+        instrumentStats[batch.instrument].add(studentId);
+      }
+      if (batch.teacher) {
+        if (!teacherStats[batch.teacher]) teacherStats[batch.teacher] = new Set();
+        teacherStats[batch.teacher].add(studentId);
+      }
+    });
+  });
+
+  const instrumentData = Object.entries(instrumentStats)
+    .map(([name, set]) => ({ name, value: set.size }))
+    .sort((a, b) => b.value - a.value);
+
+  const teacherData = Object.entries(teacherStats)
+    .map(([name, set]) => ({ name, students: set.size }))
+    .sort((a, b) => b.students - a.students);
+
+  const COLORS = ['#6366f1', '#8b5cf6', '#ec4899', '#f43f5e', '#10b981', '#f59e0b', '#3b82f6', '#ef4444'];
 
   return (
     <div className="space-y-8">
@@ -125,6 +153,53 @@ const StatsOverview: React.FC<StatsProps> = ({ students, enrollments, attendance
                 );
               })
             )}
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <div className="bg-slate-50 p-6 rounded-xl border border-slate-100">
+          <h3 className="text-lg font-semibold mb-6">Students by Instrument</h3>
+          <div className="h-80 w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={instrumentData}
+                  cx="50%"
+                  cy="50%"
+                  labelLine={false}
+                  label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                  outerRadius={80}
+                  fill="#8884d8"
+                  dataKey="value"
+                >
+                  {instrumentData.map((_, index) => (
+                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                  ))}
+                </Pie>
+                <Tooltip />
+                <Legend />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        <div className="bg-slate-50 p-6 rounded-xl border border-slate-100">
+          <h3 className="text-lg font-semibold mb-6">Students per Teacher</h3>
+          <div className="h-80 w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={teacherData} layout="vertical" margin={{ top: 5, right: 30, left: 40, bottom: 5 }}>
+                <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                <XAxis type="number" />
+                <YAxis type="category" dataKey="name" width={100} />
+                <Tooltip />
+                <Bar dataKey="students" radius={[0, 4, 4, 0]}>
+                  {teacherData.map((_, index) => (
+                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
           </div>
         </div>
       </div>

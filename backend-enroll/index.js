@@ -10,7 +10,7 @@ const pool = require('./db')
 
 const app = express()
 app.use(cors())
-app.use(express.json())
+app.use(express.json({ limit: '50mb' }))
 app.use(morgan('dev'))
 
 // Initialize Passport and Strategies
@@ -61,6 +61,7 @@ const { router: student360Router, fetchStudent360Data } = require('./routes/stud
 app.use('/api/students', student360Router);
 app.use('/api/payments', require('./routes/payments'));
 app.use('/api/users', require('./routes/users'));
+app.use('/api', require('./routes/documents'));
 app.use('/api/auth', require('./routes/auth'));
 
 // Conversational enrollment agent state and helpers

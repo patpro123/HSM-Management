@@ -12,6 +12,9 @@ interface Teacher {
   is_active: boolean;
   batch_count: number;
   created_at: string;
+  metadata?: {
+    email?: string;
+  };
 }
 
 interface Batch {
@@ -110,7 +113,7 @@ export default function TeacherManagement({ instruments, onRefresh }: TeacherMan
     setTeacherForm({
       name: teacher.name,
       phone: teacher.phone || '',
-      email: '',
+      email: teacher.metadata?.email || '',
       payout_type: teacher.payout_type,
       rate: teacher.rate || 0,
       is_active: teacher.is_active

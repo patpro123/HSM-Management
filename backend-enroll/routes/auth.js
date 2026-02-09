@@ -94,7 +94,7 @@ router.get('/profile', authenticateJWT, async (req, res) => {
     // If teacher, get teacher_id
     if (user.roles.includes('teacher')) {
       const teacherResult = await pool.query(
-        `SELECT t.id as teacher_id, t.name, t.email as teacher_email, t.phone
+        `SELECT t.id as teacher_id, t.name, t.phone
          FROM teacher_users tu
          JOIN teachers t ON tu.teacher_id = t.id
          WHERE tu.user_id = $1`,
@@ -220,7 +220,7 @@ router.post('/link/teacher',
 
       // Check if teacher exists
       const teacherResult = await pool.query(
-        'SELECT id, name, email FROM teachers WHERE id = $1',
+        'SELECT id, name FROM teachers WHERE id = $1',
         [teacher_id]
       )
       if (teacherResult.rows.length === 0) {

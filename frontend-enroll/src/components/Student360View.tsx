@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { apiGet } from '../api';
+import { apiGet, apiPost, apiDelete } from '../api';
 
 interface Student360ViewProps {
   email?: string;
@@ -35,11 +35,20 @@ interface Student360Data {
   };
 }
 
+interface Document {
+  id: string;
+  filename: string;
+  file_type: string;
+  uploaded_at: string;
+}
+
 const Student360View: React.FC<Student360ViewProps> = ({ email, studentId, onClose, isModal = false }) => {
   const [activeTab, setActiveTab] = useState<'personal' | 'academic' | 'payment'>('personal');
   const [data, setData] = useState<Student360Data | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [documents, setDocuments] = useState<Document[]>([]);
+  const [uploadSuccess, setUploadSuccess] = useState<string | null>(null);
 
   useEffect(() => {
     if (!email && !studentId) return;
@@ -53,6 +62,12 @@ const Student360View: React.FC<Student360ViewProps> = ({ email, studentId, onClo
           : `/api/students/email/${encodeURIComponent(email || '')}/360`;
         const result = await apiGet(url);
         setData(result);
+
+        // Fetch documents if we have the student ID (either from props or resolved from email)
+        const resolvedId = studentId || result.personal.details.id;
+        if (resolvedId) {
+          fetchDocuments(resolvedId);
+        }
       } catch (err: any) {
         setError(err.message || 'Failed to fetch student data');
       } finally {
@@ -62,6 +77,63 @@ const Student360View: React.FC<Student360ViewProps> = ({ email, studentId, onClo
 
     fetchData();
   }, [email, studentId]);
+
+  const fetchDocuments = async (id: string) => {
+    try {
+      const res = await apiGet(`/api/students/${id}/documents`);
+      setDocuments(res.documents || []);
+    } catch (err) {
+      console.error('Failed to fetch documents', err);
+    }
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !data) return;
+
+    const reader = new FileReader();
+    reader.onload = async () => {
+      try {
+        const base64Data = reader.result as string;
+        await apiPost(`/api/students/${data.personal.details.id}/documents`, {
+          filename: file.name,
+          file_type: file.type,
+          file_data: base64Data
+        });
+        setUploadSuccess('Document uploaded successfully!');
+        fetchDocuments(data.personal.details.id);
+        setTimeout(() => setUploadSuccess(null), 3000);
+      } catch (err) {
+        console.error('Upload failed', err);
+        alert('Failed to upload document');
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleDownload = async (docId: string, filename: string) => {
+    try {
+      const doc = await apiGet(`/api/documents/${docId}`);
+      const link = document.createElement('a');
+      link.href = doc.file_data;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (err) {
+      console.error('Download failed', err);
+    }
+  };
+
+  const handleDeleteDocument = async (docId: string) => {
+    if (!confirm('Are you sure you want to delete this document?')) return;
+    try {
+      await apiDelete(`/api/documents/${docId}`);
+      if (data) fetchDocuments(data.personal.details.id);
+    } catch (err) {
+      console.error('Delete failed', err);
+    }
+  };
 
   if (!email && !studentId) return null;
 
@@ -188,15 +260,56 @@ const Student360View: React.FC<Student360ViewProps> = ({ email, studentId, onClo
 
                 <div>
                   <h3 className="font-semibold text-lg mb-4 text-gray-800">Academic Achievements</h3>
+                  
+                  {uploadSuccess && (
+                    <div className="mb-4 p-3 bg-green-100 text-green-700 rounded-lg text-sm font-medium">
+                      {uploadSuccess}
+                    </div>
+                  )}
+
                   <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center bg-gray-50">
                     <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 011.414.586l4 4a1 1 0 01.586 1.414V19a2 2 0 01-2 2z" />
                     </svg>
                     <p className="mt-2 text-sm text-gray-500">Upload certificates, monthly reviews, or homework.</p>
-                    <button className="mt-4 px-4 py-2 bg-white border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50">
+                    <label className="mt-4 inline-block px-4 py-2 bg-white border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 cursor-pointer">
                       Upload Document
-                    </button>
+                      <input type="file" className="hidden" onChange={handleFileUpload} />
+                    </label>
                   </div>
+
+                  {documents.length > 0 && (
+                    <div className="mt-6">
+                      <h4 className="text-sm font-semibold text-gray-700 mb-3">Uploaded Documents</h4>
+                      <ul className="divide-y divide-gray-200 border rounded-lg bg-white">
+                        {documents.map((doc) => (
+                          <li key={doc.id} className="p-4 flex justify-between items-center hover:bg-gray-50">
+                            <div className="flex items-center gap-3">
+                              <span className="text-2xl">📄</span>
+                              <div>
+                                <p className="text-sm font-medium text-gray-900">{doc.filename}</p>
+                                <p className="text-xs text-gray-500">{new Date(doc.uploaded_at).toLocaleDateString()}</p>
+                              </div>
+                            </div>
+                            <div className="flex gap-2">
+                              <button 
+                                onClick={() => handleDownload(doc.id, doc.filename)}
+                                className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                              >
+                                Download
+                              </button>
+                              <button 
+                                onClick={() => handleDeleteDocument(doc.id)}
+                                className="text-red-600 hover:text-red-800 text-sm font-medium"
+                              >
+                                Delete
+                              </button>
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
                 </div>
               </div>
             )}

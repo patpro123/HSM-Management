@@ -73,6 +73,7 @@ CREATE TABLE IF NOT EXISTS teachers (
   is_active boolean DEFAULT true,
   payout_type payout_type DEFAULT 'per_class',
   rate numeric(10,2) DEFAULT 0 CHECK (rate >= 0),
+  metadata jsonb DEFAULT '{}'::jsonb,
   created_at timestamptz DEFAULT now(),
   updated_at timestamptz DEFAULT now()
 );
@@ -206,6 +207,16 @@ CREATE TABLE IF NOT EXISTS student_evaluations (
     created_at timestamptz DEFAULT now()
 );
 
+-- Student Documents Table (From Migration 009)
+CREATE TABLE IF NOT EXISTS student_documents (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    student_id UUID NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+    filename TEXT NOT NULL,
+    file_type TEXT NOT NULL,
+    file_data TEXT NOT NULL,
+    uploaded_at TIMESTAMPTZ DEFAULT now()
+);
+
 -- 4. AUTHENTICATION TABLES
 
 -- Users Table
@@ -292,6 +303,7 @@ CREATE INDEX IF NOT EXISTS idx_enrollment_batches_enrollment ON enrollment_batch
 CREATE INDEX IF NOT EXISTS idx_attendance_batch_date ON attendance_records (batch_id, session_date);
 CREATE INDEX IF NOT EXISTS idx_payments_student ON payments (student_id);
 CREATE INDEX IF NOT EXISTS idx_evaluations_student ON student_evaluations(student_id);
+CREATE INDEX IF NOT EXISTS idx_student_documents_student_id ON student_documents(student_id);
 CREATE INDEX IF NOT EXISTS idx_users_google_id ON users(google_id);
 CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 
