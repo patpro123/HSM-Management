@@ -5,12 +5,17 @@ const morgan = require('morgan')
 const crypto = require('crypto')
 const http = require('http')
 const https = require('https')
+const passport = require('passport')
 const pool = require('./db')
 
 const app = express()
 app.use(cors())
 app.use(express.json())
 app.use(morgan('dev'))
+
+// Initialize Passport and Strategies
+app.use(passport.initialize())
+require('./auth/googleStrategy')
 
 // --- AUTHENTICATION BYPASS (LOCAL DEV) ---
 const IS_DEV = process.env.NODE_ENV !== 'production'
