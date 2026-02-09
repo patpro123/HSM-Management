@@ -27,10 +27,18 @@ router.post('/', async (req, res) => {
     // Calculate total credits from batches
     let totalCredits = 0;
     if (Array.isArray(batches)) {
+      const instrumentFreqs = new Map();
       batches.forEach(b => {
-        const freq = (b.payment_frequency || '').toLowerCase();
+        const key = b.instrument_id || b.batch_id;
+        const freq = (b.payment_frequency || 'monthly').toLowerCase();
+        instrumentFreqs.set(key, freq);
+      });
+
+      instrumentFreqs.forEach(freq => {
         if (freq === 'monthly') totalCredits += 8;
         else if (freq === 'quarterly') totalCredits += 24;
+        else if (freq === 'half_yearly') totalCredits += 48;
+        else if (freq === 'yearly') totalCredits += 96;
       });
     }
 

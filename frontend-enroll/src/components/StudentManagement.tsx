@@ -20,6 +20,7 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students: propStu
   const [teachers, setTeachers] = useState<any[]>([]);
   // Default filter to Keyboard instrument if present
   const [filterInstruments, setFilterInstruments] = useState<(string | number)[]>([]);
+  const [filterBatches, setFilterBatches] = useState<(string | number)[]>([]);
 
   useEffect(() => {
     setStudents(propStudents || []);
@@ -36,6 +37,15 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students: propStu
   useEffect(() => {
     apiGet('/api/teachers').then(res => setTeachers(res.teachers || []));
   }, []);
+
+  // Clear invalid batch filters when instruments change
+  useEffect(() => {
+    const relevantBatchIds = batches
+      .filter(b => filterInstruments.includes(b.instrument_id))
+      .map(b => b.id);
+    
+    setFilterBatches(prev => prev.filter(id => relevantBatchIds.includes(id as any)));
+  }, [filterInstruments, batches]);
 
   // Get logged-in user from existing auth system
   const user = getCurrentUser();
@@ -70,6 +80,12 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students: propStu
     if (filterInstruments.length > 0) {
       const hasInstrument = studentBatches.some((batch: any) => batch.instrument_id && filterInstruments.includes(batch.instrument_id));
       if (!hasInstrument) return false;
+    }
+
+    // Batch filter
+    if (filterBatches.length > 0) {
+      const hasBatch = studentBatches.some((batch: any) => batch.batch_id && filterBatches.includes(batch.batch_id));
+      if (!hasBatch) return false;
     }
 
     // Teacher filter
@@ -209,6 +225,16 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students: propStu
     );
   };
 
+  const handleBatchToggle = (batchId: string | number) => {
+    setFilterBatches(prev => 
+      prev.includes(batchId) 
+        ? prev.filter(id => id !== batchId)
+        : [...prev, batchId]
+    );
+  };
+
+  const relevantBatches = batches.filter(b => filterInstruments.includes(b.instrument_id));
+
   return (
     <div className="space-y-6">
       {successBanner && (
@@ -286,6 +312,36 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students: propStu
             </button>
           )}
         </div>
+
+        {filterInstruments.length > 0 && relevantBatches.length > 0 && (
+          <div>
+            <h3 className="text-sm font-bold text-slate-700 mb-3">Filter by Batch</h3>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              {relevantBatches.map(batch => (
+                <label key={batch.id} className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={filterBatches.includes(batch.id)}
+                    onChange={() => handleBatchToggle(batch.id)}
+                    className="w-4 h-4 text-orange-600 rounded focus:ring-2 focus:ring-orange-500"
+                  />
+                  <span className="text-sm text-slate-700">
+                    {batch.recurrence} {batch.start_time ? `(${String(batch.start_time).slice(0, 5)})` : ''}
+                  </span>
+                </label>
+              ))}
+            </div>
+            {filterBatches.length > 0 && (
+              <button
+                onClick={() => setFilterBatches([])}
+                className="mt-3 text-xs text-orange-600 hover:text-orange-800 font-medium"
+              >
+                Clear batch filters
+              </button>
+            )}
+          </div>
+        )}
+
         <div>
           <h3 className="text-sm font-bold text-slate-700 mb-3">Filter by Teacher</h3>
           <select

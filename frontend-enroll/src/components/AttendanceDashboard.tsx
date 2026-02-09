@@ -8,33 +8,63 @@ interface AttendanceDashboardProps {
 }
 
 interface BatchStudent {
-  student_id: number;
+  student_id: string;
   student_name: string;
   status: AttendanceStatus;
+  phone: string | null;
+  guardian_phone: string | null;
+  guardian_contact: string | null;
 }
 
 const AttendanceDashboard: React.FC<AttendanceDashboardProps> = ({ batches, onRefresh }) => {
-  const [selectedBatch, setSelectedBatch] = useState<number | null>(null);
+  const [selectedBatch, setSelectedBatch] = useState<string>('');
   const [attendanceDate, setAttendanceDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [batchStudents, setBatchStudents] = useState<BatchStudent[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
+  const [errorMessage, setErrorMessage] = useState('');
+
+  // Helper to get day from date string (YYYY-MM-DD)
+  const getDayFromDate = (dateString: string) => {
+    if (!dateString) return '';
+    const [year, month, day] = dateString.split('-').map(Number);
+    const date = new Date(year, month - 1, day);
+    const days = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
+    return days[date.getDay()];
+  };
+
+  const dayOfWeek = getDayFromDate(attendanceDate);
+  const filteredBatches = batches.filter(batch => {
+    return !batch.recurrence || batch.recurrence.toUpperCase().includes(dayOfWeek);
+  });
 
   useEffect(() => {
-    if (selectedBatch) {
-      fetchBatchStudents(selectedBatch);
+    if (selectedBatch && filteredBatches.some(b => String(b.id) === selectedBatch)) {
+      fetchBatchStudents(selectedBatch, attendanceDate);
+    } else {
+      setBatchStudents([]);
     }
-  }, [selectedBatch]);
+  }, [selectedBatch, attendanceDate]);
 
-  const fetchBatchStudents = async (batchId: number) => {
+  // Reset selected batch when date changes (as available batches might change)
+  useEffect(() => {
+    setSelectedBatch('');
+    setBatchStudents([]);
+  }, [attendanceDate]);
+
+  const fetchBatchStudents = async (batchId: string, date: string) => {
     try {
       setLoading(true);
-      const data = await apiGet(`/api/batches/${batchId}/students`);
+      const data = await apiGet(`/api/batches/${batchId}/students?date=${date}`);
       setBatchStudents(
         data.students.map((s: any) => ({
           student_id: s.student_id,
           student_name: s.student_name,
-          status: 'present' as AttendanceStatus
+          status: (s.attendance_status as AttendanceStatus) || 'present',
+          phone: s.phone || s.meta_phone,
+          guardian_phone: s.guardian_phone,
+          guardian_contact: s.guardian_contact
         }))
       );
     } catch (error) {
@@ -44,7 +74,7 @@ const AttendanceDashboard: React.FC<AttendanceDashboardProps> = ({ batches, onRe
     }
   };
 
-  const handleStatusChange = (studentId: number, status: AttendanceStatus) => {
+  const handleStatusChange = (studentId: string, status: AttendanceStatus) => {
     setBatchStudents(
       batchStudents.map(s => (s.student_id === studentId ? { ...s, status } : s))
     );
@@ -54,9 +84,20 @@ const AttendanceDashboard: React.FC<AttendanceDashboardProps> = ({ batches, onRe
     setBatchStudents(batchStudents.map(s => ({ ...s, status: 'present' as AttendanceStatus })));
   };
 
+  const handleMarkAllAbsent = () => {
+    setBatchStudents(batchStudents.map(s => ({ ...s, status: 'absent' as AttendanceStatus })));
+  };
+
+  const handleMarkAllExcused = () => {
+    setBatchStudents(batchStudents.map(s => ({ ...s, status: 'excused' as AttendanceStatus })));
+  };
+
   const handleSubmitAttendance = async () => {
+    setSuccessMessage('');
+    setErrorMessage('');
+
     if (!selectedBatch) {
-      alert('Please select a batch');
+      setErrorMessage('Please select a batch');
       return;
     }
 
@@ -70,40 +111,36 @@ const AttendanceDashboard: React.FC<AttendanceDashboardProps> = ({ batches, onRe
       }));
 
       await apiPost('/api/attendance', { records: attendanceRecords });
-      alert('Attendance saved successfully!');
+      setSuccessMessage('Attendance saved successfully!');
       onRefresh();
+      setTimeout(() => setSuccessMessage(''), 3000);
     } catch (error) {
       console.error('Error saving attendance:', error);
-      alert('Error saving attendance');
+      setErrorMessage('Error saving attendance');
+      setTimeout(() => setErrorMessage(''), 3000);
     } finally {
       setSaving(false);
     }
   };
 
-  const selectedBatchInfo = batches.find(b => Number(b.id) === selectedBatch);
+  const selectedBatchInfo = batches.find(b => String(b.id) === selectedBatch);
   const presentCount = batchStudents.filter(s => s.status === 'present').length;
   const absentCount = batchStudents.filter(s => s.status === 'absent').length;
   const excusedCount = batchStudents.filter(s => s.status === 'excused').length;
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div>
-          <label className="block text-sm font-semibold text-slate-700 mb-2">Select Batch *</label>
-          <select
-            value={selectedBatch || ''}
-            onChange={(e) => setSelectedBatch(Number(e.target.value))}
-            className="w-full px-4 py-3 rounded-lg border border-slate-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none"
-          >
-            <option value="">-- Choose a batch --</option>
-            {batches.map(batch => (
-              <option key={batch.id} value={batch.id}>
-                Batch {batch.id} ({batch.day_of_week}, {batch.start_time})
-              </option>
-            ))}
-          </select>
+      {successMessage && (
+        <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg">
+          {successMessage}
         </div>
-
+      )}
+      {errorMessage && (
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
+          {errorMessage}
+        </div>
+      )}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div>
           <label className="block text-sm font-semibold text-slate-700 mb-2">Attendance Date *</label>
           <input
@@ -113,23 +150,57 @@ const AttendanceDashboard: React.FC<AttendanceDashboardProps> = ({ batches, onRe
             className="w-full px-4 py-3 rounded-lg border border-slate-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none"
           />
         </div>
+
+        <div>
+          <label className="block text-sm font-semibold text-slate-700 mb-2">Select Batch *</label>
+          <select
+            value={selectedBatch}
+            onChange={(e) => setSelectedBatch(e.target.value)}
+            disabled={filteredBatches.length === 0}
+            className="w-full px-4 py-3 rounded-lg border border-slate-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none"
+          >
+            <option value="">-- Choose a batch --</option>
+            {filteredBatches.map(batch => (
+              <option key={batch.id} value={batch.id}>
+                {(batch as any).instrument_name || 'Batch'} ({batch.recurrence})
+              </option>
+            ))}
+          </select>
+          {filteredBatches.length === 0 && (
+            <p className="text-sm text-red-500 mt-2">No batches exist for this day.</p>
+          )}
+        </div>
       </div>
 
       {selectedBatchInfo && (
         <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-4">
           <div className="flex items-center justify-between">
             <div>
-              <p className="font-bold text-slate-900">Batch {selectedBatchInfo.id}</p>
+              <p className="font-bold text-slate-900">{(selectedBatchInfo as any).instrument_name || 'Selected Batch'}</p>
               <p className="text-sm text-slate-600">
-                {selectedBatchInfo.day_of_week} • {selectedBatchInfo.start_time} - {selectedBatchInfo.end_time}
+                {selectedBatchInfo.recurrence} • {selectedBatchInfo.start_time} - {selectedBatchInfo.end_time}
               </p>
             </div>
-            <button
-              onClick={handleMarkAllPresent}
-              className="px-4 py-2 bg-emerald-500 text-white rounded-lg font-medium hover:bg-emerald-600 transition"
-            >
-              ✓ Mark All Present
-            </button>
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={handleMarkAllPresent}
+                className="px-3 py-2 text-sm bg-emerald-500 text-white rounded-lg font-medium hover:bg-emerald-600 transition"
+              >
+                ✓ All Present
+              </button>
+              <button
+                onClick={handleMarkAllAbsent}
+                className="px-3 py-2 text-sm bg-red-500 text-white rounded-lg font-medium hover:bg-red-600 transition"
+              >
+                ✗ All Absent
+              </button>
+              <button
+                onClick={handleMarkAllExcused}
+                className="px-3 py-2 text-sm bg-amber-500 text-white rounded-lg font-medium hover:bg-amber-600 transition"
+              >
+                ~ All Excused
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -168,6 +239,7 @@ const AttendanceDashboard: React.FC<AttendanceDashboardProps> = ({ batches, onRe
                 <tr>
                   <th className="px-6 py-4 text-left text-sm font-bold text-slate-700">#</th>
                   <th className="px-6 py-4 text-left text-sm font-bold text-slate-700">Student Name</th>
+                  <th className="px-6 py-4 text-left text-sm font-bold text-slate-700">Contact</th>
                   <th className="px-6 py-4 text-center text-sm font-bold text-slate-700">Status</th>
                 </tr>
               </thead>
@@ -177,6 +249,13 @@ const AttendanceDashboard: React.FC<AttendanceDashboardProps> = ({ batches, onRe
                     <td className="px-6 py-4 text-slate-600">{index + 1}</td>
                     <td className="px-6 py-4">
                       <p className="font-semibold text-slate-900">{student.student_name}</p>
+                    </td>
+                    <td className="px-6 py-4 text-sm text-slate-600">
+                      {student.phone ? (
+                        <a href={`tel:${student.phone}`} className="hover:text-indigo-600 hover:underline">{student.phone}</a>
+                      ) : student.guardian_phone ? (
+                        <a href={`tel:${student.guardian_phone}`} className="hover:text-indigo-600 hover:underline">{student.guardian_phone}</a>
+                      ) : (student.guardian_contact || 'N/A')}
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex items-center justify-center gap-2">

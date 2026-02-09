@@ -274,6 +274,157 @@ app.get('/api/batches/:instrumentId', async (req, res) => {
   }
 })
 
+// POST /api/batches - Create a new batch
+app.post('/api/batches', async (req, res) => {
+  const { instrument_id, teacher_id, recurrence, start_time, end_time, capacity } = req.body
+  
+  if (!instrument_id || !recurrence || !start_time || !end_time) {
+    return res.status(400).json({ error: 'Missing required fields' })
+  }
+
+  try {
+    const result = await pool.query(
+      `INSERT INTO batches (instrument_id, teacher_id, recurrence, start_time, end_time, capacity)
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+      [instrument_id, teacher_id || null, recurrence, start_time, end_time, capacity || 8]
+    )
+    res.status(201).json({ batch: result.rows[0] })
+  } catch (err) {
+    console.error('Create batch error:', err)
+    res.status(500).json({ error: 'Failed to create batch' })
+  }
+})
+
+// PUT /api/batches/:id - Update a batch
+app.put('/api/batches/:id', async (req, res) => {
+  const { id } = req.params
+  const { teacher_id, recurrence, start_time, end_time, capacity } = req.body
+
+  try {
+    const result = await pool.query(
+      `UPDATE batches 
+       SET teacher_id = $1, recurrence = $2, start_time = $3, end_time = $4, capacity = $5, updated_at = NOW()
+       WHERE id = $6 RETURNING *`,
+      [teacher_id || null, recurrence, start_time, end_time, capacity, id]
+    )
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Batch not found' })
+    }
+    
+    res.json({ batch: result.rows[0] })
+  } catch (err) {
+    console.error('Update batch error:', err)
+    res.status(500).json({ error: 'Failed to update batch' })
+  }
+})
+
+// DELETE /api/batches/:id - Delete a batch
+app.delete('/api/batches/:id', async (req, res) => {
+  const { id } = req.params
+  try {
+    const result = await pool.query('DELETE FROM batches WHERE id = $1 RETURNING *', [id])
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: 'Batch not found' })
+    }
+    res.json({ message: 'Batch deleted successfully', batch: result.rows[0] })
+  } catch (err) {
+    console.error('Delete batch error:', err)
+    if (err.code === '23503') {
+      return res.status(400).json({ error: 'Cannot delete batch with active enrollments or attendance records.' })
+    }
+    res.status(500).json({ error: 'Failed to delete batch' })
+  }
+})
+
+// GET /api/batches/:batchId/students - fetch students for a specific batch
+app.get('/api/batches/:batchId/students', async (req, res) => {
+  const { batchId } = req.params
+  const { date } = req.query
+
+  try {
+    let query = `
+      SELECT 
+        s.id as student_id,
+        s.name as student_name,
+        s.phone,
+        s.guardian_contact,
+        s.metadata->>'phone' as meta_phone,
+        s.metadata->>'guardian_phone' as guardian_phone
+    `
+    const params = [batchId]
+
+    if (date) {
+      query += `, ar.status as attendance_status `
+    }
+
+    query += `
+      FROM students s
+      JOIN enrollments e ON s.id = e.student_id
+      JOIN enrollment_batches eb ON e.id = eb.enrollment_id
+    `
+
+    if (date) {
+      query += ` LEFT JOIN attendance_records ar ON ar.student_id = s.id AND ar.batch_id = eb.batch_id AND ar.session_date = $2 `
+      params.push(date)
+    }
+
+    query += ` WHERE eb.batch_id = $1 AND e.status = 'active' ORDER BY s.name`
+
+    const result = await pool.query(query, params)
+    res.json({ students: result.rows })
+  } catch (err) {
+    console.error('Get batch students error:', err)
+    res.status(500).json({ error: 'Failed to fetch students for batch' })
+  }
+})
+
+// POST /api/attendance - Mark attendance
+app.post('/api/attendance', async (req, res) => {
+  const { records } = req.body
+  if (!Array.isArray(records) || records.length === 0) {
+    return res.status(400).json({ error: 'No attendance records provided' })
+  }
+
+  const client = await pool.connect()
+  try {
+    await client.query('BEGIN')
+    
+    for (const record of records) {
+      const { batch_id, student_id, date, status } = record
+      
+      // Check if record exists
+      const checkRes = await client.query(
+        'SELECT id FROM attendance_records WHERE batch_id = $1 AND student_id = $2 AND session_date = $3',
+        [batch_id, student_id, date]
+      )
+
+      if (checkRes.rows.length > 0) {
+        // Update
+        await client.query(
+          'UPDATE attendance_records SET status = $1, source = $2, finalized_at = NOW() WHERE id = $3',
+          [status, 'manual', checkRes.rows[0].id]
+        )
+      } else {
+        // Insert
+        await client.query(
+          'INSERT INTO attendance_records (batch_id, student_id, session_date, status, source, finalized_at) VALUES ($1, $2, $3, $4, $5, NOW())',
+          [batch_id, student_id, date, status, 'manual']
+        )
+      }
+    }
+
+    await client.query('COMMIT')
+    res.json({ message: 'Attendance saved successfully' })
+  } catch (err) {
+    await client.query('ROLLBACK')
+    console.error('Attendance save error:', err)
+    res.status(500).json({ error: 'Failed to save attendance' })
+  } finally {
+    client.release()
+  }
+})
+
 // POST /api/agent/enroll - conversational enrollment via LLM guidance
 app.post('/api/agent/enroll', async (req, res) => {
   const { sessionId, message } = req.body || {}
@@ -500,7 +651,9 @@ app.get('/api/enrollments', async (req, res)=>{
               'teacher_id', t.id,
               'teacher', t.name,
               'start_time', b.start_time,
-              'end_time', b.end_time
+              'end_time', b.end_time,
+              'payment_frequency', eb.payment_frequency,
+              'enrolled_on', COALESCE(eb.enrolled_on, e.enrolled_on)
             )
             ORDER BY i.name, b.recurrence
           ) FILTER (WHERE b.id IS NOT NULL),

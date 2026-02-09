@@ -27,6 +27,7 @@ const StudentDetails: React.FC<StudentDetailsProps> = ({ student, batches, instr
     address: ''
   });
   const [selectedBatches, setSelectedBatches] = useState<EnrollmentSelection[]>([]);
+  const [instrumentSettings, setInstrumentSettings] = useState<Record<string, { payment_frequency: PaymentFrequency; enrollment_date: string }>>({});
 
   useEffect(() => {
     if (student) {
@@ -48,17 +49,34 @@ const StudentDetails: React.FC<StudentDetailsProps> = ({ student, batches, instr
       });
 
       // Pre-select batches and payment modes if editing
-      if (Array.isArray(student.enrollments)) {
-        setSelectedBatches(
-          student.enrollments.map((enr: any) => ({
-            batch_id: enr.batch_id || enr.batchId || '',
-            payment_frequency: enr.payment_frequency || 'monthly',
-            enrollment_date: enr.enrolled_on ? enr.enrolled_on.split('T')[0] : ''
-          }))
-        );
-      } else {
-        setSelectedBatches([]);
+      let initialBatches: EnrollmentSelection[] = [];
+      const studentBatches = (student as any).batches || (student as any).enrollments;
+      if (Array.isArray(studentBatches)) {
+        initialBatches = studentBatches.map((enr: any) => ({
+          batch_id: enr.batch_id || enr.batchId || '',
+          payment_frequency: enr.payment_frequency || 'monthly',
+          enrollment_date: enr.enrolled_on ? enr.enrolled_on.split('T')[0] : ''
+        }));
       }
+      setSelectedBatches(initialBatches);
+
+      // Initialize instrument settings based on existing enrollments
+      const newSettings: Record<string, any> = {};
+      instruments.forEach(inst => {
+        const instBatchIds = batches
+          .filter(b => String(b.instrument_id) === String(inst.id))
+          .map(b => String(b.id));
+        
+        // Find if any batch of this instrument is selected to grab settings
+        const existing = initialBatches.find(eb => instBatchIds.includes(String(eb.batch_id)));
+        
+        newSettings[inst.id] = {
+          payment_frequency: existing?.payment_frequency || 'monthly',
+          enrollment_date: existing?.enrollment_date || new Date().toISOString().split('T')[0]
+        };
+      });
+      setInstrumentSettings(newSettings);
+
     } else {
       setFormData({
         first_name: '',
@@ -71,35 +89,58 @@ const StudentDetails: React.FC<StudentDetailsProps> = ({ student, batches, instr
         address: ''
       });
       setSelectedBatches([]);
+      
+      // Reset instrument settings to defaults
+      const newSettings: Record<string, any> = {};
+      instruments.forEach(inst => {
+        newSettings[inst.id] = {
+          payment_frequency: 'monthly',
+          enrollment_date: new Date().toISOString().split('T')[0]
+        };
+      });
+      setInstrumentSettings(newSettings);
     }
-  }, [student]);
+  }, [student, instruments, batches]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  const handleBatchToggle = (batchId: number | string) => {
+  const handleBatchToggle = (batchId: number | string, instrumentId: string) => {
     setSelectedBatches(prev => {
       const exists = prev.find(e => String(e.batch_id) === String(batchId));
       if (exists) {
         return prev.filter(e => String(e.batch_id) !== String(batchId));
       } else {
-        const today = new Date().toISOString().split('T')[0];
-        return [...prev, { batch_id: batchId, payment_frequency: 'monthly' as PaymentFrequency, enrollment_date: today }];
+        const settings = instrumentSettings[instrumentId] || {
+          payment_frequency: 'monthly',
+          enrollment_date: new Date().toISOString().split('T')[0]
+        };
+        return [...prev, { 
+          batch_id: batchId, 
+          payment_frequency: settings.payment_frequency, 
+          enrollment_date: settings.enrollment_date 
+        }];
       }
     });
   };
 
-  const handlePaymentFrequencyChange = (batchId: number | string, frequency: PaymentFrequency) => {
-    setSelectedBatches(prev =>
-      prev.map(e => (String(e.batch_id) === String(batchId) ? { ...e, payment_frequency: frequency } : e))
-    );
-  };
+  const handleInstrumentSettingChange = (instrumentId: string, field: 'payment_frequency' | 'enrollment_date', value: any) => {
+    setInstrumentSettings(prev => ({
+      ...prev,
+      [instrumentId]: { ...prev[instrumentId], [field]: value }
+    }));
 
-  const handleEnrollmentDateChange = (batchId: number | string, date: string) => {
-    setSelectedBatches(prev =>
-      prev.map(e => (String(e.batch_id) === String(batchId) ? { ...e, enrollment_date: date } : e))
-    );
+    // Update all selected batches for this instrument
+    const instBatches = batches.filter(b => String(b.instrument_id) === String(instrumentId));
+    const instBatchIds = instBatches.map(b => String(b.id));
+
+    setSelectedBatches(prev => prev.map(eb => {
+      if (instBatchIds.includes(String(eb.batch_id))) {
+        return { ...eb, [field]: value };
+      }
+      return eb;
+    }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -155,48 +196,55 @@ const StudentDetails: React.FC<StudentDetailsProps> = ({ student, batches, instr
         <h3 className="text-lg font-bold text-slate-800 mb-3">Enroll in Batches <span className="text-red-500">*</span></h3>
         <p className="text-sm text-slate-600 mb-4">Select the batches and payment plan for this student</p>
         <div className="space-y-4 max-h-64 overflow-y-auto">
-          {batchesByInstrument.map(({ instrument, batches: instrumentBatches }) => (
-            <div key={instrument.id} className="bg-slate-50 rounded-lg p-4 border border-slate-200">
-              <h4 className="text-sm font-bold text-slate-800 mb-3 flex items-center gap-2">🎵 {instrument.name}</h4>
-              {instrumentBatches.length === 0 ? (
-                <p className="text-xs text-slate-500 italic">No active batches available.</p>
-              ) : (
-                <div className="space-y-2">
-                  {instrumentBatches.map(batch => {
-                    const isSelected = selectedBatches.some(e => String(e.batch_id) === String(batch.id));
-                    const enrollment = selectedBatches.find(e => String(e.batch_id) === String(batch.id));
-                    return (
-                      <div key={batch.id} className={`p-3 rounded-lg border transition ${isSelected ? 'border-orange-500 bg-orange-50' : 'border-slate-200 bg-white'}`}>
-                        <div className="flex items-start gap-2">
-                          <input type="checkbox" checked={isSelected} onChange={() => handleBatchToggle(batch.id)} className="mt-1 w-4 h-4 text-orange-600 rounded focus:ring-2 focus:ring-orange-500" />
-                          <div className="flex-1">
-                            <p className="font-semibold text-slate-900 text-sm">{batch.recurrence}</p>
-                            <p className="text-xs text-slate-600">{batch.day_of_week} • {batch.start_time} - {batch.end_time}</p>
-                            {isSelected && (
-                              <div className="mt-2 space-y-2">
-                                <div>
-                                  <label className="block text-xs font-semibold text-slate-700 mb-1">Enrollment Date</label>
-                                  <input type="date" value={enrollment?.enrollment_date || ''} onChange={(e) => handleEnrollmentDateChange(batch.id, e.target.value)} className="text-xs px-2 py-1 rounded border border-slate-300 focus:border-indigo-500 outline-none w-full" />
-                                </div>
-                                <div>
-                                  <label className="block text-xs font-semibold text-slate-700 mb-1">Payment Frequency</label>
-                                  <select value={enrollment?.payment_frequency || 'monthly'} onChange={(e) => handlePaymentFrequencyChange(batch.id, e.target.value as PaymentFrequency)} className="text-xs px-2 py-1 rounded border border-slate-300 focus:border-indigo-500 outline-none w-full">
-                                    <option value="monthly">Monthly (8 classes)</option>
-                                    <option value="quarterly">Quarterly (24 classes)</option>
-                                    <option value="half_yearly">Half-Yearly (48 classes)</option>
-                                  </select>
-                                </div>
-                              </div>
-                            )}
+          {batchesByInstrument.map(({ instrument, batches: instrumentBatches }) => {
+            const settings = instrumentSettings[instrument.id] || {
+              payment_frequency: 'monthly',
+              enrollment_date: new Date().toISOString().split('T')[0]
+            };
+
+            return (
+              <div key={instrument.id} className="bg-slate-50 rounded-lg p-4 border border-slate-200">
+                <h4 className="text-sm font-bold text-slate-800 mb-3 flex items-center gap-2">🎵 {instrument.name}</h4>
+                
+                {/* Instrument Level Controls */}
+                <div className="grid grid-cols-2 gap-4 mb-4 bg-white p-3 rounded border border-slate-100">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Enrollment Date</label>
+                    <input type="date" value={settings.enrollment_date} onChange={(e) => handleInstrumentSettingChange(instrument.id, 'enrollment_date', e.target.value)} className="text-xs px-2 py-1 rounded border border-slate-300 focus:border-indigo-500 outline-none w-full" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Payment Frequency</label>
+                    <select value={settings.payment_frequency} onChange={(e) => handleInstrumentSettingChange(instrument.id, 'payment_frequency', e.target.value as PaymentFrequency)} className="text-xs px-2 py-1 rounded border border-slate-300 focus:border-indigo-500 outline-none w-full">
+                      <option value="monthly">Monthly (8 classes)</option>
+                      <option value="quarterly">Quarterly (24 classes)</option>
+                      <option value="half_yearly">Half-Yearly (48 classes)</option>
+                    </select>
+                  </div>
+                </div>
+
+                {instrumentBatches.length === 0 ? (
+                  <p className="text-xs text-slate-500 italic">No active batches available.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {instrumentBatches.map(batch => {
+                      const isSelected = selectedBatches.some(e => String(e.batch_id) === String(batch.id));
+                      return (
+                        <div key={batch.id} className={`p-3 rounded-lg border transition ${isSelected ? 'border-orange-500 bg-orange-50' : 'border-slate-200 bg-white'}`}>
+                          <div className="flex items-start gap-2">
+                            <input type="checkbox" checked={isSelected} onChange={() => handleBatchToggle(batch.id, instrument.id)} className="mt-1 w-4 h-4 text-orange-600 rounded focus:ring-2 focus:ring-orange-500" />
+                            <div className="flex-1">
+                              <p className="font-semibold text-slate-900 text-sm">{batch.recurrence}</p>
+                              <p className="text-xs text-slate-600">{batch.day_of_week} • {batch.start_time} - {batch.end_time}</p>
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          ))}
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       </div>
 

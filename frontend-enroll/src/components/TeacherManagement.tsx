@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { apiGet, apiPost, apiPut } from '../api';
+import { apiGet, apiPost, apiPut, apiDelete } from '../api';
 import { Instrument } from '../types';
 
 interface Teacher {
@@ -31,6 +31,7 @@ interface TeacherManagementProps {
 }
 
 export default function TeacherManagement({ instruments, onRefresh }: TeacherManagementProps) {
+  const [view, setView] = useState<'teachers' | 'batches'>('teachers');
   const [teachers, setTeachers] = useState<Teacher[]>([]);
   const [batches, setBatches] = useState<Batch[]>([]);
   const [selectedTeacher, setSelectedTeacher] = useState<Teacher | null>(null);
@@ -295,6 +296,32 @@ export default function TeacherManagement({ instruments, onRefresh }: TeacherMan
     }
   }
 
+  async function handleDeleteTeacher(id: string) {
+    if (!confirm('Are you sure you want to delete this teacher?')) return;
+    try {
+      await apiDelete(`/api/teachers/${id}`);
+      setSuccess('Teacher deleted successfully');
+      fetchTeachers();
+      onRefresh();
+      setTimeout(() => setSuccess(''), 3000);
+    } catch (err: any) {
+      setError(err.message || 'Failed to delete teacher');
+    }
+  }
+
+  async function handleDeleteBatch(id: string) {
+    if (!confirm('Are you sure you want to delete this batch?')) return;
+    try {
+      await apiDelete(`/api/batches/${id}`);
+      setSuccess('Batch deleted successfully');
+      fetchBatches();
+      onRefresh();
+      setTimeout(() => setSuccess(''), 3000);
+    } catch (err: any) {
+      setError(err.message || 'Failed to delete batch');
+    }
+  }
+
   const activeTeachers = teachers.filter(t => t.is_active);
   const inactiveTeachers = teachers.filter(t => !t.is_active);
 
@@ -303,7 +330,7 @@ export default function TeacherManagement({ instruments, onRefresh }: TeacherMan
       {/* Header */}
       <div className="flex justify-between items-center">
         <div>
-          <h2 className="text-2xl font-bold text-slate-900">Teacher Management</h2>
+          <h2 className="text-2xl font-bold text-slate-900">{view === 'teachers' ? 'Teacher Management' : 'Batch Management'}</h2>
           <p className="text-slate-600 mt-1">Manage teachers, pay packages, and batch assignments</p>
         </div>
         <div className="flex gap-3">
@@ -337,11 +364,17 @@ export default function TeacherManagement({ instruments, onRefresh }: TeacherMan
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-gradient-to-br from-orange-500 to-amber-500 text-white p-6 rounded-xl shadow-lg">
+        <div 
+          onClick={() => setView('teachers')}
+          className={`bg-gradient-to-br from-orange-500 to-amber-500 text-white p-6 rounded-xl shadow-lg cursor-pointer transition-transform hover:scale-[1.02] ${view === 'teachers' ? 'ring-4 ring-orange-200' : 'opacity-90'}`}
+        >
           <h3 className="text-sm font-medium opacity-90">Active Teachers</h3>
           <p className="text-4xl font-bold mt-2">{activeTeachers.length}</p>
         </div>
-        <div className="bg-gradient-to-br from-blue-500 to-indigo-500 text-white p-6 rounded-xl shadow-lg">
+        <div 
+          onClick={() => setView('batches')}
+          className={`bg-gradient-to-br from-blue-500 to-indigo-500 text-white p-6 rounded-xl shadow-lg cursor-pointer transition-transform hover:scale-[1.02] ${view === 'batches' ? 'ring-4 ring-blue-200' : 'opacity-90'}`}
+        >
           <h3 className="text-sm font-medium opacity-90">Total Batches</h3>
           <p className="text-4xl font-bold mt-2">{batches.length}</p>
         </div>
@@ -359,7 +392,7 @@ export default function TeacherManagement({ instruments, onRefresh }: TeacherMan
           <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500"></div>
           <p className="mt-4 text-slate-600">Loading teachers...</p>
         </div>
-      ) : (
+      ) : view === 'teachers' ? (
         <div className="space-y-6">
           {/* Active Teachers */}
           <div>
@@ -370,6 +403,7 @@ export default function TeacherManagement({ instruments, onRefresh }: TeacherMan
                   key={teacher.id}
                   teacher={teacher}
                   onEdit={() => openEditModal(teacher)}
+                  onDelete={() => handleDeleteTeacher(teacher.id)}
                   isExpanded={expandedTeacher === teacher.id}
                   onToggleExpand={() => toggleTeacherExpand(teacher.id)}
                   batches={teacherBatches[teacher.id] || []}
@@ -394,6 +428,7 @@ export default function TeacherManagement({ instruments, onRefresh }: TeacherMan
                     key={teacher.id}
                     teacher={teacher}
                     onEdit={() => openEditModal(teacher)}                    isExpanded={expandedTeacher === teacher.id}
+                    onDelete={() => handleDeleteTeacher(teacher.id)}
                     onToggleExpand={() => toggleTeacherExpand(teacher.id)}
                     batches={teacherBatches[teacher.id] || []}
                     onEditBatch={openEditBatchModal}
@@ -402,6 +437,60 @@ export default function TeacherManagement({ instruments, onRefresh }: TeacherMan
               </div>
             </div>
           )}
+        </div>
+      ) : (
+        /* Batches View */
+        <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 text-sm">
+                  <th className="py-3 px-4 font-semibold">Instrument</th>
+                  <th className="py-3 px-4 font-semibold">Teacher</th>
+                  <th className="py-3 px-4 font-semibold">Schedule</th>
+                  <th className="py-3 px-4 font-semibold">Time</th>
+                  <th className="py-3 px-4 font-semibold">Capacity</th>
+                  <th className="py-3 px-4 font-semibold text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {batches.map(batch => (
+                  <tr key={batch.id} className="hover:bg-slate-50 transition">
+                    <td className="py-3 px-4 font-medium text-slate-800">
+                      {batch.instrument_name || 'Unknown'}
+                    </td>
+                    <td className="py-3 px-4 text-slate-600">
+                      {batch.teacher_name || 'Unassigned'}
+                    </td>
+                    <td className="py-3 px-4 text-slate-600">{batch.recurrence}</td>
+                    <td className="py-3 px-4 text-slate-600">
+                      {batch.start_time?.slice(0, 5)} - {batch.end_time?.slice(0, 5)}
+                    </td>
+                    <td className="py-3 px-4 text-slate-600">{batch.capacity}</td>
+                    <td className="py-3 px-4 text-right space-x-2">
+                      <button
+                        onClick={() => openEditBatchModal(batch)}
+                        className="text-indigo-600 hover:text-indigo-800 font-medium text-sm"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        onClick={() => handleDeleteBatch(batch.id)}
+                        className="text-red-600 hover:text-red-800 font-medium text-sm"
+                      >
+                        Delete
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+                {batches.length === 0 && (
+                  <tr>
+                    <td colSpan={6} className="text-center py-10 text-slate-500">No batches found.</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
@@ -466,6 +555,7 @@ export default function TeacherManagement({ instruments, onRefresh }: TeacherMan
 function TeacherCard({ 
   teacher, 
   onEdit, 
+  onDelete,
   isExpanded, 
   onToggleExpand, 
   batches,
@@ -473,6 +563,7 @@ function TeacherCard({
 }: { 
   teacher: Teacher; 
   onEdit: () => void;
+  onDelete: () => void;
   isExpanded: boolean;
   onToggleExpand: () => void;
   batches: Batch[];
@@ -499,12 +590,20 @@ function TeacherCard({
               <p className="text-sm text-slate-500">{teacher.phone || 'No phone'}</p>
             </div>
           </div>
-          <button
-            onClick={onEdit}
-            className="text-orange-600 hover:text-orange-700 font-medium text-sm"
-          >
-            Edit
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={onEdit}
+              className="text-orange-600 hover:text-orange-700 font-medium text-sm"
+            >
+              Edit
+            </button>
+            <button
+              onClick={onDelete}
+              className="text-red-600 hover:text-red-700 font-medium text-sm"
+            >
+              Delete
+            </button>
+          </div>
         </div>
         
         <div className="space-y-2 text-sm">

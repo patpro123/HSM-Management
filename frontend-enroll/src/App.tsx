@@ -14,12 +14,11 @@ import { getCurrentUser, login, logout, handleOAuthCallback, isAuthenticated, se
 import { apiGet } from './api';
 import StatsOverview from './components/StatsOverview';
 // @ts-ignore - Explicitly import .tsx to avoid resolving to the legacy .jsx file
+import AttendanceDashboard from './components/AttendanceDashboard';
 import StudentManagement from './components/StudentManagement.tsx';
 import TeacherManagement from './components/TeacherManagement';
 import UserManagement from './components/UserManagement';
 import EnrollmentForm from './components/EnrollmentForm';
-// @ts-ignore - JSX component
-import AttendanceTab from './components/Attendance/AttendanceTab';
 import PaymentModule from './components/PaymentModule';
 import hsmLogo from './images/hsmLogo.jpg';
 
@@ -342,7 +341,10 @@ const App: React.FC = () => {
               />
             )}
             {activeTab === 'attendance' && (
-              <AttendanceTab />
+              <AttendanceDashboard 
+                batches={batches}
+                onRefresh={fetchData}
+              />
             )}
             {activeTab === 'payments' && (
               <PaymentModule 
