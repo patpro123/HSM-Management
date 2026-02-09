@@ -43,6 +43,7 @@ app.use('/api/students', require('./routes/students-put'));
 app.use('/api/teachers', require('./routes/teachers'));
 const { router: student360Router, fetchStudent360Data } = require('./routes/student360');
 app.use('/api/students', student360Router);
+app.use('/api/auth', require('./routes/auth'));
 
 // Conversational enrollment agent state and helpers
 const enrollmentSessions = new Map()
