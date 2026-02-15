@@ -15,11 +15,12 @@ import { apiGet } from './api';
 import StatsOverview from './components/StatsOverview';
 // @ts-ignore - Explicitly import .tsx to avoid resolving to the legacy .jsx file
 import AttendanceDashboard from './components/AttendanceDashboard';
-import StudentManagement from './components/StudentManagement.tsx';
+import StudentHub from './components/StudentHub';
 import TeacherManagement from './components/TeacherManagement';
 import UserManagement from './components/UserManagement';
 import EnrollmentForm from './components/EnrollmentForm';
 import PaymentModule from './components/PaymentModule';
+import FinanceModule from './components/FinanceModule';
 import hsmLogo from './images/hsmLogo.jpg';
 
 const App: React.FC = () => {
@@ -222,6 +223,7 @@ const App: React.FC = () => {
         { key: 'students', label: 'Students' },
         { key: 'attendance', label: 'Attendance' },
         { key: 'payments', label: 'Payments' },
+        { key: 'finance', label: 'Finance' },
         { key: 'teachers', label: 'Teachers' },
         { key: 'users', label: 'Users' },
       ]
@@ -333,7 +335,7 @@ const App: React.FC = () => {
               />
             )}
             {activeTab === 'students' && (
-              <StudentManagement 
+              <StudentHub 
                 students={students}
                 batches={batches}
                 instruments={instruments}
@@ -351,6 +353,14 @@ const App: React.FC = () => {
                 students={students}
                 payments={payments}
                 onRefresh={fetchData}
+              />
+            )}
+            {activeTab === 'finance' && (
+              <FinanceModule
+                students={students}
+                batches={batches}
+                payments={payments}
+                instruments={instruments}
               />
             )}
             {activeTab === 'teachers' && (

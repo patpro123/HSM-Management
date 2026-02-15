@@ -61,6 +61,7 @@ const { router: student360Router, fetchStudent360Data } = require('./routes/stud
 app.use('/api/students', student360Router);
 app.use('/api/payments', require('./routes/payments'));
 app.use('/api/users', require('./routes/users'));
+app.use('/api/finance', require('./routes/finance'));
 app.use('/api', require('./routes/documents'));
 app.use('/api/auth', require('./routes/auth'));
 
