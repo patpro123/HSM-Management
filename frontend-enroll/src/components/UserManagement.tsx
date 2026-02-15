@@ -30,7 +30,7 @@ const UserManagement: React.FC = () => {
     try {
       setLoading(true);
       const data = await apiGet('/api/users');
-      setUsers(data || []);
+      setUsers(data.users || []);
       setError(null);
     } catch (err: any) {
       console.error('Error fetching users:', err);
@@ -173,7 +173,7 @@ const UserManagement: React.FC = () => {
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex flex-wrap gap-2 items-center">
-                          {user.roles.map((roleObj) => (
+                          {(user.roles || []).map((roleObj) => (
                             <span key={roleObj.role} className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
                               {roleObj.role}
                               <button
@@ -197,7 +197,7 @@ const UserManagement: React.FC = () => {
                           >
                             <option value="">+ Add Role</option>
                             {availableRoles
-                              .filter(r => !user.roles.some(ur => ur.role === r))
+                              .filter(r => !(user.roles || []).some(ur => ur.role === r))
                               .map(role => (
                                 <option key={role} value={role}>{role}</option>
                               ))
