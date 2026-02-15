@@ -1,0 +1,2 @@
+ALTER TABLE enrollment_batches DROP CONSTRAINT IF EXISTS enrollment_batches_classes_remaining_check;
+ALTER TABLE enrollments DROP CONSTRAINT IF EXISTS enrollments_classes_remaining_check;

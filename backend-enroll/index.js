@@ -353,7 +353,8 @@ app.get('/api/batches/:batchId/students', async (req, res) => {
         s.phone,
         s.guardian_contact,
         s.metadata->>'phone' as meta_phone,
-        s.metadata->>'guardian_phone' as guardian_phone
+        s.metadata->>'guardian_phone' as guardian_phone,
+        eb.classes_remaining
     `
     const params = [batchId]
 
@@ -382,6 +383,46 @@ app.get('/api/batches/:batchId/students', async (req, res) => {
   }
 })
 
+// GET /api/attendance - Fetch attendance records
+app.get('/api/attendance', async (req, res) => {
+  const { student_id, batch_id, start_date, end_date } = req.query
+  try {
+    let query = `
+      SELECT ar.*, s.name as student_name 
+      FROM attendance_records ar
+      JOIN students s ON ar.student_id = s.id
+      WHERE 1=1
+    `
+    const params = []
+    let pIdx = 1
+
+    if (student_id) {
+      query += ` AND ar.student_id = $${pIdx++}`
+      params.push(student_id)
+    }
+    if (batch_id) {
+      query += ` AND ar.batch_id = $${pIdx++}`
+      params.push(batch_id)
+    }
+    if (start_date) {
+      query += ` AND ar.session_date >= $${pIdx++}`
+      params.push(start_date)
+    }
+    if (end_date) {
+      query += ` AND ar.session_date <= $${pIdx++}`
+      params.push(end_date)
+    }
+
+    query += ' ORDER BY ar.session_date DESC'
+    
+    const result = await pool.query(query, params)
+    res.json({ attendance: result.rows })
+  } catch (err) {
+    console.error('Get attendance error:', err)
+    res.status(500).json({ error: 'Failed to fetch attendance' })
+  }
+})
+
 // POST /api/attendance - Mark attendance
 app.post('/api/attendance', async (req, res) => {
   const { records } = req.body
@@ -398,22 +439,52 @@ app.post('/api/attendance', async (req, res) => {
       
       // Check if record exists
       const checkRes = await client.query(
-        'SELECT id FROM attendance_records WHERE batch_id = $1 AND student_id = $2 AND session_date = $3',
+        'SELECT id, status FROM attendance_records WHERE batch_id = $1 AND student_id = $2 AND session_date = $3',
         [batch_id, student_id, date]
       )
 
       if (checkRes.rows.length > 0) {
+        const oldStatus = checkRes.rows[0].status
         // Update
         await client.query(
           'UPDATE attendance_records SET status = $1, source = $2, finalized_at = NOW() WHERE id = $3',
           [status, 'manual', checkRes.rows[0].id]
         )
+
+        // Handle credit adjustment on status change
+        if (oldStatus !== 'present' && status === 'present') {
+          // Changed to Present: Decrement credit
+          await client.query(`
+            UPDATE enrollment_batches eb
+            SET classes_remaining = COALESCE(eb.classes_remaining, 0) - 1
+            FROM enrollments e
+            WHERE eb.enrollment_id = e.id AND e.student_id = $1 AND eb.batch_id = $2
+          `, [student_id, batch_id])
+        } else if (oldStatus === 'present' && status !== 'present') {
+          // Changed from Present to Absent/Excused: Refund credit
+          await client.query(`
+            UPDATE enrollment_batches eb
+            SET classes_remaining = COALESCE(eb.classes_remaining, 0) + 1
+            FROM enrollments e
+            WHERE eb.enrollment_id = e.id AND e.student_id = $1 AND eb.batch_id = $2
+          `, [student_id, batch_id])
+        }
       } else {
         // Insert
         await client.query(
           'INSERT INTO attendance_records (batch_id, student_id, session_date, status, source, finalized_at) VALUES ($1, $2, $3, $4, $5, NOW())',
           [batch_id, student_id, date, status, 'manual']
         )
+
+        // If new record is Present, decrement credit
+        if (status === 'present') {
+          await client.query(`
+            UPDATE enrollment_batches eb
+            SET classes_remaining = COALESCE(eb.classes_remaining, 0) - 1
+            FROM enrollments e
+            WHERE eb.enrollment_id = e.id AND e.student_id = $1 AND eb.batch_id = $2
+          `, [student_id, batch_id])
+        }
       }
     }
 
@@ -593,8 +664,8 @@ app.post('/api/enroll', async (req, res) => {
 
       // Link enrollment to batch (creates enrollment_batch record)
       await client.query(
-        'INSERT INTO enrollment_batches (enrollment_id, batch_id) VALUES ($1, $2)',
-        [enrollmentId, batchId]
+        'INSERT INTO enrollment_batches (enrollment_id, batch_id, classes_remaining, payment_frequency) VALUES ($1, $2, $3, $4)',
+        [enrollmentId, batchId, classesCount, paymentType]
       )
 
       // Create payment record
@@ -657,6 +728,7 @@ app.get('/api/enrollments', async (req, res)=>{
               'start_time', b.start_time,
               'end_time', b.end_time,
               'payment_frequency', eb.payment_frequency,
+              'classes_remaining', eb.classes_remaining,
               'enrolled_on', COALESCE(eb.enrolled_on, e.enrolled_on)
             )
             ORDER BY i.name, b.recurrence

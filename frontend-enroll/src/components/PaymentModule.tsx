@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { apiPost, apiPut } from '../api';
+import React, { useState, useEffect } from 'react';
+import { apiPost, apiPut, apiGet } from '../api';
 import { Student, PaymentRecord, PaymentFrequency } from '../types';
 
 interface PaymentModuleProps {
@@ -23,6 +23,27 @@ const PaymentModule: React.FC<PaymentModuleProps> = ({ students, payments, onRef
   const [filterStudent, setFilterStudent] = useState<string>('all');
   const [startDate, setStartDate] = useState<string>('');
   const [endDate, setEndDate] = useState<string>('');
+  const [paymentStatus, setPaymentStatus] = useState<any>(null);
+  const [loadingStatus, setLoadingStatus] = useState(false);
+
+  useEffect(() => {
+    if (formData.student_id) {
+      const fetchStatus = async () => {
+        setLoadingStatus(true);
+        try {
+          const data = await apiGet(`/api/payments/status/${formData.student_id}`);
+          setPaymentStatus(data);
+        } catch (error) {
+          console.error('Error fetching payment status:', error);
+        } finally {
+          setLoadingStatus(false);
+        }
+      };
+      fetchStatus();
+    } else {
+      setPaymentStatus(null);
+    }
+  }, [formData.student_id]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -288,6 +309,45 @@ const PaymentModule: React.FC<PaymentModuleProps> = ({ students, payments, onRef
                   ))}
                 </select>
               </div>
+
+              {formData.student_id && (
+                <div className="bg-slate-50 border border-slate-200 rounded-lg p-4">
+                  <h4 className="text-sm font-semibold text-slate-700 mb-3">Student Status</h4>
+                  {loadingStatus ? (
+                    <div className="text-sm text-slate-500">Loading status...</div>
+                  ) : paymentStatus ? (
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                      <div>
+                        <span className="block text-slate-500 text-xs">Classes Left</span>
+                        <span className={`font-bold text-lg ${paymentStatus.classes_remaining <= 2 ? 'text-red-600' : 'text-emerald-600'}`}>
+                          {paymentStatus.classes_remaining}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="block text-slate-500 text-xs">Last Payment</span>
+                        {paymentStatus.last_payment ? (
+                          <div>
+                            <span className="font-medium">₹{paymentStatus.last_payment.amount}</span>
+                            <span className="text-slate-400 mx-1">•</span>
+                            <span>{new Date(paymentStatus.last_payment.timestamp).toLocaleDateString()}</span>
+                          </div>
+                        ) : (
+                          <span className="text-slate-400 italic">No history</span>
+                        )}
+                      </div>
+                      <div>
+                        <span className="block text-slate-500 text-xs">Next Due</span>
+                        <span className={paymentStatus.is_overdue ? 'text-red-600 font-medium' : 'text-slate-700'}>
+                          {paymentStatus.expected_start_date ? new Date(paymentStatus.expected_start_date).toLocaleDateString() : '-'}
+                          {paymentStatus.is_overdue && <span className="ml-1 text-xs bg-red-100 text-red-700 px-1 rounded">Overdue</span>}
+                        </span>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-sm text-slate-400">No status data available</div>
+                  )}
+                </div>
+              )}
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>

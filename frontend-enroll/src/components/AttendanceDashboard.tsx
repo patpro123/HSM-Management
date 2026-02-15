@@ -10,7 +10,7 @@ interface AttendanceDashboardProps {
 interface BatchStudent {
   student_id: string;
   student_name: string;
-  status: AttendanceStatus;
+  status: AttendanceStatus | null;
   phone: string | null;
   guardian_phone: string | null;
   guardian_contact: string | null;
@@ -61,7 +61,7 @@ const AttendanceDashboard: React.FC<AttendanceDashboardProps> = ({ batches, onRe
         data.students.map((s: any) => ({
           student_id: s.student_id,
           student_name: s.student_name,
-          status: (s.attendance_status as AttendanceStatus) || 'present',
+          status: (s.attendance_status as AttendanceStatus) || null,
           phone: s.phone || s.meta_phone,
           guardian_phone: s.guardian_phone,
           guardian_contact: s.guardian_contact
@@ -103,12 +103,14 @@ const AttendanceDashboard: React.FC<AttendanceDashboardProps> = ({ batches, onRe
 
     try {
       setSaving(true);
-      const attendanceRecords = batchStudents.map(s => ({
-        batch_id: selectedBatch,
-        student_id: s.student_id,
-        date: attendanceDate,
-        status: s.status
-      }));
+      const attendanceRecords = batchStudents
+        .filter(s => s.status)
+        .map(s => ({
+          batch_id: selectedBatch,
+          student_id: s.student_id,
+          date: attendanceDate,
+          status: s.status
+        }));
 
       await apiPost('/api/attendance', { records: attendanceRecords });
       setSuccessMessage('Attendance saved successfully!');

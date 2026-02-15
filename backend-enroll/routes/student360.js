@@ -84,7 +84,7 @@ const fetchStudent360Data = async (studentId) => {
         i.name as instrument,
         b.recurrence,
         t.name as teacher,
-        e.classes_remaining
+        eb.classes_remaining
       FROM enrollments e
       JOIN enrollment_batches eb ON e.id = eb.enrollment_id
       JOIN batches b ON eb.batch_id = b.id
@@ -94,22 +94,46 @@ const fetchStudent360Data = async (studentId) => {
     `;
     const batchesRes = await pool.query(batchesQuery, [studentId]);
 
+    // Group batches by instrument for display
+    const instrumentGroups = {};
+    batchesRes.rows.forEach(row => {
+      const inst = row.instrument || 'Unknown';
+      if (!instrumentGroups[inst]) {
+        instrumentGroups[inst] = {
+          id: row.id, // Use first batch ID as key
+          instrument: inst,
+          teachers: new Set(),
+          recurrences: [],
+          classes_remaining: parseInt(row.classes_remaining) || 0
+        };
+      }
+      if (row.teacher) instrumentGroups[inst].teachers.add(row.teacher);
+      if (row.recurrence) instrumentGroups[inst].recurrences.push(row.recurrence);
+    });
+
+    const groupedBatches = Object.values(instrumentGroups).map(g => ({
+      id: g.id,
+      instrument: g.instrument,
+      teacher: Array.from(g.teachers).join(', '),
+      recurrence: g.recurrences.join(' & '),
+      classes_remaining: g.classes_remaining
+    }));
+
     // Calculate Payment Summary
     const classesAttended = parseInt(attendance.present || 0);
     const classesMissed = parseInt(attendance.absent || 0);
     const classesExcused = parseInt(attendance.excused || 0);
     
     let totalCredits = 0;
-    let classesRemaining;
+    // Always derive classesRemaining from the active batches to ensure sync with Academic tab
+    let classesRemaining = groupedBatches.reduce((sum, b) => sum + (b.classes_remaining || 0), 0);
 
     if (isCycleBased) {
       totalCredits = creditsBought;
-      classesRemaining = totalCredits - (classesAttended + classesMissed);
     } else if (student.metadata && student.metadata.total_credits !== undefined) {
       totalCredits = parseInt(student.metadata.total_credits);
-      classesRemaining = totalCredits - (classesAttended + classesMissed);
     } else {
-      classesRemaining = batchesRes.rows.reduce((sum, b) => sum + (b.classes_remaining || 0), 0);
+      totalCredits = classesRemaining + classesAttended + classesMissed;
     }
 
     return {
@@ -122,11 +146,8 @@ const fetchStudent360Data = async (studentId) => {
         }
       },
       academic: {
-        // Override classes_remaining in batches with the calculated value
-        batches: batchesRes.rows.map(b => ({
-          ...b,
-          classes_remaining: classesRemaining
-        })),
+        // Use the grouped batches (one per instrument)
+        batches: groupedBatches,
         reviews: [], // Placeholder
         certificates: [], // Placeholder
         homework: [] // Placeholder
