@@ -30,11 +30,13 @@ const UserManagement: React.FC = () => {
     try {
       setLoading(true);
       const data = await apiGet('/api/users');
-      setUsers(data.users || []);
+      
+      // Handle both array response and object wrapper response
+      setUsers(Array.isArray(data) ? data : (data?.users || []));
       setError(null);
     } catch (err: any) {
       console.error('Error fetching users:', err);
-      setError('Failed to load users. Please try again.');
+      setError(err.message || 'Failed to load users. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -83,8 +85,8 @@ const UserManagement: React.FC = () => {
   };
 
   const filteredUsers = users.filter(user => 
-    user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    user.email.toLowerCase().includes(searchTerm.toLowerCase())
+    (user.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (user.email || '').toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   const availableRoles = ['admin', 'teacher', 'parent', 'student'];

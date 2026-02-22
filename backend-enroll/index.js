@@ -20,10 +20,13 @@ require('./auth/googleStrategy')
 // --- AUTHENTICATION BYPASS (LOCAL DEV) ---
 const IS_DEV = process.env.NODE_ENV !== 'production'
 const DISABLE_AUTH = IS_DEV && process.env.DISABLE_AUTH === 'true'
-const DEV_PROFILE = process.env.DEV_PROFILE || 'student'
+const DEV_PROFILE = process.env.DEV_PROFILE || 'admin'
 
 app.use((req, res, next) => {
   if (DISABLE_AUTH) {
+    // Strip auth header to prevent passport from overwriting our dev user with a token
+    delete req.headers.authorization
+
     if (DEV_PROFILE === 'admin') {
       req.user = {
         id: '11111111-1111-1111-1111-111111111111',
