@@ -30,14 +30,21 @@ app.use((req, res, next) => {
     if (DEV_PROFILE === 'admin') {
       req.user = {
         id: '11111111-1111-1111-1111-111111111111',
-        email: 'partho.protim@gmail.com',
+        email: 'admin@local.dev',
         name: 'Local Admin',
         roles: ['admin']
       }
+    } else if (DEV_PROFILE === 'teacher') {
+      req.user = {
+        id: '22222222-2222-2222-2222-222222222222',
+        email: 'teacher@local.dev',
+        name: 'Local Teacher',
+        roles: ['teacher']
+      }
     } else {
       req.user = {
-        id: '00000000-0000-0000-0000-000000000000',
-        email: 'a.r@gmail.com',
+        id: '33333333-3333-3333-3333-333333333333',
+        email: 'student@local.dev',
         name: 'Local Student',
         roles: ['student']
       }
@@ -60,6 +67,7 @@ app.get('/api/auth/config', (req, res) => {
 app.use('/api/students', require('./routes/students'));
 app.use('/api/students', require('./routes/students-put'));
 app.use('/api/teachers', require('./routes/teachers'));
+app.use('/api/teachers', require('./routes/teacher360'));
 const { router: student360Router, fetchStudent360Data } = require('./routes/student360');
 app.use('/api/students', student360Router);
 app.use('/api/payments', require('./routes/payments'));
@@ -284,7 +292,7 @@ app.get('/api/batches/:instrumentId', async (req, res) => {
 // POST /api/batches - Create a new batch
 app.post('/api/batches', async (req, res) => {
   const { instrument_id, teacher_id, recurrence, start_time, end_time, capacity } = req.body
-  
+
   if (!instrument_id || !recurrence || !start_time || !end_time) {
     return res.status(400).json({ error: 'Missing required fields' })
   }
@@ -314,11 +322,11 @@ app.put('/api/batches/:id', async (req, res) => {
        WHERE id = $6 RETURNING *`,
       [teacher_id || null, recurrence, start_time, end_time, capacity, id]
     )
-    
+
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Batch not found' })
     }
-    
+
     res.json({ batch: result.rows[0] })
   } catch (err) {
     console.error('Update batch error:', err)
@@ -418,7 +426,7 @@ app.get('/api/attendance', async (req, res) => {
     }
 
     query += ' ORDER BY ar.session_date DESC'
-    
+
     const result = await pool.query(query, params)
     res.json({ attendance: result.rows })
   } catch (err) {
@@ -437,10 +445,10 @@ app.post('/api/attendance', async (req, res) => {
   const client = await pool.connect()
   try {
     await client.query('BEGIN')
-    
+
     for (const record of records) {
       const { batch_id, student_id, date, status } = record
-      
+
       // Check if record exists
       const checkRes = await client.query(
         'SELECT id, status FROM attendance_records WHERE batch_id = $1 AND student_id = $2 AND session_date = $3',
@@ -544,29 +552,29 @@ app.post('/api/enroll', async (req, res) => {
   console.log('Received payload:', JSON.stringify(req.body, null, 2));
 
   const payload = req.body
-  if(!payload || !payload.answers) return res.status(400).json({error: 'invalid payload'})
+  if (!payload || !payload.answers) return res.status(400).json({ error: 'invalid payload' })
 
   // Basic validation (required fields)
   const { firstName, lastName, email, dob, address, guardianName, telephone, streams, dateOfJoining } = payload.answers
-  if(!firstName || !lastName || !email || !dob || !address || !guardianName || !telephone || !Array.isArray(streams) || streams.length === 0 || !dateOfJoining) {
+  if (!firstName || !lastName || !email || !dob || !address || !guardianName || !telephone || !Array.isArray(streams) || streams.length === 0 || !dateOfJoining) {
     return res.status(422).json({ error: 'missing required fields' })
   }
-  if(!/^\S+@\S+\.\S+$/.test(email)){
+  if (!/^\S+@\S+\.\S+$/.test(email)) {
     return res.status(422).json({ error: 'invalid email' })
   }
-  if(!/^\+?[1-9]\d{0,2}[\s-]?\(?\d{1,4}\)?[\s-]?\d{1,4}[\s-]?\d{1,4}[\s-]?\d{1,9}$/.test(telephone)){
+  if (!/^\+?[1-9]\d{0,2}[\s-]?\(?\d{1,4}\)?[\s-]?\d{1,4}[\s-]?\d{1,4}[\s-]?\d{1,9}$/.test(telephone)) {
     return res.status(422).json({ error: 'invalid telephone number' })
   }
-  
-  const allowedPayments = ['Monthly','Quarterly']
-  for(const s of streams){
-    if(!s || typeof s.instrument !== 'string') return res.status(422).json({ error: 'invalid stream object' })
-    if(!s.batch || typeof s.batch !== 'string') return res.status(422).json({ error: 'invalid batch' })
-    if(!s.payment || !allowedPayments.includes(s.payment)) return res.status(422).json({ error: 'invalid payment option' })
+
+  const allowedPayments = ['Monthly', 'Quarterly']
+  for (const s of streams) {
+    if (!s || typeof s.instrument !== 'string') return res.status(422).json({ error: 'invalid stream object' })
+    if (!s.batch || typeof s.batch !== 'string') return res.status(422).json({ error: 'invalid batch' })
+    if (!s.payment || !allowedPayments.includes(s.payment)) return res.status(422).json({ error: 'invalid payment option' })
   }
 
   const client = await pool.connect()
-  try{
+  try {
     await client.query('BEGIN')
     console.log('Starting enrollment transaction for request:', { streams: streams.map(s => ({ instrument: s.instrument, batch: s.batch, payment: s.payment })) })
 
@@ -575,7 +583,7 @@ app.post('/api/enroll', async (req, res) => {
     const resolveInstrument = async (instrumentNameRaw) => {
       const instrumentName = (instrumentNameRaw || '').trim()
       const cacheKey = instrumentName.toLowerCase()
-      if(instrumentCache.has(cacheKey)) return instrumentCache.get(cacheKey)
+      if (instrumentCache.has(cacheKey)) return instrumentCache.get(cacheKey)
 
       const uuidRegex = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/
       let row = null
@@ -587,7 +595,7 @@ app.post('/api/enroll', async (req, res) => {
         console.log('UUID lookup attempt', { instrumentName, rowsReturned: byId.rows.length, found: !!row })
       }
 
-      if(!row){
+      if (!row) {
         const byExact = await client.query(
           'SELECT id, name FROM instruments WHERE LOWER(name) = LOWER($1) LIMIT 1',
           [instrumentName]
@@ -595,7 +603,7 @@ app.post('/api/enroll', async (req, res) => {
         row = byExact.rows[0]
         console.log('Exact name lookup', { instrumentName, rowsReturned: byExact.rows.length, found: !!row })
       }
-      if(!row){
+      if (!row) {
         const byPartial = await client.query(
           'SELECT id, name FROM instruments WHERE name ILIKE $1 LIMIT 1',
           [`%${instrumentName}%`]
@@ -603,7 +611,7 @@ app.post('/api/enroll', async (req, res) => {
         row = byPartial.rows[0]
         console.log('Partial name lookup', { instrumentName, rowsReturned: byPartial.rows.length, found: !!row })
       }
-      if(!row) {
+      if (!row) {
         console.error('resolveInstrument: FAILED - not found after all lookup attempts', { instrumentName, strategies: 'uuid|exact|partial' })
         throw new Error(`Instrument not found: ${instrumentName}`)
       }
@@ -634,7 +642,7 @@ app.post('/api/enroll', async (req, res) => {
     let totalClasses = 0
 
     // 3. Process each stream and create enrollment_batch records + payments
-    for(const stream of streams) {
+    for (const stream of streams) {
       const instrumentName = stream.instrument.trim()
       const batchRecurrence = stream.batch.trim()
       const paymentType = stream.payment
@@ -647,7 +655,7 @@ app.post('/api/enroll', async (req, res) => {
         'SELECT id, classes_count, price FROM packages WHERE instrument_id = $1 AND name ILIKE $2 LIMIT 1',
         [instrumentId, `%${paymentType}%`]
       )
-      if(packageRes.rows.length === 0) {
+      if (packageRes.rows.length === 0) {
         throw new Error(`Package not found for: ${instrumentName} - ${paymentType}`)
       }
       const packageId = packageRes.rows[0].id
@@ -661,7 +669,7 @@ app.post('/api/enroll', async (req, res) => {
         'SELECT id FROM batches WHERE instrument_id = $1 AND recurrence ILIKE $2 LIMIT 1',
         [instrumentId, `%${batchRecurrence}%`]
       )
-      if(batchRes.rows.length === 0) {
+      if (batchRes.rows.length === 0) {
         throw new Error(`Batch not found for ${instrumentName} with recurrence: ${batchRecurrence}`)
       }
       const batchId = batchRes.rows[0].id
@@ -696,17 +704,17 @@ app.post('/api/enroll', async (req, res) => {
 
     await client.query('COMMIT')
     return res.status(201).json({ ok: true, studentId, enrollmentId, message: 'Enrollment successful' })
-  }catch(err){
+  } catch (err) {
     await client.query('ROLLBACK')
     console.error('Enrollment error:', err)
     return res.status(500).json({ error: err.message || 'Failed to store enrollment' })
-  }finally{
+  } finally {
     client.release()
   }
 })
 
-app.get('/api/enrollments', async (req, res)=>{
-  try{
+app.get('/api/enrollments', async (req, res) => {
+  try {
     const result = await pool.query(`
       SELECT 
         s.id as student_id,
@@ -749,7 +757,7 @@ app.get('/api/enrollments', async (req, res)=>{
       ORDER BY s.name ASC
     `)
     res.json({ enrollments: result.rows })
-  }catch(err){
+  } catch (err) {
     console.error('Get enrollments error:', err)
     res.status(500).json({ error: 'Failed to fetch enrollments' })
   }
@@ -766,18 +774,18 @@ app.get('/api/portal/student/:email', async (req, res) => {
       `SELECT id FROM students WHERE email = $1 OR metadata->>'email' = $1 LIMIT 1`,
       [email]
     )
-    
+
     if (studentRes.rows.length === 0) {
       return res.status(404).json({ error: 'Student not found' })
     }
-    
+
     const studentId = studentRes.rows[0].id
     const data = await fetchStudent360Data(studentId)
-    
+
     if (!data) {
-       return res.status(404).json({ error: 'Student data not found' })
+      return res.status(404).json({ error: 'Student data not found' })
     }
-    
+
     res.json(data)
   } catch (err) {
     console.error('Student 360 error:', err)
@@ -812,7 +820,7 @@ app.post('/api/students/:studentId/image', async (req, res) => {
 })
 
 const PORT = process.env.PORT || 3000
-app.listen(PORT, ()=> {
+app.listen(PORT, () => {
   console.log(`Enroll API listening on http://localhost:${PORT}`)
   console.log(`Environment: ${process.env.NODE_ENV || 'development'}`)
   console.log(`Database: ${process.env.DB_HOST || 'localhost'}:${process.env.DB_PORT || 5432}/${process.env.DB_NAME || 'hsm_dev'}`)

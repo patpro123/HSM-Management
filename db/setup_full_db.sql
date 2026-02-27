@@ -32,7 +32,7 @@ DO $$ BEGIN
 EXCEPTION WHEN duplicate_object THEN null; END$$;
 
 DO $$ BEGIN
-    CREATE TYPE payout_type AS ENUM ('fixed','per_class','per_student_monthly');
+    CREATE TYPE payout_type AS ENUM ('fixed','per_student_monthly');
 EXCEPTION WHEN duplicate_object THEN null; END$$;
 
 DO $$ BEGIN
@@ -71,7 +71,7 @@ CREATE TABLE IF NOT EXISTS teachers (
   role text DEFAULT 'teacher',
   payout_terms jsonb DEFAULT '{}'::jsonb,
   is_active boolean DEFAULT true,
-  payout_type payout_type DEFAULT 'per_class',
+  payout_type payout_type DEFAULT 'per_student_monthly',
   rate numeric(10,2) DEFAULT 0 CHECK (rate >= 0),
   metadata jsonb DEFAULT '{}'::jsonb,
   created_at timestamptz DEFAULT now(),
@@ -352,9 +352,9 @@ ON CONFLICT DO NOTHING; -- Packages don't have unique constraint on name, so thi
 
 -- 3. Teachers
 INSERT INTO teachers (name, phone, role, payout_type, rate) VALUES
-('Ravi Kumar', '+919876543210', 'teacher', 'per_class', 500.00),
+('Ravi Kumar', '+919876543210', 'teacher', 'per_student_monthly', 500.00),
 ('Sarah Jones', '+919876543211', 'teacher', 'fixed', 25000.00),
-('Amit Patel', '+919876543212', 'teacher', 'per_class', 600.00);
+('Amit Patel', '+919876543212', 'teacher', 'per_student_monthly', 600.00);
 
 -- 4. Batches
 -- Create some batches for Keyboard and Guitar

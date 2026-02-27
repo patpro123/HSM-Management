@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { apiGet, apiPost, apiPut, apiDelete } from '../api';
 import { Instrument } from '../types';
+import Teacher360View from './Teacher360View';
 
 interface Teacher {
   id: string;
@@ -34,7 +35,7 @@ interface TeacherManagementProps {
 }
 
 export default function TeacherManagement({ instruments, onRefresh }: TeacherManagementProps) {
-  const [view, setView] = useState<'teachers' | 'batches'>('teachers');
+  const [view, setView] = useState<'teachers' | 'batches' | 'attendance'>('teachers');
   const [teachers, setTeachers] = useState<Teacher[]>([]);
   const [batches, setBatches] = useState<Batch[]>([]);
   const [selectedTeacher, setSelectedTeacher] = useState<Teacher | null>(null);
@@ -48,6 +49,21 @@ export default function TeacherManagement({ instruments, onRefresh }: TeacherMan
   const [success, setSuccess] = useState('');
   const [expandedTeacher, setExpandedTeacher] = useState<string | null>(null);
   const [teacherBatches, setTeacherBatches] = useState<Record<string, Batch[]>>({});
+  const [teacherStudents, setTeacherStudents] = useState<Record<string, any[]>>({});
+  const [show360Modal, setShow360Modal] = useState(false);
+  const [selected360Teacher, setSelected360Teacher] = useState<Teacher | null>(null);
+
+  // Teacher Attendance state
+  const [attendanceTeacherId, setAttendanceTeacherId] = useState<string>('');
+  const [attendanceDate, setAttendanceDate] = useState<string>(new Date().toISOString().slice(0, 10));
+  const [scheduledBatches, setScheduledBatches] = useState<any[]>([]);
+  const [attendanceLoading, setAttendanceLoading] = useState(false);
+  const [attendanceSaving, setAttendanceSaving] = useState<string | null>(null);
+  // Extra/unscheduled class state
+  const [numExtraBatches, setNumExtraBatches] = useState<number>(1);
+  const [extraBatchSelections, setExtraBatchSelections] = useState<string[]>(['']);
+  const [extraReasonPreset, setExtraReasonPreset] = useState<string>('');
+  const [extraNotes, setExtraNotes] = useState<string>('');
 
   // Form state for teacher
   const [teacherForm, setTeacherForm] = useState({
@@ -73,6 +89,116 @@ export default function TeacherManagement({ instruments, onRefresh }: TeacherMan
     fetchTeachers();
     fetchBatches();
   }, []);
+
+  useEffect(() => {
+    if (view === 'attendance') fetchTeacherAttendance(attendanceDate);
+  }, [view, attendanceDate]);
+
+  // Reset extra-class form when teacher or date changes
+  useEffect(() => {
+    setNumExtraBatches(1);
+    setExtraBatchSelections(['']);
+    setExtraReasonPreset('');
+    setExtraNotes('');
+  }, [attendanceTeacherId, attendanceDate]);
+
+  function handleNumExtraBatchesChange(maxOptions: number, n: number) {
+    const clamped = Math.max(1, Math.min(maxOptions, n));
+    setNumExtraBatches(clamped);
+    setExtraBatchSelections(prev => {
+      const next = [...prev];
+      while (next.length < clamped) next.push('');
+      return next.slice(0, clamped);
+    });
+  }
+
+  async function fetchTeacherAttendance(date: string) {
+    try {
+      setAttendanceLoading(true);
+      const data = await apiGet(`/api/teachers/attendance?date=${date}`);
+      setScheduledBatches(data.batches || []);
+    } catch (err) {
+      console.error('Error fetching teacher attendance:', err);
+      setError('Failed to load attendance for this date');
+    } finally {
+      setAttendanceLoading(false);
+    }
+  }
+
+  async function markTeacherAttendance(batch: any, status: 'conducted' | 'not_conducted') {
+    setAttendanceSaving(batch.batch_id);
+    try {
+      await apiPost('/api/teachers/attendance', {
+        teacher_id: batch.teacher_id,
+        batch_id: batch.batch_id,
+        session_date: attendanceDate,
+        status
+      });
+      setScheduledBatches(prev =>
+        prev.map(b => b.batch_id === batch.batch_id ? { ...b, status } : b)
+      );
+    } catch (err) {
+      console.error('Error marking attendance:', err);
+      setError('Failed to save attendance');
+    } finally {
+      setAttendanceSaving(null);
+    }
+  }
+
+  async function markAllTeacherAttendance(batches: any[], status: 'conducted' | 'not_conducted') {
+    for (const batch of batches) {
+      setAttendanceSaving(batch.batch_id);
+      try {
+        await apiPost('/api/teachers/attendance', {
+          teacher_id: batch.teacher_id,
+          batch_id: batch.batch_id,
+          session_date: attendanceDate,
+          status
+        });
+      } catch (err) {
+        console.error('Error marking attendance:', err);
+        setError('Failed to save attendance for one or more batches');
+        setAttendanceSaving(null);
+        return;
+      }
+    }
+    setAttendanceSaving(null);
+    setScheduledBatches(prev =>
+      prev.map(b => batches.some(mb => mb.batch_id === b.batch_id) ? { ...b, status } : b)
+    );
+  }
+
+  async function markExtraAttendance(status: 'conducted' | 'not_conducted') {
+    if (!attendanceTeacherId) return;
+    const validSelections = extraBatchSelections.filter(Boolean);
+    if (validSelections.length === 0) return;
+    const notes = [extraReasonPreset, extraNotes].filter(Boolean).join(' — ');
+
+    for (const batchId of validSelections) {
+      setAttendanceSaving(batchId);
+      try {
+        await apiPost('/api/teachers/attendance', {
+          teacher_id: attendanceTeacherId,
+          batch_id: batchId,
+          session_date: attendanceDate,
+          status,
+          notes: notes || null
+        });
+      } catch (err) {
+        console.error('Error marking extra attendance:', err);
+        setError('Failed to save attendance');
+        setAttendanceSaving(null);
+        return;
+      }
+    }
+    setAttendanceSaving(null);
+    setSuccess(`Attendance marked for ${validSelections.length} batch${validSelections.length !== 1 ? 'es' : ''}.`);
+    setNumExtraBatches(1);
+    setExtraBatchSelections(['']);
+    setExtraReasonPreset('');
+    setExtraNotes('');
+    await fetchTeacherAttendance(attendanceDate);
+  }
 
   async function fetchTeachers() {
     try {
@@ -167,6 +293,15 @@ export default function TeacherManagement({ instruments, onRefresh }: TeacherMan
     }
   }
 
+  async function fetchTeacherStudents(teacherId: string) {
+    try {
+      const data = await apiGet(`/api/teachers/${teacherId}/students`);
+      setTeacherStudents(prev => ({ ...prev, [teacherId]: data.students || [] }));
+    } catch (err) {
+      console.error('Error fetching teacher students:', err);
+    }
+  }
+
   function toggleTeacherExpand(teacherId: string) {
     if (expandedTeacher === teacherId) {
       setExpandedTeacher(null);
@@ -174,6 +309,9 @@ export default function TeacherManagement({ instruments, onRefresh }: TeacherMan
       setExpandedTeacher(teacherId);
       if (!teacherBatches[teacherId]) {
         fetchTeacherBatches(teacherId);
+      }
+      if (!teacherStudents[teacherId]) {
+        fetchTeacherStudents(teacherId);
       }
     }
   }
@@ -333,7 +471,9 @@ export default function TeacherManagement({ instruments, onRefresh }: TeacherMan
       {/* Header */}
       <div className="flex justify-between items-center">
         <div>
-          <h2 className="text-2xl font-bold text-slate-900">{view === 'teachers' ? 'Teacher Management' : 'Batch Management'}</h2>
+          <h2 className="text-2xl font-bold text-slate-900">
+            {view === 'teachers' ? 'Teacher Management' : view === 'batches' ? 'Batch Management' : 'Teacher Attendance'}
+          </h2>
           <p className="text-slate-600 mt-1">Manage teachers, pay packages, and batch assignments</p>
         </div>
         <div className="flex gap-3">
@@ -367,25 +507,27 @@ export default function TeacherManagement({ instruments, onRefresh }: TeacherMan
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div 
+        <div
           onClick={() => setView('teachers')}
           className={`bg-gradient-to-br from-orange-500 to-amber-500 text-white p-6 rounded-xl shadow-lg cursor-pointer transition-transform hover:scale-[1.02] ${view === 'teachers' ? 'ring-4 ring-orange-200' : 'opacity-90'}`}
         >
           <h3 className="text-sm font-medium opacity-90">Active Teachers</h3>
           <p className="text-4xl font-bold mt-2">{activeTeachers.length}</p>
         </div>
-        <div 
+        <div
           onClick={() => setView('batches')}
           className={`bg-gradient-to-br from-blue-500 to-indigo-500 text-white p-6 rounded-xl shadow-lg cursor-pointer transition-transform hover:scale-[1.02] ${view === 'batches' ? 'ring-4 ring-blue-200' : 'opacity-90'}`}
         >
           <h3 className="text-sm font-medium opacity-90">Total Batches</h3>
           <p className="text-4xl font-bold mt-2">{batches.length}</p>
         </div>
-        <div className="bg-gradient-to-br from-emerald-500 to-teal-500 text-white p-6 rounded-xl shadow-lg">
-          <h3 className="text-sm font-medium opacity-90">Monthly Payout (Fixed)</h3>
-          <p className="text-4xl font-bold mt-2">
-            ₹{teachers.reduce((sum, t) => sum + (t.payout_type === 'fixed' ? t.rate : 0), 0).toLocaleString()}
-          </p>
+        <div
+          onClick={() => setView('attendance')}
+          className={`bg-gradient-to-br from-violet-500 to-purple-600 text-white p-6 rounded-xl shadow-lg cursor-pointer transition-transform hover:scale-[1.02] ${view === 'attendance' ? 'ring-4 ring-violet-200' : 'opacity-90'}`}
+        >
+          <h3 className="text-sm font-medium opacity-90">Mark Attendance</h3>
+          <p className="text-lg font-bold mt-3">Today's Sessions</p>
+          <p className="text-xs mt-1 opacity-75">Record which classes were conducted</p>
         </div>
       </div>
 
@@ -407,9 +549,11 @@ export default function TeacherManagement({ instruments, onRefresh }: TeacherMan
                   teacher={teacher}
                   onEdit={() => openEditModal(teacher)}
                   onDelete={() => handleDeleteTeacher(teacher.id)}
+                  onView360={() => { setSelected360Teacher(teacher); setShow360Modal(true); }}
                   isExpanded={expandedTeacher === teacher.id}
                   onToggleExpand={() => toggleTeacherExpand(teacher.id)}
                   batches={teacherBatches[teacher.id] || []}
+                  students={teacherStudents[teacher.id]}
                   onEditBatch={openEditBatchModal}
                 />
               ))}
@@ -430,10 +574,13 @@ export default function TeacherManagement({ instruments, onRefresh }: TeacherMan
                   <TeacherCard
                     key={teacher.id}
                     teacher={teacher}
-                    onEdit={() => openEditModal(teacher)}                    isExpanded={expandedTeacher === teacher.id}
+                    onEdit={() => openEditModal(teacher)}
                     onDelete={() => handleDeleteTeacher(teacher.id)}
+                    onView360={() => { setSelected360Teacher(teacher); setShow360Modal(true); }}
+                    isExpanded={expandedTeacher === teacher.id}
                     onToggleExpand={() => toggleTeacherExpand(teacher.id)}
                     batches={teacherBatches[teacher.id] || []}
+                    students={teacherStudents[teacher.id]}
                     onEditBatch={openEditBatchModal}
                   />
                 ))}
@@ -441,7 +588,7 @@ export default function TeacherManagement({ instruments, onRefresh }: TeacherMan
             </div>
           )}
         </div>
-      ) : (
+      ) : view === 'batches' ? (
         /* Batches View */
         <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
           <div className="overflow-x-auto">
@@ -495,6 +642,282 @@ export default function TeacherManagement({ instruments, onRefresh }: TeacherMan
             </table>
           </div>
         </div>
+      ) : null}
+
+      {/* ── ATTENDANCE VIEW ── */}
+      {view === 'attendance' && (() => {
+        const selectedAttTeacher = teachers.find(t => t.id === attendanceTeacherId) || null;
+        const teacherScheduledBatches = scheduledBatches.filter(b => b.teacher_id === attendanceTeacherId);
+        const teacherBatchOptions = batches.filter(b => b.teacher_id === attendanceTeacherId);
+        const formattedDate = attendanceDate
+          ? new Date(attendanceDate + 'T00:00:00').toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+          : '';
+
+        return (
+          <div className="space-y-4">
+            {/* Teacher + Date selectors */}
+            <div className="flex items-center gap-4 bg-violet-50 border border-violet-100 rounded-xl p-4 flex-wrap gap-y-3">
+              <div className="flex items-center gap-2">
+                <label className="text-sm font-semibold text-violet-700 whitespace-nowrap">Teacher:</label>
+                <select
+                  value={attendanceTeacherId}
+                  onChange={e => setAttendanceTeacherId(e.target.value)}
+                  className="px-3 py-2 border border-violet-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-400 bg-white"
+                >
+                  <option value="">Select teacher…</option>
+                  {teachers.filter(t => t.is_active).map(t => (
+                    <option key={t.id} value={t.id}>{t.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex items-center gap-2">
+                <label className="text-sm font-semibold text-violet-700 whitespace-nowrap">Date:</label>
+                <input
+                  type="date"
+                  value={attendanceDate}
+                  max={new Date().toISOString().slice(0, 10)}
+                  onChange={e => setAttendanceDate(e.target.value)}
+                  className="px-3 py-2 border border-violet-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-400 bg-white"
+                />
+              </div>
+              {formattedDate && (
+                <span className="text-xs text-violet-500 ml-auto hidden sm:block">{formattedDate}</span>
+              )}
+            </div>
+
+            {/* Prompt to select teacher */}
+            {!attendanceTeacherId && (
+              <div className="text-center py-12 border rounded-xl border-dashed border-slate-200 text-slate-400">
+                <p className="text-lg font-medium">Select a teacher above</p>
+                <p className="text-sm mt-1">Pick a teacher and date to view or mark their attendance.</p>
+              </div>
+            )}
+
+            {/* Teacher selected: loading */}
+            {attendanceTeacherId && attendanceLoading && (
+              <div className="text-center py-12">
+                <div className="inline-block animate-spin rounded-full h-10 w-10 border-b-2 border-violet-500"></div>
+                <p className="mt-3 text-slate-500 text-sm">Loading…</p>
+              </div>
+            )}
+
+            {/* Teacher selected, not loading: show scheduled batches OR unscheduled warning */}
+            {attendanceTeacherId && !attendanceLoading && (
+              <>
+                {teacherScheduledBatches.length > 0 ? (
+                  /* ── Scheduled batches: mark conducted / not conducted ── */
+                  <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+                    <div className="bg-slate-50 border-b border-slate-200 px-4 py-3 flex flex-wrap gap-3 justify-between items-center">
+                      <span className="text-sm font-semibold text-slate-600">
+                        {teacherScheduledBatches.length} class{teacherScheduledBatches.length !== 1 ? 'es' : ''} scheduled for {selectedAttTeacher?.name} on {formattedDate}
+                      </span>
+                      <div className="flex items-center gap-3 flex-wrap">
+                        <div className="flex gap-2">
+                          <button
+                            disabled={attendanceSaving !== null}
+                            onClick={() => markAllTeacherAttendance(teacherScheduledBatches, 'conducted')}
+                            className="px-3 py-1 rounded-lg text-xs font-semibold bg-green-500 text-white hover:bg-green-600 disabled:opacity-50 disabled:cursor-wait transition-colors"
+                          >
+                            Mark All Conducted
+                          </button>
+                          <button
+                            disabled={attendanceSaving !== null}
+                            onClick={() => markAllTeacherAttendance(teacherScheduledBatches, 'not_conducted')}
+                            className="px-3 py-1 rounded-lg text-xs font-semibold bg-red-500 text-white hover:bg-red-600 disabled:opacity-50 disabled:cursor-wait transition-colors"
+                          >
+                            Mark All Not Conducted
+                          </button>
+                        </div>
+                        <div className="flex gap-3 text-xs">
+                          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500 inline-block"></span> Conducted</span>
+                          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-400 inline-block"></span> Not Conducted</span>
+                          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-slate-300 inline-block"></span> Unmarked</span>
+                        </div>
+                      </div>
+                    </div>
+                    <table className="w-full text-left">
+                      <thead>
+                        <tr className="text-slate-500 text-xs uppercase tracking-wide border-b border-slate-100">
+                          <th className="py-3 px-4">Instrument</th>
+                          <th className="py-3 px-4">Time</th>
+                          <th className="py-3 px-4">Schedule</th>
+                          <th className="py-3 px-4 text-center">Mark</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {teacherScheduledBatches.map(b => (
+                          <tr key={b.batch_id} className="hover:bg-slate-50 transition">
+                            <td className="py-3 px-4 font-medium text-slate-800">{b.instrument_name}</td>
+                            <td className="py-3 px-4 text-slate-600 text-sm">{b.start_time} – {b.end_time}</td>
+                            <td className="py-3 px-4 text-slate-500 text-xs">{b.recurrence}</td>
+                            <td className="py-3 px-4">
+                              <div className="flex gap-2 justify-center">
+                                <button
+                                  disabled={attendanceSaving === b.batch_id}
+                                  onClick={() => markTeacherAttendance(b, 'conducted')}
+                                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all border-2 ${
+                                    b.status === 'conducted'
+                                      ? 'bg-green-500 text-white border-green-500 shadow'
+                                      : 'bg-white text-green-600 border-green-300 hover:bg-green-50'
+                                  } ${attendanceSaving === b.batch_id ? 'opacity-50 cursor-wait' : ''}`}
+                                >
+                                  Conducted
+                                </button>
+                                <button
+                                  disabled={attendanceSaving === b.batch_id}
+                                  onClick={() => markTeacherAttendance(b, 'not_conducted')}
+                                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all border-2 ${
+                                    b.status === 'not_conducted'
+                                      ? 'bg-red-500 text-white border-red-500 shadow'
+                                      : 'bg-white text-red-500 border-red-300 hover:bg-red-50'
+                                  } ${attendanceSaving === b.batch_id ? 'opacity-50 cursor-wait' : ''}`}
+                                >
+                                  Not Conducted
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  /* ── No class scheduled: unscheduled / extra class form ── */
+                  <div className="bg-amber-50 border border-amber-200 rounded-xl p-6">
+                    <div className="flex items-start gap-3">
+                      <span className="text-2xl mt-0.5">⚠️</span>
+                      <div className="flex-1">
+                        <h3 className="font-semibold text-amber-900">No class scheduled</h3>
+                        <p className="text-amber-800 text-sm mt-1">
+                          <strong>{selectedAttTeacher?.name}</strong> doesn't have a class scheduled on {formattedDate}.
+                        </p>
+                        <p className="text-amber-700 text-sm mt-2">
+                          Do you still want to mark attendance? Select a reason below:
+                        </p>
+
+                        {/* Reason presets */}
+                        <div className="flex gap-2 mt-3 flex-wrap">
+                          {['Compensation Class', 'Extra Class', 'Trial Class', 'Other'].map(preset => (
+                            <button
+                              key={preset}
+                              type="button"
+                              onClick={() => setExtraReasonPreset(prev => prev === preset ? '' : preset)}
+                              className={`px-3 py-1 text-sm rounded-full border transition-all ${
+                                extraReasonPreset === preset
+                                  ? 'bg-amber-500 text-white border-amber-500 shadow'
+                                  : 'bg-white text-amber-700 border-amber-300 hover:bg-amber-100'
+                              }`}
+                            >
+                              {preset}
+                            </button>
+                          ))}
+                        </div>
+
+                        {/* Free-text notes */}
+                        <input
+                          type="text"
+                          placeholder="Additional notes (e.g. replacing missed class on Feb 10)…"
+                          value={extraNotes}
+                          onChange={e => setExtraNotes(e.target.value)}
+                          className="mt-3 w-full px-3 py-2 border border-amber-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 bg-white"
+                        />
+
+                        {/* Number of batches + batch selectors */}
+                        {teacherBatchOptions.length > 0 ? (
+                          <>
+                            <div className="mt-3 flex items-center gap-3">
+                              <label className="text-sm font-medium text-amber-800 whitespace-nowrap">
+                                How many batches were conducted?
+                              </label>
+                              <input
+                                type="number"
+                                min={1}
+                                max={teacherBatchOptions.length}
+                                value={numExtraBatches}
+                                onChange={e => handleNumExtraBatchesChange(
+                                  teacherBatchOptions.length,
+                                  parseInt(e.target.value) || 1
+                                )}
+                                className="w-16 px-2 py-1.5 border border-amber-300 rounded-lg text-sm text-center focus:outline-none focus:ring-2 focus:ring-amber-400 bg-white"
+                              />
+                              <span className="text-xs text-amber-600">
+                                (max {teacherBatchOptions.length})
+                              </span>
+                            </div>
+                            <div className="mt-2 space-y-2">
+                              {extraBatchSelections.map((batchId, idx) => (
+                                <select
+                                  key={idx}
+                                  value={batchId}
+                                  onChange={e => {
+                                    const next = [...extraBatchSelections];
+                                    next[idx] = e.target.value;
+                                    setExtraBatchSelections(next);
+                                  }}
+                                  className="w-full px-3 py-2 border border-amber-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 bg-white"
+                                >
+                                  <option value="">Select batch {idx + 1}…</option>
+                                  {teacherBatchOptions.map(b => (
+                                    <option key={b.id} value={b.id}>
+                                      {b.instrument_name} ({b.recurrence})
+                                    </option>
+                                  ))}
+                                </select>
+                              ))}
+                            </div>
+                          </>
+                        ) : (
+                          <p className="mt-3 text-sm text-amber-700 italic">
+                            This teacher has no assigned batches. Assign a batch first before marking attendance.
+                          </p>
+                        )}
+
+                        {/* Action buttons */}
+                        {teacherBatchOptions.length > 0 && (() => {
+                          const allSelected = extraBatchSelections.every(Boolean);
+                          const canSave = extraReasonPreset && allSelected && attendanceSaving === null;
+                          return (
+                            <div className="flex gap-3 mt-4 flex-wrap">
+                              <button
+                                disabled={!canSave}
+                                onClick={() => markExtraAttendance('conducted')}
+                                className="px-4 py-2 bg-green-500 text-white rounded-lg text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed hover:bg-green-600 transition-colors"
+                              >
+                                {attendanceSaving ? 'Saving…' : `Mark ${numExtraBatches > 1 ? `All ${numExtraBatches} ` : ''}as Conducted`}
+                              </button>
+                              <button
+                                disabled={!canSave}
+                                onClick={() => markExtraAttendance('not_conducted')}
+                                className="px-4 py-2 bg-red-500 text-white rounded-lg text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed hover:bg-red-600 transition-colors"
+                              >
+                                {attendanceSaving ? 'Saving…' : `Mark ${numExtraBatches > 1 ? `All ${numExtraBatches} ` : ''}as Not Conducted`}
+                              </button>
+                              {!extraReasonPreset && (
+                                <span className="text-xs text-amber-600 self-center">Select a reason to enable marking.</span>
+                              )}
+                              {extraReasonPreset && !allSelected && (
+                                <span className="text-xs text-amber-600 self-center">Select a batch for each row.</span>
+                              )}
+                            </div>
+                          );
+                        })()}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        );
+      })()}
+
+      {/* Teacher 360 Modal */}
+      {show360Modal && selected360Teacher && (
+        <Teacher360View
+          teacherId={String(selected360Teacher.id)}
+          isModal
+          onClose={() => { setShow360Modal(false); setSelected360Teacher(null); }}
+        />
       )}
 
       {/* Add Teacher Modal */}
@@ -555,21 +978,25 @@ export default function TeacherManagement({ instruments, onRefresh }: TeacherMan
 }
 
 // Teacher Card Component
-function TeacherCard({ 
-  teacher, 
-  onEdit, 
+function TeacherCard({
+  teacher,
+  onEdit,
   onDelete,
-  isExpanded, 
-  onToggleExpand, 
+  onView360,
+  isExpanded,
+  onToggleExpand,
   batches,
+  students,
   onEditBatch
-}: { 
-  teacher: Teacher; 
+}: {
+  teacher: Teacher;
   onEdit: () => void;
   onDelete: () => void;
+  onView360: () => void;
   isExpanded: boolean;
   onToggleExpand: () => void;
   batches: Batch[];
+  students?: any[];
   onEditBatch?: (batch: Batch) => void;
 }) {
   const getPayTypeLabel = (type: string) => {
@@ -594,6 +1021,12 @@ function TeacherCard({
             </div>
           </div>
           <div className="flex gap-2">
+            <button
+              onClick={onView360}
+              className="text-blue-600 hover:text-blue-700 font-medium text-sm"
+            >
+              360
+            </button>
             <button
               onClick={onEdit}
               className="text-orange-600 hover:text-orange-700 font-medium text-sm"
@@ -635,38 +1068,76 @@ function TeacherCard({
             onClick={onToggleExpand}
             className="w-full mt-4 py-2 text-sm font-medium text-orange-600 hover:text-orange-700 border-t border-slate-200 transition-colors"
           >
-            {isExpanded ? '▼ Hide Batches' : '▶ View Batches'}
+            {isExpanded ? '▼ Hide Details' : '▶ View Batches & Students'}
           </button>
         )}
       </div>
 
-      {isExpanded && batches.length > 0 && (
-        <div className="border-t border-slate-200 p-4 bg-slate-50">
-          <h4 className="text-sm font-semibold text-slate-700 mb-3">Assigned Batches</h4>
-          <div className="space-y-2">
-            {batches.map(batch => (
-              <div key={batch.id} className="bg-white rounded p-3 border border-slate-200">
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <div className="font-medium text-slate-900 text-sm">{batch.instrument_name}</div>
-                    <div className="text-xs text-slate-600 mt-1">{batch.recurrence}</div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="text-xs text-slate-500">
-                      Cap: {batch.capacity}
+      {isExpanded && (
+        <div className="border-t border-slate-200 bg-slate-50">
+          {/* Batches sub-section */}
+          {batches.length > 0 && (
+            <div className="p-4">
+              <h4 className="text-sm font-semibold text-slate-700 mb-3">Assigned Batches</h4>
+              <div className="space-y-2">
+                {batches.map(batch => (
+                  <div key={batch.id} className="bg-white rounded p-3 border border-slate-200">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <div className="font-medium text-slate-900 text-sm">{batch.instrument_name}</div>
+                        <div className="text-xs text-slate-600 mt-1">{batch.recurrence}</div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="text-xs text-slate-500">Cap: {batch.capacity}</div>
+                        {onEditBatch && (
+                          <button
+                            onClick={() => onEditBatch(batch)}
+                            className="text-orange-600 hover:text-orange-700 text-xs font-medium px-2 py-1 rounded hover:bg-orange-50"
+                          >
+                            Edit
+                          </button>
+                        )}
+                      </div>
                     </div>
-                    {onEditBatch && (
-                      <button
-                        onClick={() => onEditBatch(batch)}
-                        className="text-orange-600 hover:text-orange-700 text-xs font-medium px-2 py-1 rounded hover:bg-orange-50"
-                      >
-                        Edit
-                      </button>
-                    )}
                   </div>
-                </div>
+                ))}
               </div>
-            ))}
+            </div>
+          )}
+
+          {/* Students sub-section */}
+          <div className={`p-4 ${batches.length > 0 ? 'border-t border-slate-200' : ''}`}>
+            <h4 className="text-sm font-semibold text-slate-700 mb-3">
+              Enrolled Students
+              {students !== undefined && (
+                <span className="ml-2 text-xs font-normal text-slate-500">({students.length})</span>
+              )}
+            </h4>
+            {students === undefined ? (
+              <div className="flex items-center gap-2 text-xs text-slate-400">
+                <div className="animate-spin rounded-full h-3 w-3 border-b border-orange-400"></div>
+                Loading…
+              </div>
+            ) : students.length === 0 ? (
+              <p className="text-xs text-slate-400 italic">No active students enrolled.</p>
+            ) : (
+              <div className="space-y-2 max-h-48 overflow-y-auto">
+                {students.map(s => (
+                  <div key={s.id} className="bg-white rounded p-2 border border-slate-200 flex items-center justify-between">
+                    <div>
+                      <div className="text-sm font-medium text-slate-900">{s.name}</div>
+                      <div className="text-xs text-slate-500">{s.instrument} · {s.recurrence}</div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-xs text-slate-500">{s.phone || s.guardian_contact || ''}</div>
+                      {s.classes_remaining !== null && (
+                        <div className="text-xs text-orange-600 font-medium">{s.classes_remaining} cls left</div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       )}

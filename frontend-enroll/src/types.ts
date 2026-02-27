@@ -1,5 +1,5 @@
 
-export type PayoutType = 'fixed' | 'per_class';
+export type PayoutType = 'fixed' | 'per_student_monthly';
 export type PaymentFrequency = 'monthly' | 'quarterly' | 'half_yearly' | 'yearly';
 export type AttendanceStatus = 'present' | 'absent' | 'excused';
 
@@ -88,4 +88,52 @@ export interface PaymentRecord {
   payment_for?: string;
   notes?: string;
   timestamp: string;
+}
+
+export interface Teacher360Data {
+  profile: {
+    id: string;
+    name: string;
+    phone: string;
+    email: string;
+    payout_type: 'fixed' | 'per_student_monthly';
+    rate: number;
+    is_active: boolean;
+    batch_count: number;
+    batches: Array<{
+      id: string;
+      instrument_name: string;
+      recurrence: string;
+      capacity: number;
+      active_students: number;
+    }>;
+  };
+  attendance: {
+    summary: {
+      total_sessions_conducted: number;
+      current_month_sessions: number;
+      current_month_expected: number;
+    };
+    monthly_breakdown: Array<{
+      month: string;
+      conducted: number;
+      expected: number;
+    }>;
+  };
+  payout: {
+    projected: {
+      amount: number;
+      basis: string;
+      model: string;
+    };
+    history: Array<{
+      id: string;
+      period: string;
+      amount: number;
+      method: string;
+      linked_classes_count: number;
+      created_at: string;
+    }>;
+    total_paid: number;
+  };
 }

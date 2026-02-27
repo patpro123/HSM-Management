@@ -21,12 +21,13 @@ import UserManagement from './components/UserManagement';
 import EnrollmentForm from './components/EnrollmentForm';
 import PaymentModule from './components/PaymentModule';
 import FinanceModule from './components/FinanceModule';
+import Teacher360View from './components/Teacher360View';
 import hsmLogo from './images/hsmLogo.jpg';
 
 const App: React.FC = () => {
   // Add new profile page states
-  const [activeTab, setActiveTab] = useState<'stats' | 'students' | 'attendance' | 'payments' | 'teachers' | 'users' | 'student-profile' | 'enrollment'>(
-    getCurrentUser()?.roles?.includes('admin') ? 'stats' : 'student-profile'
+  const [activeTab, setActiveTab] = useState<'stats' | 'students' | 'attendance' | 'payments' | 'teachers' | 'users' | 'student-profile' | 'teacher-profile' | 'enrollment'>(
+    getCurrentUser()?.roles?.includes('admin') ? 'stats' : getCurrentUser()?.roles?.includes('teacher') ? 'teacher-profile' : 'student-profile'
   );
   const [students, setStudents] = useState<Student[]>([]);
   const [batches, setBatches] = useState<Batch[]>([]);
@@ -82,12 +83,14 @@ const App: React.FC = () => {
   useEffect(() => {
     if (user) {
       const isAdminRole = user.roles.includes('admin');
-      // If admin is on student profile (default), switch to dashboard to avoid blank page
-      if (isAdminRole && activeTab === 'student-profile') {
+      const isTeacherRole = !isAdminRole && user.roles.includes('teacher');
+      if (isAdminRole && (activeTab === 'student-profile' || activeTab === 'teacher-profile')) {
         setActiveTab('stats');
       }
-      // If student is on admin tabs, switch to profile
-      if (!isAdminRole && activeTab !== 'student-profile') {
+      if (isTeacherRole && activeTab !== 'teacher-profile') {
+        setActiveTab('teacher-profile');
+      }
+      if (!isAdminRole && !isTeacherRole && activeTab !== 'student-profile') {
         setActiveTab('student-profile');
       }
     }
@@ -214,7 +217,8 @@ const App: React.FC = () => {
 
   // Main app UI
   const isAdmin = user && user.roles.includes('admin');
-  const isStudentOrParent = user && !isAdmin && (user.roles.includes('student') || user.roles.includes('parent'));
+  const isTeacherOnly = user && !isAdmin && user.roles.includes('teacher');
+  const isStudentOrParent = user && !isAdmin && !isTeacherOnly && (user.roles.includes('student') || user.roles.includes('parent'));
 
   // Menu items by role
   const menuItems = isAdmin
@@ -226,6 +230,10 @@ const App: React.FC = () => {
         { key: 'finance', label: 'Finance' },
         { key: 'teachers', label: 'Teachers' },
         { key: 'users', label: 'Users' },
+      ]
+    : isTeacherOnly
+    ? [
+        { key: 'teacher-profile', label: 'My Profile' },
       ]
     : [
         { key: 'student-profile', label: 'My Profile' },
@@ -379,6 +387,12 @@ const App: React.FC = () => {
                 instruments={instruments}
                 onRefresh={fetchData}
               />
+            )}
+          </div>
+        ) : isTeacherOnly ? (
+          <div className="bg-white rounded-xl p-8 shadow-sm border border-slate-100">
+            {activeTab === 'teacher-profile' && (
+              <Teacher360View selfView isModal={false} />
             )}
           </div>
         ) : (
