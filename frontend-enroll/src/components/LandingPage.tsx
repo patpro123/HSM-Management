@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { API_BASE_URL } from '../config';
 import './LandingPage.css';
 
 interface LandingPageProps {
@@ -64,7 +65,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLogin }) => {
         };
 
         try {
-            const res = await fetch('http://localhost:3000/api/prospects', {
+            const res = await fetch(`${API_BASE_URL}/api/prospects`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
