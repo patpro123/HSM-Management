@@ -64,6 +64,7 @@ app.get('/api/auth/config', (req, res) => {
 // -----------------------------------------
 
 // Register students and teachers routes
+app.use('/api/prospects', require('./routes/prospects'));
 app.use('/api/students', require('./routes/students'));
 app.use('/api/students', require('./routes/students-put'));
 app.use('/api/teachers', require('./routes/teachers'));

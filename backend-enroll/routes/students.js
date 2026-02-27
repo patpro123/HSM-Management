@@ -2,10 +2,10 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../db');
 
-// GET /api/students - List all students with enrollments
+// GET /api/students - List all permanent students with enrollments
 router.get('/', async (req, res) => {
   try {
-    const result = await pool.query('SELECT * FROM students ORDER BY name');
+    const result = await pool.query("SELECT * FROM students WHERE student_type = 'permanent' OR student_type IS NULL ORDER BY name");
     res.json({ students: result.rows });
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch students' });
@@ -23,7 +23,7 @@ router.post('/', async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    
+
     // Calculate total credits from batches
     let totalCredits = 0;
     if (Array.isArray(batches)) {
@@ -64,7 +64,7 @@ router.post('/', async (req, res) => {
       ]
     );
     const student = studentResult.rows[0];
-    
+
     // Insert enrollment
     const enrollmentResult = await client.query(
       'INSERT INTO enrollments (student_id, status) VALUES ($1, $2) RETURNING *',
@@ -77,7 +77,7 @@ router.post('/', async (req, res) => {
     if (Array.isArray(batches)) {
       for (const batch of batches) {
         const { batch_id, payment_frequency, classes_remaining, enrolled_on } = batch;
-        
+
         let initialCredits = classes_remaining || 0;
         const freq = (payment_frequency || '').toLowerCase();
         if (!initialCredits && freq === 'monthly') initialCredits = 8;
@@ -90,7 +90,7 @@ router.post('/', async (req, res) => {
         enrollmentBatchRows.push(batchResult.rows[0]);
       }
     }
-    
+
     // Insert payment
     let paymentRow = null;
     if (payment && payment.amount && payment.method) {
@@ -101,7 +101,7 @@ router.post('/', async (req, res) => {
       );
       paymentRow = payResult.rows[0];
     }
-    
+
     await client.query('COMMIT');
     console.log('[POST /api/students] Student and related records created successfully:', { student, enrollment, enrollmentBatchRows, paymentRow });
     res.status(201).json({ student, enrollment, enrollment_batches: enrollmentBatchRows, payment: paymentRow });
@@ -166,7 +166,7 @@ router.post('/:id/restore', async (req, res) => {
     }
     // Restore enrollment status to active
     await pool.query("UPDATE enrollments SET status = 'active' WHERE student_id = $1", [id]);
-    
+
     res.json({ message: 'Student restored successfully', student: result.rows[0] });
   } catch (err) {
     res.status(500).json({ error: 'Failed to restore student' });

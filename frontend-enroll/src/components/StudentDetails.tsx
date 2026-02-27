@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { apiGet } from '../api';
 import { Student, Batch, Instrument, PaymentFrequency } from '../types';
 
 export interface EnrollmentSelection {
@@ -11,7 +12,7 @@ interface StudentDetailsProps {
   student?: Student | null;
   batches: Batch[];
   instruments: Instrument[];
-  onSave: (data: any, enrollments: EnrollmentSelection[]) => void;
+  onSave: (data: any, enrollments: EnrollmentSelection[], prospectId?: string) => void;
   onCancel: () => void;
 }
 
@@ -28,6 +29,18 @@ const StudentDetails: React.FC<StudentDetailsProps> = ({ student, batches, instr
   });
   const [selectedBatches, setSelectedBatches] = useState<EnrollmentSelection[]>([]);
   const [instrumentSettings, setInstrumentSettings] = useState<Record<string, { payment_frequency: PaymentFrequency; enrollment_date: string }>>({});
+
+  const [prospects, setProspects] = useState<any[]>([]);
+  const [selectedProspectId, setSelectedProspectId] = useState<string>('');
+
+  // Fetch prospects only when adding a new student
+  useEffect(() => {
+    if (!student) {
+      apiGet('/api/prospects')
+        .then(res => setProspects(res.prospects || []))
+        .catch(err => console.error('Error fetching prospects:', err));
+    }
+  }, [student]);
 
   useEffect(() => {
     if (student) {
@@ -66,10 +79,10 @@ const StudentDetails: React.FC<StudentDetailsProps> = ({ student, batches, instr
         const instBatchIds = batches
           .filter(b => String(b.instrument_id) === String(inst.id))
           .map(b => String(b.id));
-        
+
         // Find if any batch of this instrument is selected to grab settings
         const existing = initialBatches.find(eb => instBatchIds.includes(String(eb.batch_id)));
-        
+
         newSettings[inst.id] = {
           payment_frequency: existing?.payment_frequency || 'monthly',
           enrollment_date: existing?.enrollment_date || new Date().toISOString().split('T')[0]
@@ -89,7 +102,7 @@ const StudentDetails: React.FC<StudentDetailsProps> = ({ student, batches, instr
         address: ''
       });
       setSelectedBatches([]);
-      
+
       // Reset instrument settings to defaults
       const newSettings: Record<string, any> = {};
       instruments.forEach(inst => {
@@ -101,6 +114,30 @@ const StudentDetails: React.FC<StudentDetailsProps> = ({ student, batches, instr
       setInstrumentSettings(newSettings);
     }
   }, [student, instruments, batches]);
+
+  const handleProspectSelect = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const prospectId = e.target.value;
+    setSelectedProspectId(prospectId);
+    if (!prospectId) return;
+
+    const prospect = prospects.find(p => String(p.id) === prospectId);
+    if (prospect) {
+      const name = prospect.name || '';
+      const nameParts = name.split(' ');
+      const firstName = nameParts[0] || '';
+      const lastName = nameParts.length > 1 ? nameParts.slice(1).join(' ') : '';
+      const metadata = prospect.metadata || {};
+
+      setFormData(prev => ({
+        ...prev,
+        first_name: firstName,
+        last_name: lastName,
+        email: metadata.email || '',
+        phone: prospect.phone || '',
+        address: metadata.address || ''
+      }));
+    }
+  };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -116,10 +153,10 @@ const StudentDetails: React.FC<StudentDetailsProps> = ({ student, batches, instr
           payment_frequency: 'monthly',
           enrollment_date: new Date().toISOString().split('T')[0]
         };
-        return [...prev, { 
-          batch_id: batchId, 
-          payment_frequency: settings.payment_frequency, 
-          enrollment_date: settings.enrollment_date 
+        return [...prev, {
+          batch_id: batchId,
+          payment_frequency: settings.payment_frequency,
+          enrollment_date: settings.enrollment_date
         }];
       }
     });
@@ -145,8 +182,8 @@ const StudentDetails: React.FC<StudentDetailsProps> = ({ student, batches, instr
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log('📝 [StudentDetails] Submitting form:', { formData, selectedBatches });
-    onSave(formData, selectedBatches);
+    console.log('📝 [StudentDetails] Submitting form:', { formData, selectedBatches, selectedProspectId });
+    onSave(formData, selectedBatches, selectedProspectId);
   };
 
   // Group batches by instrument
@@ -157,6 +194,26 @@ const StudentDetails: React.FC<StudentDetailsProps> = ({ student, batches, instr
 
   return (
     <form onSubmit={handleSubmit} className="p-6 space-y-4">
+
+      {!student && prospects.length > 0 && (
+        <div className="bg-orange-50 p-4 border border-orange-200 rounded-lg mb-4">
+          <label className="block text-sm font-bold text-orange-800 mb-2">Import from Demo Signups (Prospects)</label>
+          <select
+            value={selectedProspectId}
+            onChange={handleProspectSelect}
+            className="w-full px-4 py-2 rounded-lg border border-orange-300 focus:border-orange-500 focus:ring-2 focus:ring-orange-200 outline-none"
+          >
+            <option value="">-- Start fresh or select a prospect --</option>
+            {prospects.map(p => (
+              <option key={p.id} value={p.id}>
+                {p.name} ({p.phone || p.metadata?.email}) - Interested in: {p.metadata?.interested_instrument || 'Any'}
+              </option>
+            ))}
+          </select>
+          <p className="text-xs text-orange-600 mt-2">Selecting a prospect will automatically fill their details below and mark them as an active permanent student upon save.</p>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
           <label className="block text-sm font-semibold text-slate-700 mb-2">First Name *</label>
@@ -205,16 +262,16 @@ const StudentDetails: React.FC<StudentDetailsProps> = ({ student, batches, instr
             return (
               <div key={instrument.id} className="bg-slate-50 rounded-lg p-4 border border-slate-200">
                 <h4 className="text-sm font-bold text-slate-800 mb-3 flex items-center gap-2">🎵 {instrument.name}</h4>
-                
+
                 {/* Instrument Level Controls */}
                 <div className="grid grid-cols-2 gap-4 mb-4 bg-white p-3 rounded border border-slate-100">
                   <div>
                     <label className="block text-xs font-semibold text-slate-700 mb-1">Enrollment Date</label>
-                    <input type="date" value={settings.enrollment_date} onChange={(e) => handleInstrumentSettingChange(instrument.id, 'enrollment_date', e.target.value)} className="text-xs px-2 py-1 rounded border border-slate-300 focus:border-indigo-500 outline-none w-full" />
+                    <input type="date" value={settings.enrollment_date} onChange={(e) => handleInstrumentSettingChange(String(instrument.id), 'enrollment_date', e.target.value)} className="text-xs px-2 py-1 rounded border border-slate-300 focus:border-indigo-500 outline-none w-full" />
                   </div>
                   <div>
                     <label className="block text-xs font-semibold text-slate-700 mb-1">Payment Frequency</label>
-                    <select value={settings.payment_frequency} onChange={(e) => handleInstrumentSettingChange(instrument.id, 'payment_frequency', e.target.value as PaymentFrequency)} className="text-xs px-2 py-1 rounded border border-slate-300 focus:border-indigo-500 outline-none w-full">
+                    <select value={settings.payment_frequency} onChange={(e) => handleInstrumentSettingChange(String(instrument.id), 'payment_frequency', e.target.value as PaymentFrequency)} className="text-xs px-2 py-1 rounded border border-slate-300 focus:border-indigo-500 outline-none w-full">
                       <option value="monthly">Monthly (8 classes)</option>
                       <option value="quarterly">Quarterly (24 classes)</option>
                       <option value="half_yearly">Half-Yearly (48 classes)</option>
@@ -231,7 +288,7 @@ const StudentDetails: React.FC<StudentDetailsProps> = ({ student, batches, instr
                       return (
                         <div key={batch.id} className={`p-3 rounded-lg border transition ${isSelected ? 'border-orange-500 bg-orange-50' : 'border-slate-200 bg-white'}`}>
                           <div className="flex items-start gap-2">
-                            <input type="checkbox" checked={isSelected} onChange={() => handleBatchToggle(batch.id, instrument.id)} className="mt-1 w-4 h-4 text-orange-600 rounded focus:ring-2 focus:ring-orange-500" />
+                            <input type="checkbox" checked={isSelected} onChange={() => handleBatchToggle(batch.id, String(instrument.id))} className="mt-1 w-4 h-4 text-orange-600 rounded focus:ring-2 focus:ring-orange-500" />
                             <div className="flex-1">
                               <p className="font-semibold text-slate-900 text-sm">{batch.recurrence}</p>
                               <p className="text-xs text-slate-600">{batch.day_of_week} • {batch.start_time} - {batch.end_time}</p>
