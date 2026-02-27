@@ -341,7 +341,8 @@ img {
 
 @media (max-width: 480px) {
     .nav-actions .nav-signin {
-        display: none;
+        padding: 0.4rem 0.75rem;
+        font-size: 0.8rem;
     }
 }
 
