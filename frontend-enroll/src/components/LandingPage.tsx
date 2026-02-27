@@ -99,8 +99,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLogin }) => {
                         <img
                             src="/HSM_Logo_Horizontal.png"
                             alt="HSM Logo"
-                            className={isDark ? "logo-screen" : "logo-multiply"}
-                            style={{ height: '120px', width: 'auto', marginTop: '-25px', marginBottom: '-25px', marginLeft: '-15px' }}
+                            className={`nav-logo ${isDark ? "logo-screen" : "logo-multiply"}`}
                         />
                     </a>
 
@@ -111,18 +110,18 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLogin }) => {
                     </div>
 
                     <div className="nav-actions">
-                        <button className="theme-toggle" onClick={toggleTheme} aria-label="Toggle Dark Mode">
-                            {isDark ? '☀' : '☾'}
-                        </button>
                         <button
                             onClick={onLogin}
-                            className="btn btn-outline"
+                            className="btn btn-outline nav-signin"
                             style={{ padding: '0.5rem 1rem', border: '1px solid var(--text-muted)' }}
                         >
                             Sign In
                         </button>
-                        <button onClick={handleOpenModal} className="btn btn-cta ml-3">
-                            Schedule a Trial Lesson
+                        <button onClick={handleOpenModal} className="btn btn-cta">
+                            Book Trial
+                        </button>
+                        <button className="theme-toggle" onClick={toggleTheme} aria-label="Toggle Dark Mode">
+                            {isDark ? '☀' : '☾'}
                         </button>
                     </div>
                 </div>
