@@ -32,6 +32,8 @@ const StudentDetails: React.FC<StudentDetailsProps> = ({ student, batches, instr
 
   const [prospects, setProspects] = useState<any[]>([]);
   const [selectedProspectId, setSelectedProspectId] = useState<string>('');
+  const [activeTab, setActiveTab] = useState<'prospect' | 'form'>('prospect');
+  const [prospectSearch, setProspectSearch] = useState('');
 
   // Fetch prospects only when adding a new student
   useEffect(() => {
@@ -115,8 +117,7 @@ const StudentDetails: React.FC<StudentDetailsProps> = ({ student, batches, instr
     }
   }, [student, instruments, batches]);
 
-  const handleProspectSelect = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const prospectId = e.target.value;
+  const handleProspectSelect = (prospectId: string) => {
     setSelectedProspectId(prospectId);
     if (!prospectId) return;
 
@@ -136,6 +137,9 @@ const StudentDetails: React.FC<StudentDetailsProps> = ({ student, batches, instr
         phone: prospect.phone || '',
         address: metadata.address || ''
       }));
+
+      // Switch to form tab after selecting a prospect
+      setActiveTab('form');
     }
   };
 
@@ -192,27 +196,137 @@ const StudentDetails: React.FC<StudentDetailsProps> = ({ student, batches, instr
     batches: (batches || []).filter(batch => String(batch.instrument_id) === String(instrument.id))
   }));
 
-  return (
-    <form onSubmit={handleSubmit} className="p-6 space-y-4">
+  const filteredProspects = prospects.filter(p => {
+    if (!prospectSearch) return true;
+    const q = prospectSearch.toLowerCase();
+    const name = (p.name || '').toLowerCase();
+    const phone = (p.phone || '').toLowerCase();
+    const email = (p.metadata?.email || '').toLowerCase();
+    const instrument = (p.metadata?.interested_instrument || '').toLowerCase();
+    return name.includes(q) || phone.includes(q) || email.includes(q) || instrument.includes(q);
+  });
 
-      {!student && prospects.length > 0 && (
-        <div className="bg-orange-50 p-4 border border-orange-200 rounded-lg mb-4">
-          <label className="block text-sm font-bold text-orange-800 mb-2">Import from Demo Signups (Prospects)</label>
-          <select
-            value={selectedProspectId}
-            onChange={handleProspectSelect}
-            className="w-full px-4 py-2 rounded-lg border border-orange-300 focus:border-orange-500 focus:ring-2 focus:ring-orange-200 outline-none"
+  return (
+    <div>
+      {/* Tab bar — only shown when adding a new student */}
+      {!student && (
+        <div className="flex border-b border-slate-200">
+          <button
+            type="button"
+            onClick={() => setActiveTab('prospect')}
+            className={`px-6 py-3 text-sm font-semibold transition border-b-2 -mb-px ${
+              activeTab === 'prospect'
+                ? 'border-orange-500 text-orange-600'
+                : 'border-transparent text-slate-500 hover:text-slate-700'
+            }`}
           >
-            <option value="">-- Start fresh or select a prospect --</option>
-            {prospects.map(p => (
-              <option key={p.id} value={p.id}>
-                {p.name} ({p.phone || p.metadata?.email}) - Interested in: {p.metadata?.interested_instrument || 'Any'}
-              </option>
-            ))}
-          </select>
-          <p className="text-xs text-orange-600 mt-2">Selecting a prospect will automatically fill their details below and mark them as an active permanent student upon save.</p>
+            From Prospect
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('form')}
+            className={`px-6 py-3 text-sm font-semibold transition border-b-2 -mb-px ${
+              activeTab === 'form'
+                ? 'border-orange-500 text-orange-600'
+                : 'border-transparent text-slate-500 hover:text-slate-700'
+            }`}
+          >
+            New Student
+          </button>
         </div>
       )}
+
+      {/* Prospect picker tab */}
+      {!student && activeTab === 'prospect' && (
+        <div className="p-6 space-y-4">
+          <div>
+            <input
+              type="text"
+              placeholder="Search by name, phone, email, or instrument..."
+              value={prospectSearch}
+              onChange={e => setProspectSearch(e.target.value)}
+              className="w-full px-4 py-2 rounded-lg border border-slate-300 focus:border-orange-500 focus:ring-2 focus:ring-orange-200 outline-none"
+            />
+          </div>
+
+          {prospects.length === 0 ? (
+            <div className="text-center py-12 text-slate-400">
+              <p className="text-lg font-medium">No prospects yet</p>
+              <p className="text-sm mt-1">Prospects come from demo/trial signups on the landing page.</p>
+              <button
+                type="button"
+                onClick={() => setActiveTab('form')}
+                className="mt-4 px-4 py-2 bg-orange-500 text-white rounded-lg font-semibold hover:bg-orange-600 transition"
+              >
+                Add as New Student instead
+              </button>
+            </div>
+          ) : filteredProspects.length === 0 ? (
+            <div className="text-center py-8 text-slate-400">No prospects match your search.</div>
+          ) : (
+            <div className="space-y-2 max-h-96 overflow-y-auto">
+              {filteredProspects.map(p => {
+                const isSelected = String(p.id) === selectedProspectId;
+                return (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => handleProspectSelect(String(p.id))}
+                    className={`w-full text-left px-4 py-3 rounded-lg border transition ${
+                      isSelected
+                        ? 'border-orange-500 bg-orange-50'
+                        : 'border-slate-200 bg-white hover:border-orange-300 hover:bg-orange-50'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="font-semibold text-slate-900">{p.name}</p>
+                        <p className="text-xs text-slate-500 mt-0.5">
+                          {[p.phone, p.metadata?.email].filter(Boolean).join(' · ')}
+                        </p>
+                      </div>
+                      {p.metadata?.interested_instrument && (
+                        <span className="ml-3 px-2 py-1 bg-orange-100 text-orange-700 rounded-full text-xs font-semibold whitespace-nowrap">
+                          {p.metadata.interested_instrument}
+                        </span>
+                      )}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          <div className="flex gap-3 pt-2 border-t border-slate-200">
+            <button type="button" onClick={onCancel} className="flex-1 px-4 py-3 bg-slate-200 text-slate-700 rounded-lg font-semibold hover:bg-slate-300 transition">Cancel</button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('form')}
+              className="flex-1 px-4 py-3 bg-slate-100 text-slate-700 rounded-lg font-semibold hover:bg-slate-200 transition"
+            >
+              Skip — New Student
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Student details form tab */}
+      {(student || activeTab === 'form') && (
+      <form onSubmit={handleSubmit} className="p-6 space-y-4">
+        {selectedProspectId && !student && (
+          <div className="flex items-center gap-3 bg-orange-50 border border-orange-200 rounded-lg px-4 py-3 text-sm">
+            <span className="text-orange-600 font-semibold">
+              Prospect selected: {prospects.find(p => String(p.id) === selectedProspectId)?.name}
+            </span>
+            <button
+              type="button"
+              onClick={() => { setSelectedProspectId(''); setActiveTab('prospect'); }}
+              className="ml-auto text-xs text-slate-500 hover:text-slate-700 underline"
+            >
+              Change
+            </button>
+          </div>
+        )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
@@ -309,7 +423,9 @@ const StudentDetails: React.FC<StudentDetailsProps> = ({ student, batches, instr
         <button type="button" onClick={onCancel} className="flex-1 px-4 py-3 bg-slate-200 text-slate-700 rounded-lg font-semibold hover:bg-slate-300 transition">Cancel</button>
         <button type="submit" className="flex-1 px-4 py-3 bg-gradient-to-r from-orange-500 to-amber-500 text-white rounded-lg font-semibold hover:from-orange-600 hover:to-amber-600 transition shadow-lg">{student ? 'Save Changes' : 'Add Student & Enroll'}</button>
       </div>
-    </form>
+      </form>
+      )}
+    </div>
   );
 };
 

@@ -754,6 +754,7 @@ app.get('/api/enrollments', async (req, res) => {
       LEFT JOIN batches b ON eb.batch_id = b.id
       LEFT JOIN instruments i ON b.instrument_id = i.id
       LEFT JOIN teachers t ON b.teacher_id = t.id
+      WHERE (s.student_type = 'permanent' OR s.student_type IS NULL)
       GROUP BY s.id, s.name, s.dob, s.phone, s.guardian_contact, s.metadata, s.is_active, e.id, e.status, e.classes_remaining, e.enrolled_on
       ORDER BY s.name ASC
     `)

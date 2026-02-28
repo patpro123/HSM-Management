@@ -7,10 +7,11 @@ interface StudentHubProps {
   students: Student[];
   batches: Batch[];
   instruments: Instrument[];
+  prospects: any[];
   onRefresh: () => void;
 }
 
-const StudentHub: React.FC<StudentHubProps> = ({ students, batches, instruments, onRefresh }) => {
+const StudentHub: React.FC<StudentHubProps> = ({ students, batches, instruments, prospects, onRefresh }) => {
   const [activeTab, setActiveTab] = useState<'all' | 'today'>('all');
 
   return (
@@ -37,10 +38,11 @@ const StudentHub: React.FC<StudentHubProps> = ({ students, batches, instruments,
       </div>
 
       {activeTab === 'all' ? (
-        <StudentManagement 
+        <StudentManagement
           students={students}
           batches={batches}
           instruments={instruments}
+          prospects={prospects}
           onRefresh={onRefresh}
         />
       ) : (

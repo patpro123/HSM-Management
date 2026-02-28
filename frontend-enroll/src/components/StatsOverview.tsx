@@ -1,10 +1,10 @@
 import React from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend } from 'recharts';
-import { Student, BatchAssignment, AttendanceRecord, PaymentRecord } from '../types';
+import { Student, AttendanceRecord, PaymentRecord } from '../types';
 
 interface StatsProps {
   students: Student[];
-  enrollments: BatchAssignment[];
+  prospectsCount: number;
   attendance: AttendanceRecord[];
   payments: PaymentRecord[];
   onNavigate?: (tab: 'stats' | 'students' | 'attendance' | 'payments' | 'teachers') => void;
@@ -29,9 +29,19 @@ const StatCard: React.FC<{
   </div>
 );
 
-const StatsOverview: React.FC<StatsProps> = ({ students, enrollments, attendance, payments, onNavigate }) => {
+const StatsOverview: React.FC<StatsProps> = ({ students, prospectsCount, attendance, payments, onNavigate }) => {
   const totalRevenue = payments.reduce((acc, p) => acc + parseFloat(String(p.amount || '0')), 0);
   const activeStudents = students.length;
+
+  // Count enrollments at instrument level: unique (student, instrument) pairs
+  const totalEnrollments = students.reduce((count, student) => {
+    const instrumentIds = new Set(
+      ((student as any).batches || [])
+        .map((b: any) => b.instrument_id)
+        .filter(Boolean)
+    );
+    return count + instrumentIds.size;
+  }, 0);
   
   // Chart data: Monthly enrollment trend (last 3 months)
   const chartData = [
@@ -72,33 +82,40 @@ const StatsOverview: React.FC<StatsProps> = ({ students, enrollments, attendance
 
   return (
     <div className="space-y-8">
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <StatCard 
-          title="Total Students" 
-          value={activeStudents.toString()} 
-          icon="👥" 
-          color="bg-blue-500" 
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
+        <StatCard
+          title="Total Students"
+          value={activeStudents.toString()}
+          icon="👥"
+          color="bg-blue-500"
           onClick={() => onNavigate?.('students')}
         />
-        <StatCard 
-          title="Revenue (INR)" 
-          value={`₹${totalRevenue.toLocaleString()}`} 
-          icon="💰" 
-          color="bg-emerald-500" 
+        <StatCard
+          title="Revenue (INR)"
+          value={`₹${totalRevenue.toLocaleString()}`}
+          icon="💰"
+          color="bg-emerald-500"
           onClick={() => onNavigate?.('payments')}
         />
-        <StatCard 
-          title="Enrollments" 
-          value={enrollments.length.toString()} 
-          icon="📚" 
-          color="bg-indigo-500" 
+        <StatCard
+          title="Enrollments"
+          value={totalEnrollments.toString()}
+          icon="📚"
+          color="bg-indigo-500"
           onClick={() => onNavigate?.('students')}
         />
-        <StatCard 
-          title="Attendance" 
-          value={attendance.length.toString()} 
-          icon="📅" 
-          color="bg-amber-500" 
+        <StatCard
+          title="Prospects"
+          value={prospectsCount.toString()}
+          icon="🎯"
+          color="bg-purple-500"
+          onClick={() => onNavigate?.('students')}
+        />
+        <StatCard
+          title="Attendance"
+          value={attendance.length.toString()}
+          icon="📅"
+          color="bg-amber-500"
           onClick={() => onNavigate?.('attendance')}
         />
       </div>
@@ -168,7 +185,7 @@ const StatsOverview: React.FC<StatsProps> = ({ students, enrollments, attendance
                   cx="50%"
                   cy="50%"
                   labelLine={false}
-                  label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                  label={({ name, percent }) => `${name} ${((percent ?? 0) * 100).toFixed(0)}%`}
                   outerRadius={80}
                   fill="#8884d8"
                   dataKey="value"
@@ -207,8 +224,8 @@ const StatsOverview: React.FC<StatsProps> = ({ students, enrollments, attendance
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="bg-white p-6 rounded-xl border border-slate-200 hover:shadow-lg transition-shadow">
           <h4 className="text-sm font-semibold text-slate-600 mb-2">Active Enrollments</h4>
-          <p className="text-3xl font-bold text-slate-900">{enrollments.length}</p>
-          <p className="text-xs text-slate-500 mt-2">Students in batches</p>
+          <p className="text-3xl font-bold text-slate-900">{totalEnrollments}</p>
+          <p className="text-xs text-slate-500 mt-2">Student–instrument pairs</p>
         </div>
         <div className="bg-white p-6 rounded-xl border border-slate-200 hover:shadow-lg transition-shadow">
           <h4 className="text-sm font-semibold text-slate-600 mb-2">Avg. Revenue/Student</h4>
