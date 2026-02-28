@@ -316,7 +316,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLogin }) => {
 
                         <div className="form-group">
                             <label htmlFor="address">Address</label>
-                            <input type="text" id="address" required placeholder="Your full address" />
+                            <input type="text" id="address" placeholder="Your full address" />
                         </div>
 
                         <div className="form-grid">
@@ -326,13 +326,13 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLogin }) => {
                             </div>
                             <div className="form-group">
                                 <label htmlFor="email">Email Address</label>
-                                <input type="email" id="email" required placeholder="you@example.com" />
+                                <input type="email" id="email" placeholder="you@example.com" />
                             </div>
                         </div>
 
                         <div className="form-group">
                             <label htmlFor="instrument">Instrument Interested In</label>
-                            <select id="instrument" required defaultValue="">
+                            <select id="instrument" defaultValue="">
                                 <option value="" disabled>Select an instrument...</option>
                                 <option value="piano">Piano & Keyboard</option>
                                 <option value="guitar">Acoustic & Electric Guitar</option>
@@ -344,7 +344,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLogin }) => {
 
                         <div className="form-group">
                             <label htmlFor="source">Where did you hear about HSM?</label>
-                            <select id="source" required defaultValue="">
+                            <select id="source" defaultValue="">
                                 <option value="" disabled>Select an option...</option>
                                 <option value="google">Google Search</option>
                                 <option value="social">Social Media (Instagram, Facebook)</option>

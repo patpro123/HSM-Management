@@ -135,8 +135,8 @@ router.post('/', async (req, res) => {
     console.log('[POST /api/prospects] Incoming prospect form:', req.body);
     const { name, address, phone, email, instrument, source } = req.body;
 
-    if (!name || !email || !phone) {
-        return res.status(400).json({ error: 'Name, email, and phone are required for a trial booking.' });
+    if (!name || !phone) {
+        return res.status(400).json({ error: 'Name and phone are required for a trial booking.' });
     }
 
     const client = await pool.connect();
@@ -168,6 +168,36 @@ router.post('/', async (req, res) => {
         await client.query('COMMIT');
         const prospect = prospectResult.rows[0];
         console.log('[POST /api/prospects] Prospect created successfully:', prospect.id);
+
+        // Notify admins via database notification
+        try {
+            await pool.query(`
+                INSERT INTO notifications (type, title, message, metadata, action_link) 
+                VALUES ($1, $2, $3, $4::jsonb, $5)
+            `, [
+                'NEW_PROSPECT',
+                'New Demo Sign-up',
+                `${name} recently booked a trial class for ${instrument || 'a program'}.`,
+                JSON.stringify({ prospect_id: prospect.id, phone, email }),
+                '/students'
+            ]);
+            console.log('[POST /api/prospects] Notification inserted successfully.');
+
+            // Immediately broadcast event to connected admins via SSE
+            const notificationsRouter = require('./notifications');
+            if (notificationsRouter.emitNotification) {
+                notificationsRouter.emitNotification({
+                    type: 'NEW_PROSPECT',
+                    title: 'New Demo Sign-up',
+                    message: `${name} recently booked a trial class for ${instrument || 'a program'}.`,
+                    metadata: { prospect_id: prospect.id, phone, email },
+                    action_link: '/students',
+                    created_at: new Date().toISOString()
+                });
+            }
+        } catch (notifErr) {
+            console.error('[POST /api/prospects] Failed to create notification:', notifErr.message);
+        }
 
         // Send notification email — non-blocking, failures are logged only
         sendProspectNotification(prospect).catch(err =>

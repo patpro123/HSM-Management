@@ -24,6 +24,7 @@ import FinanceModule from './components/FinanceModule';
 import Teacher360View from './components/Teacher360View';
 import hsmLogo from './images/hsmLogo.jpg';
 import LandingPage from './components/LandingPage';
+import NotificationsPanel from './components/NotificationsPanel';
 
 const App: React.FC = () => {
   // Add new profile page states
@@ -316,80 +317,99 @@ const App: React.FC = () => {
         </nav>
       </>
 
-      <main className="flex-1 p-4 md:p-10 overflow-y-auto max-h-screen md:ml-0">
-        {/* Main content by tab */}
-        {isAdmin ? (
-          <div className="bg-white rounded-xl p-8 shadow-sm border border-slate-100">
-            {activeTab === 'stats' && (
-              <StatsOverview
-                students={students.filter(s => (s as any).is_active !== false)}
-                prospectsCount={prospects.length}
-                attendance={attendance}
-                payments={payments}
-                onNavigate={setActiveTab}
-              />
-            )}
-            {activeTab === 'students' && (
-              <StudentHub
-                students={students}
-                batches={batches}
-                instruments={instruments}
-                prospects={prospects}
-                onRefresh={fetchData}
-              />
-            )}
-            {activeTab === 'attendance' && (
-              <AttendanceDashboard
-                batches={batches}
-                onRefresh={fetchData}
-              />
-            )}
-            {activeTab === 'payments' && (
-              <PaymentModule
-                students={students}
-                payments={payments}
-                onRefresh={fetchData}
-              />
-            )}
-            {activeTab === 'finance' && (
-              <FinanceModule
-                students={students}
-                batches={batches}
-                payments={payments}
-                instruments={instruments}
-              />
-            )}
-            {activeTab === 'teachers' && (
-              <TeacherManagement
-                instruments={instruments}
-                onRefresh={fetchData}
-              />
-            )}
-            {activeTab === 'users' && (
-              <UserManagement />
-            )}
-            {activeTab === 'enrollment' && (
-              <EnrollmentForm
-                students={students}
-                batches={batches}
-                instruments={instruments}
-                onRefresh={fetchData}
-              />
-            )}
+      <main className="flex-1 overflow-y-auto max-h-screen md:ml-0 flex flex-col bg-slate-50">
+
+        {/* Top Header */}
+        <header className="bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between sticky top-0 z-30 shadow-sm">
+          <div className="flex items-center gap-4">
+            <h2 className="text-xl font-bold tracking-tight text-slate-800 ml-12 md:ml-0">
+              {menuItems.find(item => item.key === activeTab)?.label || 'Dashboard'}
+            </h2>
           </div>
-        ) : isTeacherOnly ? (
-          <div className="bg-white rounded-xl p-8 shadow-sm border border-slate-100">
-            {activeTab === 'teacher-profile' && (
-              <Teacher360View selfView isModal={false} />
-            )}
+          <div className="flex items-center gap-4">
+            {isAdmin && <NotificationsPanel onNavigation={(path) => handleTabChange(path as any)} />}
+            <div className="hidden md:flex flex-col text-right">
+              <span className="text-sm font-bold text-slate-700">{user?.name || user?.email}</span>
+              <span className="text-xs text-slate-500 capitalize">{user?.roles[0]}</span>
+            </div>
           </div>
-        ) : (
-          <div className="bg-white rounded-xl p-8 shadow-sm border border-slate-100">
-            {activeTab === 'student-profile' && (
-              <StudentProfile />
-            )}
-          </div>
-        )}
+        </header>
+
+        <div className="p-4 md:p-10">
+          {/* Main content by tab */}
+          {isAdmin ? (
+            <div className="bg-white rounded-xl p-8 shadow-sm border border-slate-100">
+              {activeTab === 'stats' && (
+                <StatsOverview
+                  students={students.filter(s => (s as any).is_active !== false)}
+                  prospectsCount={prospects.length}
+                  attendance={attendance}
+                  payments={payments}
+                  onNavigate={setActiveTab}
+                />
+              )}
+              {activeTab === 'students' && (
+                <StudentHub
+                  students={students}
+                  batches={batches}
+                  instruments={instruments}
+                  prospects={prospects}
+                  onRefresh={fetchData}
+                />
+              )}
+              {activeTab === 'attendance' && (
+                <AttendanceDashboard
+                  batches={batches}
+                  onRefresh={fetchData}
+                />
+              )}
+              {activeTab === 'payments' && (
+                <PaymentModule
+                  students={students}
+                  payments={payments}
+                  onRefresh={fetchData}
+                />
+              )}
+              {activeTab === 'finance' && (
+                <FinanceModule
+                  students={students}
+                  batches={batches}
+                  payments={payments}
+                  instruments={instruments}
+                />
+              )}
+              {activeTab === 'teachers' && (
+                <TeacherManagement
+                  instruments={instruments}
+                  onRefresh={fetchData}
+                />
+              )}
+              {activeTab === 'users' && (
+                <UserManagement />
+              )}
+              {activeTab === 'enrollment' && (
+                <EnrollmentForm
+                  students={students}
+                  batches={batches}
+                  instruments={instruments}
+                  onRefresh={fetchData}
+                />
+              )}
+            </div>
+          ) : isTeacherOnly ? (
+            <div className="bg-white rounded-xl p-8 shadow-sm border border-slate-100">
+              {activeTab === 'teacher-profile' && (
+                <Teacher360View selfView isModal={false} />
+              )}
+            </div>
+          ) : (
+            <div className="bg-white rounded-xl p-8 shadow-sm border border-slate-100">
+              {activeTab === 'student-profile' && (
+                <StudentProfile />
+              )}
+            </div>
+          )}
+        </div>
       </main>
     </div>
   );
