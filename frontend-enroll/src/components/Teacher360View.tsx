@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { apiGet } from '../api';
 import { Teacher360Data } from '../types';
+import PhoneLink from './PhoneLink';
 
 interface Teacher360ViewProps {
   teacherId?: string;
@@ -168,7 +169,7 @@ const Teacher360View: React.FC<Teacher360ViewProps> = ({
                     <dl className="space-y-3 text-sm">
                       <div className="flex justify-between">
                         <dt className="text-gray-500">Phone</dt>
-                        <dd className="font-medium">{data.profile.phone || 'N/A'}</dd>
+                        <dd className="font-medium"><PhoneLink phone={data.profile.phone} fallback="N/A" /></dd>
                       </div>
                       <div className="flex justify-between">
                         <dt className="text-gray-500">Email</dt>
@@ -265,7 +266,7 @@ const Teacher360View: React.FC<Teacher360ViewProps> = ({
                               <td className="py-3 pl-4 pr-3 text-sm font-medium text-gray-900">{s.name}</td>
                               <td className="px-3 py-3 text-sm text-gray-600">{s.instrument}</td>
                               <td className="px-3 py-3 text-sm text-gray-500">{s.recurrence}</td>
-                              <td className="px-3 py-3 text-sm text-gray-500">{s.phone || s.guardian_contact || '—'}</td>
+                              <td className="px-3 py-3 text-sm text-gray-500"><PhoneLink phone={s.phone || s.guardian_contact} /></td>
                               <td className="px-3 py-3 text-sm text-right">
                                 {s.classes_remaining !== null ? (
                                   <span className={`font-medium ${s.classes_remaining <= 2 ? 'text-red-600' : 'text-gray-700'}`}>

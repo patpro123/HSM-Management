@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { apiGet, apiPost, apiPut } from '../api';
 import { getCurrentUser } from '../auth';
+import PhoneLink from './PhoneLink';
 
 interface ProspectModalProps {
   prospect: any;
@@ -131,7 +132,7 @@ const ProspectModal: React.FC<ProspectModalProps> = ({ prospect, onClose, onUpda
           <div className="grid grid-cols-2 gap-4 text-sm">
             <div>
               <p className="text-xs font-semibold text-slate-500 uppercase mb-1">Phone</p>
-              <p className="text-slate-900">{prospect.phone || '—'}</p>
+              <PhoneLink phone={prospect.phone} />
             </div>
             <div>
               <p className="text-xs font-semibold text-slate-500 uppercase mb-1">Email</p>

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { apiGet, apiPost, apiPut, apiDelete } from '../api';
 import { Instrument } from '../types';
 import Teacher360View from './Teacher360View';
+import PhoneLink from './PhoneLink';
 
 interface Teacher {
   id: string;
@@ -1017,7 +1018,7 @@ function TeacherCard({
             </div>
             <div>
               <h3 className="font-semibold text-slate-900">{teacher.name}</h3>
-              <p className="text-sm text-slate-500">{teacher.phone || 'No phone'}</p>
+              <p className="text-sm text-slate-500"><PhoneLink phone={teacher.phone} fallback="No phone" /></p>
             </div>
           </div>
           <div className="flex gap-2">
@@ -1129,7 +1130,7 @@ function TeacherCard({
                       <div className="text-xs text-slate-500">{s.instrument} · {s.recurrence}</div>
                     </div>
                     <div className="text-right">
-                      <div className="text-xs text-slate-500">{s.phone || s.guardian_contact || ''}</div>
+                      <div className="text-xs text-slate-500"><PhoneLink phone={s.phone || s.guardian_contact} fallback="" /></div>
                       {s.classes_remaining !== null && (
                         <div className="text-xs text-orange-600 font-medium">{s.classes_remaining} cls left</div>
                       )}

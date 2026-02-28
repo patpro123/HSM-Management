@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { apiGet, apiPost, apiDelete } from '../api';
+import PhoneLink from './PhoneLink';
 
 interface Student360ViewProps {
   email?: string;
@@ -204,8 +205,8 @@ const Student360View: React.FC<Student360ViewProps> = ({ email, studentId, onClo
                     <h3 className="font-semibold text-lg mb-4 text-gray-800">Basic Information</h3>
                     <dl className="space-y-3 text-sm">
                       <div className="flex justify-between"><dt className="text-gray-500">Date of Birth:</dt> <dd>{new Date(data.personal.details.dob).toLocaleDateString()}</dd></div>
-                      <div className="flex justify-between"><dt className="text-gray-500">Phone:</dt> <dd>{data.personal.details.phone}</dd></div>
-                      <div className="flex justify-between"><dt className="text-gray-500">Guardian:</dt> <dd>{data.personal.details.guardian_contact}</dd></div>
+                      <div className="flex justify-between"><dt className="text-gray-500">Phone:</dt> <dd><PhoneLink phone={data.personal.details.phone} /></dd></div>
+                      <div className="flex justify-between"><dt className="text-gray-500">Guardian:</dt> <dd><PhoneLink phone={data.personal.details.guardian_contact} /></dd></div>
                       <div className="flex justify-between"><dt className="text-gray-500">Address:</dt> <dd className="text-right max-w-xs">{data.personal.details.metadata?.address || 'N/A'}</dd></div>
                     </dl>
                   </div>

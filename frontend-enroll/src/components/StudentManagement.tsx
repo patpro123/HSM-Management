@@ -6,6 +6,7 @@ import { API_BASE_URL } from '../config';
 import Student360View from './Student360View';
 import StudentDetails, { EnrollmentSelection } from './StudentDetails';
 import ProspectModal from './ProspectModal';
+import PhoneLink from './PhoneLink';
 
 interface StudentManagementProps {
   students: Student[];
@@ -581,7 +582,7 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students: propStu
                 <div className="space-y-2 text-sm mb-4">
                   <div className="flex items-center gap-2 text-slate-600">
                     <span>📱</span>
-                    <span>{student.phone || 'N/A'}</span>
+                    <PhoneLink phone={student.phone} fallback="N/A" />
                   </div>
                   <div className="flex items-center gap-2 text-slate-600">
                     <span>👤</span>
@@ -589,7 +590,7 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students: propStu
                   </div>
                   <div className="flex items-center gap-2 text-slate-600">
                     <span>📞</span>
-                    <span>{((student as any).metadata?.guardian_phone) || student.guardian_phone || 'N/A'}</span>
+                    <PhoneLink phone={((student as any).metadata?.guardian_phone) || student.guardian_phone} fallback="N/A" />
                   </div>
                   <div className="flex items-start gap-2 text-slate-600">
                     <span className="mt-1">📍</span>
@@ -691,13 +692,13 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students: propStu
                       </td>
                       <td className="px-6 py-4">
                         <div className="text-sm text-slate-600">
-                          {student.phone || 'N/A'}
+                          <PhoneLink phone={student.phone} fallback="N/A" />
                         </div>
                       </td>
                       <td className="px-6 py-4">
                         <div className="text-sm text-slate-600">
                           <div>{((student as any).metadata?.guardian_name) || student.guardian_name || (student as any).guardian_contact || 'N/A'}</div>
-                          <div className="text-xs text-slate-500">{((student as any).metadata?.guardian_phone) || student.guardian_phone || 'N/A'}</div>
+                          <div className="text-xs text-slate-500"><PhoneLink phone={((student as any).metadata?.guardian_phone) || student.guardian_phone} fallback="N/A" /></div>
                           <div className="text-xs text-slate-500">{((student as any).metadata?.address) || student.address || ''}</div>
                         </div>
                       </td>
