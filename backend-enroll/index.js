@@ -232,7 +232,7 @@ app.get('/api/instruments', async (req, res) => {
 app.get('/api/batches', async (req, res) => {
   try {
     const result = await pool.query(`
-      SELECT 
+      SELECT
         b.id,
         b.recurrence,
         b.start_time,
@@ -242,11 +242,15 @@ app.get('/api/batches', async (req, res) => {
         i.id as instrument_id,
         i.name as instrument_name,
         t.id as teacher_id,
-        t.name as teacher_name
+        t.name as teacher_name,
+        COUNT(eb.id) FILTER (WHERE e.status = 'active') AS student_count
       FROM batches b
       JOIN instruments i ON b.instrument_id = i.id
       LEFT JOIN teachers t ON b.teacher_id = t.id
+      LEFT JOIN enrollment_batches eb ON eb.batch_id = b.id
+      LEFT JOIN enrollments e ON e.id = eb.enrollment_id
       WHERE b.is_makeup = false
+      GROUP BY b.id, i.id, i.name, t.id, t.name
       ORDER BY i.name, b.recurrence
     `)
     res.json({ batches: result.rows })

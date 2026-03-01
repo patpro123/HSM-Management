@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { apiGet } from '../api';
 import { Student, Batch, Instrument, PaymentFrequency } from '../types';
+import BatchScheduleGrid from './BatchScheduleGrid';
 
 export interface EnrollmentSelection {
   batch_id: number | string;
@@ -32,7 +33,7 @@ const StudentDetails: React.FC<StudentDetailsProps> = ({ student, batches, instr
 
   const [prospects, setProspects] = useState<any[]>([]);
   const [selectedProspectId, setSelectedProspectId] = useState<string>('');
-  const [activeTab, setActiveTab] = useState<'prospect' | 'form'>('prospect');
+  const [activeTab, setActiveTab] = useState<'prospect' | 'form' | 'batches'>(student ? 'form' : 'prospect');
   const [prospectSearch, setProspectSearch] = useState('');
 
   // Fetch prospects only when adding a new student
@@ -206,37 +207,57 @@ const StudentDetails: React.FC<StudentDetailsProps> = ({ student, batches, instr
     return name.includes(q) || phone.includes(q) || email.includes(q) || instrument.includes(q);
   });
 
+  // Step indicator steps
+  const steps = student
+    ? [
+        { key: 'form',    label: 'Personal Details' },
+        { key: 'batches', label: 'Batch Selection'  },
+      ]
+    : [
+        { key: 'prospect', label: 'Select Prospect' },
+        { key: 'form',     label: 'Personal Details' },
+        { key: 'batches',  label: 'Batch Selection'  },
+      ];
+
+  const currentStepIndex = steps.findIndex(s => s.key === activeTab);
+
   return (
     <div>
-      {/* Tab bar — only shown when adding a new student */}
-      {!student && (
-        <div className="flex border-b border-slate-200">
-          <button
-            type="button"
-            onClick={() => setActiveTab('prospect')}
-            className={`px-6 py-3 text-sm font-semibold transition border-b-2 -mb-px ${
-              activeTab === 'prospect'
-                ? 'border-orange-500 text-orange-600'
-                : 'border-transparent text-slate-500 hover:text-slate-700'
-            }`}
-          >
-            From Prospect
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab('form')}
-            className={`px-6 py-3 text-sm font-semibold transition border-b-2 -mb-px ${
-              activeTab === 'form'
-                ? 'border-orange-500 text-orange-600'
-                : 'border-transparent text-slate-500 hover:text-slate-700'
-            }`}
-          >
-            New Student
-          </button>
-        </div>
-      )}
+      {/* Step indicator */}
+      <div className="flex items-center border-b border-slate-200 px-6 py-3 gap-0">
+        {steps.map((step, idx) => {
+          const isActive = step.key === activeTab;
+          const isDone   = idx < currentStepIndex;
+          return (
+            <React.Fragment key={step.key}>
+              <button
+                type="button"
+                onClick={() => {
+                  // Allow navigating back to any earlier step freely
+                  if (isDone || isActive) setActiveTab(step.key as any);
+                }}
+                className={`flex items-center gap-1.5 text-xs font-semibold transition ${
+                  isActive ? 'text-orange-600' : isDone ? 'text-slate-600 hover:text-orange-500 cursor-pointer' : 'text-slate-300 cursor-default'
+                }`}
+              >
+                <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold border-2 ${
+                  isActive ? 'border-orange-500 bg-orange-500 text-white'
+                  : isDone  ? 'border-slate-400 bg-slate-400 text-white'
+                  : 'border-slate-200 text-slate-300'
+                }`}>
+                  {isDone ? '✓' : idx + 1}
+                </span>
+                {step.label}
+              </button>
+              {idx < steps.length - 1 && (
+                <div className={`flex-1 h-px mx-2 ${idx < currentStepIndex ? 'bg-slate-400' : 'bg-slate-200'}`} />
+              )}
+            </React.Fragment>
+          );
+        })}
+      </div>
 
-      {/* Prospect picker tab */}
+      {/* Step 1 (new student): Prospect picker */}
       {!student && activeTab === 'prospect' && (
         <div className="p-6 space-y-4">
           <div>
@@ -310,13 +331,16 @@ const StudentDetails: React.FC<StudentDetailsProps> = ({ student, batches, instr
         </div>
       )}
 
-      {/* Student details form tab */}
-      {(student || activeTab === 'form') && (
-      <form onSubmit={handleSubmit} className="p-6 space-y-4">
+      {/* Step 2: Personal Details */}
+      {(activeTab === 'form') && (
+      <form
+        onSubmit={(e) => { e.preventDefault(); setActiveTab('batches'); }}
+        className="p-6 space-y-4"
+      >
         {selectedProspectId && !student && (
           <div className="flex items-center gap-3 bg-orange-50 border border-orange-200 rounded-lg px-4 py-3 text-sm">
             <span className="text-orange-600 font-semibold">
-              Prospect selected: {prospects.find(p => String(p.id) === selectedProspectId)?.name}
+              Prospect: {prospects.find(p => String(p.id) === selectedProspectId)?.name}
             </span>
             <button
               type="button"
@@ -328,101 +352,111 @@ const StudentDetails: React.FC<StudentDetailsProps> = ({ student, batches, instr
           </div>
         )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div>
-          <label className="block text-sm font-semibold text-slate-700 mb-2">First Name *</label>
-          <input name="first_name" value={formData.first_name} onChange={handleInputChange} required className="w-full px-4 py-2 rounded-lg border border-slate-300 focus:border-orange-500 focus:ring-2 focus:ring-orange-200 outline-none" />
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-semibold text-slate-700 mb-2">First Name *</label>
+            <input name="first_name" value={formData.first_name} onChange={handleInputChange} required className="w-full px-4 py-2 rounded-lg border border-slate-300 focus:border-orange-500 focus:ring-2 focus:ring-orange-200 outline-none" />
+          </div>
+          <div>
+            <label className="block text-sm font-semibold text-slate-700 mb-2">Last Name *</label>
+            <input name="last_name" value={formData.last_name} onChange={handleInputChange} required className="w-full px-4 py-2 rounded-lg border border-slate-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none" />
+          </div>
+          <div>
+            <label className="block text-sm font-semibold text-slate-700 mb-2">Date of Birth</label>
+            <input type="date" name="date_of_birth" value={formData.date_of_birth} onChange={handleInputChange} className="w-full px-4 py-2 rounded-lg border border-slate-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none" />
+          </div>
+          <div>
+            <label className="block text-sm font-semibold text-slate-700 mb-2">Email</label>
+            <input type="email" name="email" value={formData.email} onChange={handleInputChange} className="w-full px-4 py-2 rounded-lg border border-slate-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none" />
+          </div>
+          <div>
+            <label className="block text-sm font-semibold text-slate-700 mb-2">Phone</label>
+            <input type="tel" name="phone" value={formData.phone} onChange={handleInputChange} className="w-full px-4 py-2 rounded-lg border border-slate-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none" />
+          </div>
+          <div>
+            <label className="block text-sm font-semibold text-slate-700 mb-2">Guardian Name</label>
+            <input name="guardian_name" value={formData.guardian_name} onChange={handleInputChange} className="w-full px-4 py-2 rounded-lg border border-slate-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none" />
+          </div>
+          <div>
+            <label className="block text-sm font-semibold text-slate-700 mb-2">Guardian Phone</label>
+            <input type="tel" name="guardian_phone" value={formData.guardian_phone} onChange={handleInputChange} className="w-full px-4 py-2 rounded-lg border border-slate-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none" />
+          </div>
         </div>
         <div>
-          <label className="block text-sm font-semibold text-slate-700 mb-2">Last Name *</label>
-          <input name="last_name" value={formData.last_name} onChange={handleInputChange} required className="w-full px-4 py-2 rounded-lg border border-slate-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none" />
+          <label className="block text-sm font-semibold text-slate-700 mb-2">Address</label>
+          <textarea name="address" value={formData.address} onChange={handleInputChange} rows={3} className="w-full px-4 py-2 rounded-lg border border-slate-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none" />
         </div>
-        <div>
-          <label className="block text-sm font-semibold text-slate-700 mb-2">Date of Birth</label>
-          <input type="date" name="date_of_birth" value={formData.date_of_birth} onChange={handleInputChange} className="w-full px-4 py-2 rounded-lg border border-slate-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none" />
-        </div>
-        <div>
-          <label className="block text-sm font-semibold text-slate-700 mb-2">Email</label>
-          <input type="email" name="email" value={formData.email} onChange={handleInputChange} className="w-full px-4 py-2 rounded-lg border border-slate-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none" />
-        </div>
-        <div>
-          <label className="block text-sm font-semibold text-slate-700 mb-2">Phone</label>
-          <input type="tel" name="phone" value={formData.phone} onChange={handleInputChange} className="w-full px-4 py-2 rounded-lg border border-slate-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none" />
-        </div>
-        <div>
-          <label className="block text-sm font-semibold text-slate-700 mb-2">Guardian Name</label>
-          <input name="guardian_name" value={formData.guardian_name} onChange={handleInputChange} className="w-full px-4 py-2 rounded-lg border border-slate-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none" />
-        </div>
-        <div>
-          <label className="block text-sm font-semibold text-slate-700 mb-2">Guardian Phone</label>
-          <input type="tel" name="guardian_phone" value={formData.guardian_phone} onChange={handleInputChange} className="w-full px-4 py-2 rounded-lg border border-slate-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none" />
-        </div>
-      </div>
-      <div>
-        <label className="block text-sm font-semibold text-slate-700 mb-2">Address</label>
-        <textarea name="address" value={formData.address} onChange={handleInputChange} rows={3} className="w-full px-4 py-2 rounded-lg border border-slate-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none" />
-      </div>
 
-      <div className="border-t border-slate-200 pt-4">
-        <h3 className="text-lg font-bold text-slate-800 mb-3">Enroll in Batches <span className="text-red-500">*</span></h3>
-        <p className="text-sm text-slate-600 mb-4">Select the batches and payment plan for this student</p>
-        <div className="space-y-4 max-h-64 overflow-y-auto">
-          {batchesByInstrument.map(({ instrument, batches: instrumentBatches }) => {
-            const settings = instrumentSettings[instrument.id] || {
+        <div className="flex gap-3 pt-4">
+          <button type="button" onClick={onCancel} className="px-4 py-3 bg-slate-200 text-slate-700 rounded-lg font-semibold hover:bg-slate-300 transition">Cancel</button>
+          <button type="submit" className="flex-1 px-4 py-3 bg-gradient-to-r from-orange-500 to-amber-500 text-white rounded-lg font-semibold hover:from-orange-600 hover:to-amber-600 transition shadow-lg">
+            Next: Select Batches →
+          </button>
+        </div>
+      </form>
+      )}
+
+      {/* Step 3: Batch Selection */}
+      {activeTab === 'batches' && (
+      <form onSubmit={handleSubmit} className="p-6 space-y-4">
+        <p className="text-sm text-slate-500">Click a batch slot to select it. Batches on multiple days (e.g. Tue+Thu) are linked — selecting one selects both days.</p>
+
+        <BatchScheduleGrid
+          batches={batches}
+          instruments={instruments}
+          selectedBatchIds={new Set(selectedBatches.map(b => String(b.batch_id)))}
+          onToggle={handleBatchToggle}
+        />
+
+        {/* Payment settings — shown per instrument once at least one batch is selected */}
+        {batchesByInstrument
+          .filter(({ instrument }) =>
+            selectedBatches.some(sel =>
+              batches.find(b => String(b.id) === String(sel.batch_id) && String(b.instrument_id) === String(instrument.id))
+            )
+          )
+          .map(({ instrument }) => {
+            const settings = instrumentSettings[String(instrument.id)] || {
               payment_frequency: 'monthly',
-              enrollment_date: new Date().toISOString().split('T')[0]
+              enrollment_date: new Date().toISOString().split('T')[0],
             };
-
             return (
               <div key={instrument.id} className="bg-slate-50 rounded-lg p-4 border border-slate-200">
-                <h4 className="text-sm font-bold text-slate-800 mb-3 flex items-center gap-2">🎵 {instrument.name}</h4>
-
-                {/* Instrument Level Controls */}
-                <div className="grid grid-cols-2 gap-4 mb-4 bg-white p-3 rounded border border-slate-100">
+                <h4 className="text-sm font-bold text-slate-700 mb-3">🎵 {instrument.name} — Payment Settings</h4>
+                <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-xs font-semibold text-slate-700 mb-1">Enrollment Date</label>
-                    <input type="date" value={settings.enrollment_date} onChange={(e) => handleInstrumentSettingChange(String(instrument.id), 'enrollment_date', e.target.value)} className="text-xs px-2 py-1 rounded border border-slate-300 focus:border-indigo-500 outline-none w-full" />
+                    <input
+                      type="date"
+                      value={settings.enrollment_date}
+                      onChange={(e) => handleInstrumentSettingChange(String(instrument.id), 'enrollment_date', e.target.value)}
+                      className="text-xs px-2 py-1 rounded border border-slate-300 focus:border-indigo-500 outline-none w-full"
+                    />
                   </div>
                   <div>
                     <label className="block text-xs font-semibold text-slate-700 mb-1">Payment Frequency</label>
-                    <select value={settings.payment_frequency} onChange={(e) => handleInstrumentSettingChange(String(instrument.id), 'payment_frequency', e.target.value as PaymentFrequency)} className="text-xs px-2 py-1 rounded border border-slate-300 focus:border-indigo-500 outline-none w-full">
+                    <select
+                      value={settings.payment_frequency}
+                      onChange={(e) => handleInstrumentSettingChange(String(instrument.id), 'payment_frequency', e.target.value as PaymentFrequency)}
+                      className="text-xs px-2 py-1 rounded border border-slate-300 focus:border-indigo-500 outline-none w-full"
+                    >
                       <option value="monthly">Monthly (8 classes)</option>
                       <option value="quarterly">Quarterly (24 classes)</option>
                       <option value="half_yearly">Half-Yearly (48 classes)</option>
                     </select>
                   </div>
                 </div>
-
-                {instrumentBatches.length === 0 ? (
-                  <p className="text-xs text-slate-500 italic">No active batches available.</p>
-                ) : (
-                  <div className="space-y-2">
-                    {instrumentBatches.map(batch => {
-                      const isSelected = selectedBatches.some(e => String(e.batch_id) === String(batch.id));
-                      return (
-                        <div key={batch.id} className={`p-3 rounded-lg border transition ${isSelected ? 'border-orange-500 bg-orange-50' : 'border-slate-200 bg-white'}`}>
-                          <div className="flex items-start gap-2">
-                            <input type="checkbox" checked={isSelected} onChange={() => handleBatchToggle(batch.id, String(instrument.id))} className="mt-1 w-4 h-4 text-orange-600 rounded focus:ring-2 focus:ring-orange-500" />
-                            <div className="flex-1">
-                              <p className="font-semibold text-slate-900 text-sm">{batch.recurrence}</p>
-                              <p className="text-xs text-slate-600">{batch.day_of_week} • {batch.start_time} - {batch.end_time}</p>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
               </div>
             );
-          })}
-        </div>
-      </div>
+          })
+        }
 
-      <div className="flex gap-3 pt-4">
-        <button type="button" onClick={onCancel} className="flex-1 px-4 py-3 bg-slate-200 text-slate-700 rounded-lg font-semibold hover:bg-slate-300 transition">Cancel</button>
-        <button type="submit" className="flex-1 px-4 py-3 bg-gradient-to-r from-orange-500 to-amber-500 text-white rounded-lg font-semibold hover:from-orange-600 hover:to-amber-600 transition shadow-lg">{student ? 'Save Changes' : 'Add Student & Enroll'}</button>
-      </div>
+        <div className="flex gap-3 pt-4">
+          <button type="button" onClick={() => setActiveTab('form')} className="px-4 py-3 bg-slate-200 text-slate-700 rounded-lg font-semibold hover:bg-slate-300 transition">← Back</button>
+          <button type="submit" className="flex-1 px-4 py-3 bg-gradient-to-r from-orange-500 to-amber-500 text-white rounded-lg font-semibold hover:from-orange-600 hover:to-amber-600 transition shadow-lg">
+            {student ? 'Save Changes' : 'Add Student & Enroll'}
+          </button>
+        </div>
       </form>
       )}
     </div>

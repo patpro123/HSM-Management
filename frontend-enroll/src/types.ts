@@ -32,6 +32,7 @@ export interface Batch {
   is_makeup: boolean;
   instrument_name?: string;
   teacher_name?: string;
+  student_count?: number;
 }
 
 export interface Student {
