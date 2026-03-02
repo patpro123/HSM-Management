@@ -33,7 +33,7 @@ const StudentProfile: React.FC = () => {
         </div>
       </div>
       <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
-        <Student360View email={user.email} />
+        <Student360View selfMode hidePayments />
       </main>
     </div>
   );

@@ -8,6 +8,7 @@ interface Student360ViewProps {
   onClose?: () => void;
   isModal?: boolean;
   hidePayments?: boolean;
+  selfMode?: boolean; // uses /me/360 — resolves student via student_guardians (JWT-based)
 }
 
 interface Student360Data {
@@ -44,7 +45,7 @@ interface Document {
   uploaded_at: string;
 }
 
-const Student360View: React.FC<Student360ViewProps> = ({ email, studentId, onClose, isModal = false, hidePayments = false }) => {
+const Student360View: React.FC<Student360ViewProps> = ({ email, studentId, onClose, isModal = false, hidePayments = false, selfMode = false }) => {
   const [activeTab, setActiveTab] = useState<'personal' | 'academic' | 'payment'>('personal');
   const [data, setData] = useState<Student360Data | null>(null);
   const [loading, setLoading] = useState(true);
@@ -53,15 +54,16 @@ const Student360View: React.FC<Student360ViewProps> = ({ email, studentId, onClo
   const [uploadSuccess, setUploadSuccess] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!email && !studentId) return;
+    if (!selfMode && !email && !studentId) return;
 
     const fetchData = async () => {
       try {
         setLoading(true);
-        // Using apiGet wrapper if available, or fetch directly
-        const url = studentId
-          ? `/api/students/${studentId}/360`
-          : `/api/students/email/${encodeURIComponent(email || '')}/360`;
+        const url = selfMode
+          ? '/api/students/me/360'
+          : studentId
+            ? `/api/students/${studentId}/360`
+            : `/api/students/email/${encodeURIComponent(email || '')}/360`;
         const result = await apiGet(url);
         setData(result);
 
@@ -78,7 +80,7 @@ const Student360View: React.FC<Student360ViewProps> = ({ email, studentId, onClo
     };
 
     fetchData();
-  }, [email, studentId]);
+  }, [selfMode, email, studentId]);
 
   const fetchDocuments = async (id: string) => {
     try {
@@ -137,7 +139,7 @@ const Student360View: React.FC<Student360ViewProps> = ({ email, studentId, onClo
     }
   };
 
-  if (!email && !studentId) return null;
+  if (!selfMode && !email && !studentId) return null;
 
   const content = (
     <div className={`bg-white ${isModal ? 'rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] flex flex-col' : 'min-h-screen'}`}>
