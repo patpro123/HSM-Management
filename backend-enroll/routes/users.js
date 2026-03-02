@@ -83,8 +83,8 @@ router.post('/provision', authenticateJWT, authorizeRole(['admin']), async (req,
   try {
     const { email, entity_type, entity_id } = req.body;
 
-    if (!email || !entity_type || !entity_id) {
-      return res.status(400).json({ error: 'email, entity_type, and entity_id are required' });
+    if (!email || !entity_type) {
+      return res.status(400).json({ error: 'email and entity_type are required' });
     }
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -92,20 +92,25 @@ router.post('/provision', authenticateJWT, authorizeRole(['admin']), async (req,
       return res.status(400).json({ error: 'Invalid email format' });
     }
 
-    if (!['student', 'teacher'].includes(entity_type)) {
-      return res.status(400).json({ error: 'entity_type must be "student" or "teacher"' });
+    if (!['student', 'teacher', 'admin'].includes(entity_type)) {
+      return res.status(400).json({ error: 'entity_type must be "student", "teacher", or "admin"' });
+    }
+
+    // Admin provisioning requires no entity linkage
+    if (entity_type !== 'admin' && !entity_id) {
+      return res.status(400).json({ error: 'entity_id is required for student and teacher provisioning' });
     }
 
     await client.query('BEGIN');
 
-    // Verify the entity exists
+    // Verify the entity exists for non-admin types
     if (entity_type === 'teacher') {
       const check = await client.query('SELECT id, name FROM teachers WHERE id = $1', [entity_id]);
       if (check.rows.length === 0) {
         await client.query('ROLLBACK');
         return res.status(404).json({ error: 'Teacher not found' });
       }
-    } else {
+    } else if (entity_type === 'student') {
       const check = await client.query('SELECT id, name FROM students WHERE id = $1', [entity_id]);
       if (check.rows.length === 0) {
         await client.query('ROLLBACK');
@@ -113,13 +118,14 @@ router.post('/provision', authenticateJWT, authorizeRole(['admin']), async (req,
       }
     }
 
-    const role = entity_type; // 'student' → 'student', 'teacher' → 'teacher'
+    const role = entity_type; // 'student' → 'student', 'teacher' → 'teacher', 'admin' → 'admin'
+    const resolvedEntityId = entity_type === 'admin' ? null : entity_id;
 
     const result = await client.query(
       `INSERT INTO provisioned_users (email, entity_type, entity_id, role, provisioned_by)
        VALUES ($1, $2, $3, $4, $5)
        RETURNING *`,
-      [email.toLowerCase().trim(), entity_type, entity_id, role, req.user.id]
+      [email.toLowerCase().trim(), entity_type, resolvedEntityId, role, req.user.id]
     );
 
     await client.query('COMMIT');
@@ -133,6 +139,24 @@ router.post('/provision', authenticateJWT, authorizeRole(['admin']), async (req,
     res.status(500).json({ error: 'Failed to provision user' });
   } finally {
     client.release();
+  }
+});
+
+// Manually mark a provisioning entry as activated (admin tool / local testing)
+router.put('/provisioned/:id/activate', authenticateJWT, authorizeRole(['admin']), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await db.query(
+      `UPDATE provisioned_users SET used_at = NOW() WHERE id = $1 AND used_at IS NULL RETURNING *`,
+      [id]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Provisioning record not found or already activated' });
+    }
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Error activating provisioned user:', error);
+    res.status(500).json({ error: 'Failed to activate provisioned user' });
   }
 });
 

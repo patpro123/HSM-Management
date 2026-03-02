@@ -22,10 +22,10 @@ interface User {
 interface ProvisionedUser {
   id: string;
   email: string;
-  entity_type: 'student' | 'teacher';
-  entity_id: string;
+  entity_type: 'student' | 'teacher' | 'admin';
+  entity_id: string | null;
   role: string;
-  entity_name: string;
+  entity_name: string | null;
   provisioned_by_name: string;
   provisioned_at: string;
   used_at: string | null;
@@ -48,7 +48,7 @@ const UserManagement: React.FC = () => {
 
   // Provision form state
   const [provEmail, setProvEmail] = useState('');
-  const [provEntityType, setProvEntityType] = useState<'student' | 'teacher'>('student');
+  const [provEntityType, setProvEntityType] = useState<'student' | 'teacher' | 'admin'>('student');
   const [provEntityId, setProvEntityId] = useState('');
   const [provSubmitting, setProvSubmitting] = useState(false);
   const [showProvisionForm, setShowProvisionForm] = useState(false);
@@ -125,13 +125,14 @@ const UserManagement: React.FC = () => {
 
   const handleProvision = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!provEmail || !provEntityId) return;
+    if (!provEmail) return;
+    if (provEntityType !== 'admin' && !provEntityId) return;
     setProvSubmitting(true);
     try {
       await apiPost('/api/users/provision', {
         email: provEmail,
         entity_type: provEntityType,
-        entity_id: provEntityId,
+        ...(provEntityType !== 'admin' && { entity_id: provEntityId }),
       });
       showSuccess(`Access provisioned for ${provEmail}`);
       setProvEmail('');
@@ -153,6 +154,17 @@ const UserManagement: React.FC = () => {
       fetchAll();
     } catch (err: any) {
       showError(err.message || 'Failed to remove provisioning');
+    }
+  };
+
+  const handleMarkActivated = async (id: string, email: string) => {
+    if (!confirm(`Mark provisioning for ${email} as activated?`)) return;
+    try {
+      await apiPut(`/api/users/provisioned/${id}/activate`, {});
+      showSuccess(`${email} marked as activated`);
+      fetchAll();
+    } catch (err: any) {
+      showError(err.message || 'Failed to activate provisioning');
     }
   };
 
@@ -206,7 +218,7 @@ const UserManagement: React.FC = () => {
         <div className="bg-orange-50 border border-orange-200 rounded-xl p-5">
           <h3 className="text-base font-semibold text-slate-800 mb-4">Provision New User</h3>
           <p className="text-sm text-slate-600 mb-4">
-            Enter the email address the student or teacher will use to log in with Google.
+            Enter the email address the user will use to log in with Google.
             They will not be able to log in until provisioned.
           </p>
           <form onSubmit={handleProvision} className="flex flex-wrap gap-3 items-end">
@@ -238,24 +250,40 @@ const UserManagement: React.FC = () => {
                 >
                   Teacher
                 </button>
+                <button
+                  type="button"
+                  onClick={() => { setProvEntityType('admin'); setProvEntityId(''); }}
+                  className={`px-4 py-2 font-medium transition ${provEntityType === 'admin' ? 'bg-orange-500 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'}`}
+                >
+                  Admin
+                </button>
               </div>
             </div>
-            <div className="flex flex-col gap-1">
-              <label className="text-xs font-medium text-slate-600">
-                Link to {provEntityType === 'student' ? 'Student' : 'Teacher'}
-              </label>
-              <select
-                required
-                value={provEntityId}
-                onChange={e => setProvEntityId(e.target.value)}
-                className="px-3 py-2 rounded-lg border border-slate-300 focus:border-orange-500 focus:ring-2 focus:ring-orange-200 outline-none text-sm w-56"
-              >
-                <option value="">Select {provEntityType}...</option>
-                {entityOptions.map(opt => (
-                  <option key={opt.id} value={opt.id}>{opt.name}</option>
-                ))}
-              </select>
-            </div>
+            {provEntityType !== 'admin' && (
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-medium text-slate-600">
+                  Link to {provEntityType === 'student' ? 'Student' : 'Teacher'}
+                </label>
+                <select
+                  required
+                  value={provEntityId}
+                  onChange={e => setProvEntityId(e.target.value)}
+                  className="px-3 py-2 rounded-lg border border-slate-300 focus:border-orange-500 focus:ring-2 focus:ring-orange-200 outline-none text-sm w-56"
+                >
+                  <option value="">Select {provEntityType}...</option>
+                  {entityOptions.map(opt => (
+                    <option key={opt.id} value={opt.id}>{opt.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+            {provEntityType === 'admin' && (
+              <div className="flex items-end pb-2">
+                <p className="text-xs text-slate-500 max-w-xs">
+                  Admin users have full system access. No student or teacher profile is required.
+                </p>
+              </div>
+            )}
             <div className="flex gap-2">
               <button
                 type="submit"
@@ -301,7 +329,9 @@ const UserManagement: React.FC = () => {
                     <td className="px-5 py-3 font-medium text-slate-800">{p.email}</td>
                     <td className="px-5 py-3">
                       <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${
-                        p.entity_type === 'teacher' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'
+                        p.entity_type === 'teacher' ? 'bg-purple-100 text-purple-700'
+                        : p.entity_type === 'admin' ? 'bg-red-100 text-red-700'
+                        : 'bg-blue-100 text-blue-700'
                       }`}>
                         {p.entity_type}
                       </span>
@@ -323,12 +353,20 @@ const UserManagement: React.FC = () => {
                     </td>
                     <td className="px-5 py-3">
                       {!p.used_at && (
-                        <button
-                          onClick={() => handleRemoveProvision(p.id, p.email)}
-                          className="text-xs text-red-500 hover:text-red-700 font-medium"
-                        >
-                          Remove
-                        </button>
+                        <div className="flex gap-3">
+                          <button
+                            onClick={() => handleMarkActivated(p.id, p.email)}
+                            className="text-xs text-green-600 hover:text-green-800 font-medium"
+                          >
+                            Mark Activated
+                          </button>
+                          <button
+                            onClick={() => handleRemoveProvision(p.id, p.email)}
+                            className="text-xs text-red-500 hover:text-red-700 font-medium"
+                          >
+                            Remove
+                          </button>
+                        </div>
                       )}
                     </td>
                   </tr>

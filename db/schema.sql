@@ -381,9 +381,9 @@ COMMENT ON TABLE login_history IS 'Audit trail of all login attempts (successful
 CREATE TABLE IF NOT EXISTS provisioned_users (
   id             uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   email          text UNIQUE NOT NULL,
-  entity_type    text NOT NULL CHECK (entity_type IN ('student', 'teacher')),
-  entity_id      uuid NOT NULL,
-  role           text NOT NULL CHECK (role IN ('student', 'teacher')),
+  entity_type    text NOT NULL CHECK (entity_type IN ('student', 'teacher', 'admin')),
+  entity_id      uuid,  -- NULL for admin provisioning (no linked entity required)
+  role           text NOT NULL CHECK (role IN ('student', 'teacher', 'admin')),
   provisioned_by uuid REFERENCES users(id),
   provisioned_at timestamptz DEFAULT now(),
   used_at        timestamptz  -- populated on the user's first successful login

@@ -51,28 +51,25 @@ passport.use(new GoogleStrategy({
       const roleCheck = await client.query('SELECT role FROM user_roles WHERE user_id = $1 AND revoked_at IS NULL', [user.id]);
       let roles = roleCheck.rows.map(r => r.role);
 
-      // If no roles, check provisioning allowlist before granting access
-      if (roles.length === 0) {
-        const provision = await client.query(
-          'SELECT * FROM provisioned_users WHERE email = $1',
-          [email]
-        );
+      // Always apply any unused provisioned entry for this email (even if user already has other roles)
+      const provision = await client.query(
+        'SELECT * FROM provisioned_users WHERE email = $1 AND used_at IS NULL',
+        [email.toLowerCase()]
+      );
 
-        if (provision.rows.length === 0) {
-          // Not provisioned — block login
-          await client.query('ROLLBACK');
-          return done(null, false, { message: 'not_provisioned' });
-        }
-
+      if (provision.rows.length > 0) {
         const prov = provision.rows[0];
 
-        // Assign the provisioned role
-        await client.query(
-          'INSERT INTO user_roles (user_id, role) VALUES ($1, $2)',
-          [user.id, prov.role]
-        );
+        // Add the provisioned role if not already present
+        if (!roles.includes(prov.role)) {
+          await client.query(
+            'INSERT INTO user_roles (user_id, role) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+            [user.id, prov.role]
+          );
+          roles = [...roles, prov.role];
+        }
 
-        // Link to the appropriate entity
+        // Link to the appropriate entity (admin users have no entity to link)
         if (prov.entity_type === 'teacher') {
           await client.query(
             `INSERT INTO teacher_users (user_id, teacher_id)
@@ -88,14 +85,17 @@ passport.use(new GoogleStrategy({
             [user.id, prov.entity_id]
           );
         }
+        // entity_type === 'admin': no entity linking needed
 
         // Mark provision as used
         await client.query(
           'UPDATE provisioned_users SET used_at = NOW() WHERE id = $1',
           [prov.id]
         );
-
-        roles = [prov.role];
+      } else if (roles.length === 0) {
+        // No roles and no provisioned entry — block login
+        await client.query('ROLLBACK');
+        return done(null, false, { message: 'not_provisioned' });
       }
 
       // 3. Log Login History
