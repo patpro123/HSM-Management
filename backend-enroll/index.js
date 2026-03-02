@@ -7,6 +7,9 @@ const http = require('http')
 const https = require('https')
 const passport = require('passport')
 const pool = require('./db')
+const { filterTeacherData, authenticateJWT } = require('./auth/rbacMiddleware') || {}
+// Note: we can require filterTeacherData where we need it if there's a circular dependency.
+const rbac = require('./auth/rbacMiddleware')
 
 const app = express()
 app.use(cors())
@@ -20,35 +23,147 @@ require('./auth/googleStrategy')
 // --- AUTHENTICATION BYPASS (LOCAL DEV) ---
 const IS_DEV = process.env.NODE_ENV !== 'production'
 const DISABLE_AUTH = IS_DEV && process.env.DISABLE_AUTH === 'true'
-const DEV_PROFILE = process.env.DEV_PROFILE || 'admin'
 
-app.use((req, res, next) => {
+// Mutable dev profile — can be changed at runtime via POST /api/dev/switch-profile
+let currentDevProfile = process.env.DEV_PROFILE || 'admin'
+// When set, this resolved user object is used as req.user directly (bypasses profile defaults)
+let currentDevOverride = null
+
+const DEV_DEFAULTS = {
+  admin:   { id: '11111111-1111-1111-1111-111111111111', email: 'admin@local.dev',   name: 'Local Admin',   roles: ['admin'] },
+  teacher: { id: '22222222-2222-2222-2222-222222222222', email: 'teacher@local.dev', name: 'Local Teacher', roles: ['teacher'] },
+  student: { id: '33333333-3333-3333-3333-333333333333', email: 'student@local.dev', name: 'Local Student', roles: ['student'] },
+}
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+// Resolve a userRef (UUID or email) to a user object from the DB.
+// Returns null if not found anywhere.
+async function resolveDevUser(userRef) {
+  const isUUID = UUID_RE.test(userRef)
+  const col = isUUID ? 'id' : 'email'
+
+  // 1. Check the users table (already logged in at least once)
+  const userRes = await pool.query(`SELECT id, email, name FROM users WHERE ${col} = $1`, [userRef.toLowerCase()])
+  if (userRes.rows.length > 0) {
+    const u = userRes.rows[0]
+    const roleRes = await pool.query(
+      'SELECT role FROM user_roles WHERE user_id = $1 AND revoked_at IS NULL', [u.id]
+    )
+    return { id: u.id, email: u.email, name: u.name, roles: roleRes.rows.map(r => r.role) }
+  }
+
+  // provisioned_users is keyed by email only — nothing to look up for a UUID ref
+  if (isUUID) return null
+
+  // 2. Check provisioned_users — user provisioned but never logged in yet
+  const provRes = await pool.query(
+    `SELECT pu.email, pu.role, pu.entity_type, pu.entity_id,
+            CASE WHEN pu.entity_type = 'student' THEN s.name
+                 WHEN pu.entity_type = 'teacher' THEN t.name
+            END AS entity_name
+     FROM provisioned_users pu
+     LEFT JOIN students s ON pu.entity_type = 'student' AND pu.entity_id = s.id
+     LEFT JOIN teachers t ON pu.entity_type = 'teacher' AND pu.entity_id = t.id
+     WHERE pu.email = $1
+     LIMIT 1`,
+    [userRef.toLowerCase()]
+  )
+  if (provRes.rows.length > 0) {
+    const p = provRes.rows[0]
+
+    // Follow entity_id → find an already-linked user account for this teacher/student.
+    // When a teacher is already linked to a Google account via teacher_users, we borrow
+    // their UUID so all downstream queries (teacher360, etc.) work correctly.
+    if (p.entity_id) {
+      let linkedUserRes = null
+      if (p.entity_type === 'teacher') {
+        linkedUserRes = await pool.query(
+          `SELECT u.id, u.name FROM users u
+           JOIN teacher_users tu ON u.id = tu.user_id
+           WHERE tu.teacher_id = $1 LIMIT 1`,
+          [p.entity_id]
+        )
+      } else if (p.entity_type === 'student') {
+        linkedUserRes = await pool.query(
+          `SELECT u.id, u.name FROM users u
+           JOIN student_guardians sg ON u.id = sg.user_id
+           WHERE sg.student_id = $1 LIMIT 1`,
+          [p.entity_id]
+        )
+      }
+      if (linkedUserRes && linkedUserRes.rows.length > 0) {
+        const lu = linkedUserRes.rows[0]
+        console.log(`[DEV] Provisioned user ${p.email} → using linked user UUID ${lu.id}`)
+        return {
+          id: lu.id,
+          email: p.email,
+          name: p.entity_name || lu.name,
+          roles: [p.role],
+          _provisioned: true,
+        }
+      }
+
+      // No linked user found — auto-create the user + entity link for local dev.
+      // This simulates what googleStrategy.js does on first real login.
+      const crypto = require('crypto')
+      const hash = crypto.createHash('sha256').update(p.email).digest('hex')
+      const devId = [hash.slice(0,8), hash.slice(8,12), '4'+hash.slice(12,15), '8'+hash.slice(15,18), hash.slice(18,30)].join('-')
+
+      const client = await pool.connect()
+      try {
+        await client.query('BEGIN')
+        await client.query(
+          `INSERT INTO users (id, email, name, google_id, email_verified)
+           VALUES ($1, $2, $3, $4, true)
+           ON CONFLICT (id) DO NOTHING`,
+          [devId, p.email, p.entity_name || p.email, `dev-${p.email}`]
+        )
+        if (p.entity_type === 'teacher') {
+          await client.query(
+            `INSERT INTO teacher_users (user_id, teacher_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+            [devId, p.entity_id]
+          )
+        } else if (p.entity_type === 'student') {
+          await client.query(
+            `INSERT INTO student_guardians (user_id, student_id, relationship) VALUES ($1, $2, 'self') ON CONFLICT DO NOTHING`,
+            [devId, p.entity_id]
+          )
+        }
+        await client.query(
+          `INSERT INTO user_roles (user_id, role, granted_by) VALUES ($1, $2, $1) ON CONFLICT DO NOTHING`,
+          [devId, p.role]
+        )
+        await client.query('COMMIT')
+        console.log(`[DEV] Auto-created local user ${devId} for provisioned email ${p.email}`)
+      } catch (e) {
+        await client.query('ROLLBACK')
+        console.warn('[DEV] Auto-create user failed:', e.message)
+      } finally {
+        client.release()
+      }
+
+      return { id: devId, email: p.email, name: p.entity_name || p.email, roles: [p.role], _provisioned: true }
+    }
+
+    // No entity_id — fall back to nil UUID
+    return {
+      id: '00000000-0000-0000-0000-000000000000',
+      email: p.email,
+      name: p.entity_name || p.email,
+      roles: [p.role],
+      _provisioned: true,
+    }
+  }
+
+  return null
+}
+
+app.use(async (req, _res, next) => {
   if (DISABLE_AUTH) {
     // Strip auth header to prevent passport from overwriting our dev user with a token
     delete req.headers.authorization
-
-    if (DEV_PROFILE === 'admin') {
-      req.user = {
-        id: '11111111-1111-1111-1111-111111111111',
-        email: 'admin@local.dev',
-        name: 'Local Admin',
-        roles: ['admin']
-      }
-    } else if (DEV_PROFILE === 'teacher') {
-      req.user = {
-        id: '22222222-2222-2222-2222-222222222222',
-        email: 'teacher@local.dev',
-        name: 'Local Teacher',
-        roles: ['teacher']
-      }
-    } else {
-      req.user = {
-        id: '33333333-3333-3333-3333-333333333333',
-        email: 'student@local.dev',
-        name: 'Local Student',
-        roles: ['student']
-      }
-    }
+    req.user = currentDevOverride || DEV_DEFAULTS[currentDevProfile] || DEV_DEFAULTS.admin
   }
   next()
 })
@@ -58,9 +173,44 @@ app.get('/api/auth/config', (req, res) => {
   res.json({
     authDisabled: DISABLE_AUTH,
     user: req.user || null,
-    profile: DEV_PROFILE
+    profile: currentDevProfile,
+    devOverride: currentDevOverride ? { email: currentDevOverride.email, name: currentDevOverride.name } : null,
   })
 })
+
+// POST /api/dev/switch-profile — only available in local dev mode
+if (DISABLE_AUTH) {
+  app.post('/api/dev/switch-profile', async (req, res) => {
+    const { profile, userRef } = req.body
+    if (!DEV_DEFAULTS[profile]) {
+      return res.status(400).json({ error: 'Invalid profile. Use: admin, teacher, student' })
+    }
+    currentDevProfile = profile
+    currentDevOverride = null
+
+    if (userRef && userRef.trim()) {
+      try {
+        const resolved = await resolveDevUser(userRef.trim())
+        if (!resolved) {
+          return res.status(404).json({ error: `No user or provisioned entry found for: ${userRef}` })
+        }
+        currentDevOverride = resolved
+        console.log(`[DEV] Switched → ${profile} as ${resolved.email}${resolved._provisioned ? ' (provisioned, not yet activated)' : ''}`)
+      } catch (e) {
+        console.error('[DEV] resolveDevUser failed:', e.message)
+        return res.status(500).json({ error: 'DB lookup failed: ' + e.message })
+      }
+    } else {
+      console.log(`[DEV] Switched → ${profile} (default dev user)`)
+    }
+
+    res.json({
+      success: true,
+      profile: currentDevProfile,
+      user: currentDevOverride || DEV_DEFAULTS[currentDevProfile],
+    })
+  })
+}
 // -----------------------------------------
 
 // Register students and teachers routes
@@ -229,8 +379,19 @@ app.get('/api/instruments', async (req, res) => {
 })
 
 // GET /api/batches - fetch all batches with instrument and teacher details
-app.get('/api/batches', async (req, res) => {
+app.get('/api/batches', rbac.filterTeacherData, async (req, res) => {
   try {
+    let queryArgs = []
+    let teacherFilter = ''
+
+    if (req.dataFilter && req.dataFilter.isTeacher) {
+      if (!req.dataFilter.teacherId) {
+        return res.json({ batches: [] })
+      }
+      teacherFilter = `AND b.teacher_id = $1`
+      queryArgs.push(req.dataFilter.teacherId)
+    }
+
     const result = await pool.query(`
       SELECT
         b.id,
@@ -249,10 +410,10 @@ app.get('/api/batches', async (req, res) => {
       LEFT JOIN teachers t ON b.teacher_id = t.id
       LEFT JOIN enrollment_batches eb ON eb.batch_id = b.id
       LEFT JOIN enrollments e ON e.id = eb.enrollment_id
-      WHERE b.is_makeup = false
+      WHERE b.is_makeup = false ${teacherFilter}
       GROUP BY b.id, i.id, i.name, t.id, t.name
       ORDER BY i.name, b.recurrence
-    `)
+    `, queryArgs)
     res.json({ batches: result.rows })
   } catch (err) {
     console.error('Get batches error:', err)
@@ -402,17 +563,30 @@ app.get('/api/batches/:batchId/students', async (req, res) => {
 })
 
 // GET /api/attendance - Fetch attendance records
-app.get('/api/attendance', async (req, res) => {
+app.get('/api/attendance', rbac.filterTeacherData, async (req, res) => {
   const { student_id, batch_id, start_date, end_date } = req.query
   try {
+    let pIdx = 1
+    const params = []
     let query = `
       SELECT ar.*, s.name as student_name 
       FROM attendance_records ar
       JOIN students s ON ar.student_id = s.id
-      WHERE 1=1
     `
-    const params = []
-    let pIdx = 1
+
+    if (req.dataFilter && req.dataFilter.isTeacher) {
+      if (!req.dataFilter.teacherId) {
+        return res.json({ attendance: [] })
+      }
+      query += ` JOIN batches b ON ar.batch_id = b.id `
+    }
+
+    query += ` WHERE 1=1 `
+
+    if (req.dataFilter && req.dataFilter.isTeacher) {
+      query += ` AND b.teacher_id = $${pIdx++} `
+      params.push(req.dataFilter.teacherId)
+    }
 
     if (student_id) {
       query += ` AND ar.student_id = $${pIdx++}`
@@ -442,10 +616,26 @@ app.get('/api/attendance', async (req, res) => {
 })
 
 // POST /api/attendance - Mark attendance
-app.post('/api/attendance', async (req, res) => {
+app.post('/api/attendance', rbac.filterTeacherData, async (req, res) => {
   const { records } = req.body
   if (!Array.isArray(records) || records.length === 0) {
     return res.status(400).json({ error: 'No attendance records provided' })
+  }
+
+  // Teachers may only mark attendance for their own batches
+  if (req.dataFilter?.isTeacher) {
+    const teacherId = req.dataFilter.teacherId
+    if (!teacherId) {
+      return res.status(403).json({ error: 'Teacher account not linked to a profile' })
+    }
+    const batchIds = [...new Set(records.map(r => r.batch_id))]
+    const owned = await pool.query(
+      'SELECT id FROM batches WHERE id = ANY($1) AND teacher_id = $2',
+      [batchIds, teacherId]
+    )
+    if (owned.rows.length !== batchIds.length) {
+      return res.status(403).json({ error: 'You can only mark attendance for your own batches' })
+    }
   }
 
   const client = await pool.connect()
@@ -719,8 +909,24 @@ app.post('/api/enroll', async (req, res) => {
   }
 })
 
-app.get('/api/enrollments', async (req, res) => {
+app.get('/api/enrollments', rbac.filterTeacherData, async (req, res) => {
   try {
+    let queryArgs = []
+    let teacherFilter = ''
+    let teacherJoin = ''
+
+    if (req.dataFilter && req.dataFilter.isTeacher) {
+      if (!req.dataFilter.teacherId) {
+        return res.json({ enrollments: [] }) // Teacher with no assigned teacher profile sees nothing
+      }
+      teacherJoin = `
+        INNER JOIN enrollment_batches eb_filter ON e.id = eb_filter.enrollment_id
+        INNER JOIN batches b_filter ON eb_filter.batch_id = b_filter.id
+      `
+      teacherFilter = `AND b_filter.teacher_id = $1`
+      queryArgs.push(req.dataFilter.teacherId)
+    }
+
     const result = await pool.query(`
       SELECT 
         s.id as student_id,
@@ -755,14 +961,15 @@ app.get('/api/enrollments', async (req, res) => {
         ) as batches
       FROM students s
       LEFT JOIN enrollments e ON s.id = e.student_id
+      ${teacherJoin}
       LEFT JOIN enrollment_batches eb ON e.id = eb.enrollment_id
       LEFT JOIN batches b ON eb.batch_id = b.id
       LEFT JOIN instruments i ON b.instrument_id = i.id
       LEFT JOIN teachers t ON b.teacher_id = t.id
-      WHERE (s.student_type = 'permanent' OR s.student_type IS NULL)
+      WHERE (s.student_type = 'permanent' OR s.student_type IS NULL) ${teacherFilter}
       GROUP BY s.id, s.name, s.dob, s.phone, s.guardian_contact, s.metadata, s.is_active, e.id, e.status, e.classes_remaining, e.enrolled_on
       ORDER BY s.name ASC
-    `)
+    `, queryArgs)
     res.json({ enrollments: result.rows })
   } catch (err) {
     console.error('Get enrollments error:', err)

@@ -45,6 +45,130 @@ router.get('/', authenticateJWT, authorizeRole(['admin']), async (req, res) => {
   }
 });
 
+// ==================== Provisioning ====================
+
+// List all provisioned users (pending and activated)
+router.get('/provisioned', authenticateJWT, authorizeRole(['admin']), async (req, res) => {
+  try {
+    const result = await db.query(`
+      SELECT
+        pu.id,
+        pu.email,
+        pu.entity_type,
+        pu.entity_id,
+        pu.role,
+        pu.provisioned_at,
+        pu.used_at,
+        CASE
+          WHEN pu.entity_type = 'student' THEN s.name
+          WHEN pu.entity_type = 'teacher' THEN t.name
+        END AS entity_name,
+        provisioner.name AS provisioned_by_name
+      FROM provisioned_users pu
+      LEFT JOIN students s ON pu.entity_type = 'student' AND pu.entity_id = s.id
+      LEFT JOIN teachers t ON pu.entity_type = 'teacher' AND pu.entity_id = t.id
+      LEFT JOIN users provisioner ON pu.provisioned_by = provisioner.id
+      ORDER BY pu.provisioned_at DESC
+    `);
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error fetching provisioned users:', error);
+    res.status(500).json({ error: 'Failed to fetch provisioned users' });
+  }
+});
+
+// Provision a new user by email
+router.post('/provision', authenticateJWT, authorizeRole(['admin']), async (req, res) => {
+  const client = await db.connect();
+  try {
+    const { email, entity_type, entity_id } = req.body;
+
+    if (!email || !entity_type || !entity_id) {
+      return res.status(400).json({ error: 'email, entity_type, and entity_id are required' });
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({ error: 'Invalid email format' });
+    }
+
+    if (!['student', 'teacher'].includes(entity_type)) {
+      return res.status(400).json({ error: 'entity_type must be "student" or "teacher"' });
+    }
+
+    await client.query('BEGIN');
+
+    // Verify the entity exists
+    if (entity_type === 'teacher') {
+      const check = await client.query('SELECT id, name FROM teachers WHERE id = $1', [entity_id]);
+      if (check.rows.length === 0) {
+        await client.query('ROLLBACK');
+        return res.status(404).json({ error: 'Teacher not found' });
+      }
+    } else {
+      const check = await client.query('SELECT id, name FROM students WHERE id = $1', [entity_id]);
+      if (check.rows.length === 0) {
+        await client.query('ROLLBACK');
+        return res.status(404).json({ error: 'Student not found' });
+      }
+    }
+
+    const role = entity_type; // 'student' → 'student', 'teacher' → 'teacher'
+
+    const result = await client.query(
+      `INSERT INTO provisioned_users (email, entity_type, entity_id, role, provisioned_by)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING *`,
+      [email.toLowerCase().trim(), entity_type, entity_id, role, req.user.id]
+    );
+
+    await client.query('COMMIT');
+    res.status(201).json(result.rows[0]);
+  } catch (error) {
+    await client.query('ROLLBACK');
+    if (error.code === '23505') {
+      return res.status(409).json({ error: 'This email has already been provisioned' });
+    }
+    console.error('Error provisioning user:', error);
+    res.status(500).json({ error: 'Failed to provision user' });
+  } finally {
+    client.release();
+  }
+});
+
+// Remove a provisioning entry (only allowed if not yet activated)
+router.delete('/provisioned/:id', authenticateJWT, authorizeRole(['admin']), async (req, res) => {
+  const client = await db.connect();
+  try {
+    const { id } = req.params;
+
+    await client.query('BEGIN');
+
+    const check = await client.query('SELECT * FROM provisioned_users WHERE id = $1', [id]);
+    if (check.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Provisioning record not found' });
+    }
+
+    if (check.rows[0].used_at !== null) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'Cannot remove: this user has already activated their account. Use deactivate instead.' });
+    }
+
+    await client.query('DELETE FROM provisioned_users WHERE id = $1', [id]);
+    await client.query('COMMIT');
+    res.json({ message: 'Provisioning removed successfully' });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Error removing provisioning:', error);
+    res.status(500).json({ error: 'Failed to remove provisioning' });
+  } finally {
+    client.release();
+  }
+});
+
+// =======================================================
+
 // Get a single user by ID
 router.get('/:id', authenticateJWT, authorizeRole(['admin']), async (req, res) => {
   try {

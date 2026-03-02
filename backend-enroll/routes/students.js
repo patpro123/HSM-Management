@@ -1,6 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const pool = require('../db');
+const { authenticateJWT } = require('../auth/jwtMiddleware');
+const { authorizeRole } = require('../auth/rbacMiddleware');
 
 // GET /api/students - List all permanent students with enrollments
 router.get('/', async (req, res) => {
@@ -12,8 +14,8 @@ router.get('/', async (req, res) => {
   }
 });
 
-// POST /api/students - Create new student
-router.post('/', async (req, res) => {
+// POST /api/students - Create new student (admin only)
+router.post('/', authenticateJWT, authorizeRole(['admin']), async (req, res) => {
   console.log('[POST /api/students] Incoming body:', req.body);
   const { first_name, last_name, email, dob, phone, guardian_name, guardian_phone, address, batches, payment, metadata } = req.body;
   if (!first_name || !last_name || !email) {
@@ -115,8 +117,8 @@ router.post('/', async (req, res) => {
   }
 });
 
-// DELETE /api/students/:id - Soft delete a student (unenroll and mark inactive)
-router.delete('/:id', async (req, res) => {
+// DELETE /api/students/:id - Soft delete a student (admin only)
+router.delete('/:id', authenticateJWT, authorizeRole(['admin']), async (req, res) => {
   const { id } = req.params;
   const client = await pool.connect();
   try {
@@ -153,8 +155,8 @@ router.delete('/:id', async (req, res) => {
   }
 });
 
-// POST /api/students/:id/restore - Restore a soft-deleted student
-router.post('/:id/restore', async (req, res) => {
+// POST /api/students/:id/restore - Restore a soft-deleted student (admin only)
+router.post('/:id/restore', authenticateJWT, authorizeRole(['admin']), async (req, res) => {
   const { id } = req.params;
   try {
     const result = await pool.query(

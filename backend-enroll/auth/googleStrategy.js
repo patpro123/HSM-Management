@@ -51,13 +51,51 @@ passport.use(new GoogleStrategy({
       const roleCheck = await client.query('SELECT role FROM user_roles WHERE user_id = $1 AND revoked_at IS NULL', [user.id]);
       let roles = roleCheck.rows.map(r => r.role);
 
-      // If no roles, assign default 'parent' role
+      // If no roles, check provisioning allowlist before granting access
       if (roles.length === 0) {
+        const provision = await client.query(
+          'SELECT * FROM provisioned_users WHERE email = $1',
+          [email]
+        );
+
+        if (provision.rows.length === 0) {
+          // Not provisioned — block login
+          await client.query('ROLLBACK');
+          return done(null, false, { message: 'not_provisioned' });
+        }
+
+        const prov = provision.rows[0];
+
+        // Assign the provisioned role
         await client.query(
           'INSERT INTO user_roles (user_id, role) VALUES ($1, $2)',
-          [user.id, 'parent']
+          [user.id, prov.role]
         );
-        roles = ['parent'];
+
+        // Link to the appropriate entity
+        if (prov.entity_type === 'teacher') {
+          await client.query(
+            `INSERT INTO teacher_users (user_id, teacher_id)
+             VALUES ($1, $2)
+             ON CONFLICT DO NOTHING`,
+            [user.id, prov.entity_id]
+          );
+        } else if (prov.entity_type === 'student') {
+          await client.query(
+            `INSERT INTO student_guardians (user_id, student_id, relationship)
+             VALUES ($1, $2, 'self')
+             ON CONFLICT DO NOTHING`,
+            [user.id, prov.entity_id]
+          );
+        }
+
+        // Mark provision as used
+        await client.query(
+          'UPDATE provisioned_users SET used_at = NOW() WHERE id = $1',
+          [prov.id]
+        );
+
+        roles = [prov.role];
       }
 
       // 3. Log Login History

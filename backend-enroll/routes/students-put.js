@@ -1,9 +1,11 @@
 const express = require('express');
 const router = express.Router();
 const pool = require('../db');
+const { authenticateJWT } = require('../auth/jwtMiddleware');
+const { authorizeRole } = require('../auth/rbacMiddleware');
 
-// PUT /api/students/:id - Update student details and enrollments
-router.put('/:id', async (req, res) => {
+// PUT /api/students/:id - Update student details and enrollments (admin only)
+router.put('/:id', authenticateJWT, authorizeRole(['admin']), async (req, res) => {
   const { id } = req.params;
   const { name, dob, phone, guardian_contact, metadata, batches } = req.body;
 

@@ -12,6 +12,7 @@ import {
 import { API_BASE_URL } from './config';
 import { getCurrentUser, login, logout, handleOAuthCallback, isAuthenticated, setToken } from './auth';
 import { apiGet } from './api';
+import DevSwitcher from './components/DevSwitcher';
 import StatsOverview from './components/StatsOverview';
 // @ts-ignore - Explicitly import .tsx to avoid resolving to the legacy .jsx file
 import AttendanceDashboard from './components/AttendanceDashboard';
@@ -28,7 +29,7 @@ import NotificationsPanel from './components/NotificationsPanel';
 
 const App: React.FC = () => {
   // Add new profile page states
-  const [activeTab, setActiveTab] = useState<'stats' | 'students' | 'attendance' | 'payments' | 'teachers' | 'users' | 'student-profile' | 'teacher-profile' | 'enrollment'>(
+  const [activeTab, setActiveTab] = useState<'stats' | 'students' | 'attendance' | 'payments' | 'finance' | 'teachers' | 'users' | 'student-profile' | 'teacher-profile' | 'enrollment'>(
     getCurrentUser()?.roles?.includes('admin') ? 'stats' : getCurrentUser()?.roles?.includes('teacher') ? 'teacher-profile' : 'student-profile'
   );
   const [students, setStudents] = useState<Student[]>([]);
@@ -44,9 +45,20 @@ const App: React.FC = () => {
   const [user, setUser] = useState(getCurrentUser());
   const [authChecked, setAuthChecked] = useState(false);
   const [bypassedUser, setBypassedUser] = useState<any>(null);
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [devProfile, setDevProfile] = useState<'admin' | 'teacher' | 'student'>('admin');
+  const [devOverride, setDevOverride] = useState<{ email: string; name: string } | null>(null);
 
   // Handle OAuth callback on mount
   useEffect(() => {
+    // Check for OAuth error params first (e.g. not_provisioned, auth_failed)
+    const urlParams = new URLSearchParams(window.location.search);
+    const errorParam = urlParams.get('error');
+    if (errorParam) {
+      setAuthError(errorParam);
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+
     // Check backend config for OAuth bypass
     fetch(`${API_BASE_URL}/api/auth/config`)
       .then(res => res.json())
@@ -55,6 +67,8 @@ const App: React.FC = () => {
           // In local dev mode with auth bypassed, we simply save the user.
           // We don't auto-login here so the landing page still shows!
           setBypassedUser(data.user);
+          setDevProfile(data.profile || 'admin');
+          setDevOverride(data.devOverride || null);
           setAuthChecked(true);
         } else {
           // Normal OAuth flow
@@ -165,6 +179,24 @@ const App: React.FC = () => {
     window.location.href = '/';
   };
 
+  // Dev-only: switch profile without server restart or page reload
+  const handleDevSwitched = (newUser: any) => {
+    const fakePayload = {
+      userId: newUser.id,
+      email: newUser.email,
+      name: newUser.name,
+      roles: newUser.roles,
+      exp: Math.floor(Date.now() / 1000) + 86400,
+    };
+    const fakeToken = ['header', btoa(JSON.stringify(fakePayload)), 'signature'].join('.');
+    setToken(fakeToken);
+    setBypassedUser(newUser);
+    setDevProfile(newUser.roles.includes('admin') ? 'admin' : newUser.roles.includes('teacher') ? 'teacher' : 'student');
+    const isDefaultUser = ['1111', '2222', '3333'].some(p => newUser.id.startsWith(p));
+    setDevOverride(isDefaultUser ? null : { email: newUser.email, name: newUser.name });
+    setUser(newUser); // triggers fetchData via useEffect
+  };
+
   // Show loading while checking auth
   if (!authChecked) {
     return (
@@ -180,26 +212,36 @@ const App: React.FC = () => {
   // Show landing page if not authenticated
   if (!isAuthenticated()) {
     return (
-      <LandingPage
-        onLogin={() => {
-          if (bypassedUser) {
-            // Dev mode bypass: Login instantly with dummy user
-            const fakePayload = {
-              userId: bypassedUser.id,
-              email: bypassedUser.email,
-              name: bypassedUser.name,
-              roles: bypassedUser.roles,
-              exp: Math.floor(Date.now() / 1000) + 86400 // 1 day expiry
-            };
-            const fakeToken = ['header', btoa(JSON.stringify(fakePayload)), 'signature'].join('.');
-            setToken(fakeToken);
-            setUser(bypassedUser);
-          } else {
-            // Production: trigger actual OAuth flow
-            login(API_BASE_URL);
-          }
-        }}
-      />
+      <>
+        <LandingPage
+          authError={authError ?? undefined}
+          onLogin={() => {
+            if (bypassedUser) {
+              // Dev mode bypass: Login instantly with dummy user
+              const fakePayload = {
+                userId: bypassedUser.id,
+                email: bypassedUser.email,
+                name: bypassedUser.name,
+                roles: bypassedUser.roles,
+                exp: Math.floor(Date.now() / 1000) + 86400 // 1 day expiry
+              };
+              const fakeToken = ['header', btoa(JSON.stringify(fakePayload)), 'signature'].join('.');
+              setToken(fakeToken);
+              setUser(bypassedUser);
+            } else {
+              // Production: trigger actual OAuth flow
+              login(API_BASE_URL);
+            }
+          }}
+        />
+        {bypassedUser && (
+          <DevSwitcher
+            currentProfile={devProfile}
+            currentOverride={devOverride}
+            onSwitched={handleDevSwitched}
+          />
+        )}
+      </>
     );
   }
 
@@ -222,6 +264,7 @@ const App: React.FC = () => {
     : isTeacherOnly
       ? [
         { key: 'teacher-profile', label: 'My Profile' },
+        { key: 'attendance', label: 'Attendance' },
       ]
       : [
         { key: 'student-profile', label: 'My Profile' },
@@ -401,6 +444,12 @@ const App: React.FC = () => {
               {activeTab === 'teacher-profile' && (
                 <Teacher360View selfView isModal={false} />
               )}
+              {activeTab === 'attendance' && (
+                <AttendanceDashboard
+                  batches={batches}
+                  onRefresh={fetchData}
+                />
+              )}
             </div>
           ) : (
             <div className="bg-white rounded-xl p-8 shadow-sm border border-slate-100">
@@ -411,6 +460,13 @@ const App: React.FC = () => {
           )}
         </div>
       </main>
+      {bypassedUser && (
+        <DevSwitcher
+          currentProfile={devProfile}
+          currentOverride={devOverride}
+          onSwitched={handleDevSwitched}
+        />
+      )}
     </div>
   );
 };

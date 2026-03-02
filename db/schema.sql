@@ -377,6 +377,20 @@ CREATE INDEX IF NOT EXISTS idx_login_history_user_id ON login_history(user_id);
 
 COMMENT ON TABLE login_history IS 'Audit trail of all login attempts (successful and failed)';
 
+-- Provisioned users: admin pre-registers an email before the user can log in (migration 015)
+CREATE TABLE IF NOT EXISTS provisioned_users (
+  id             uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  email          text UNIQUE NOT NULL,
+  entity_type    text NOT NULL CHECK (entity_type IN ('student', 'teacher')),
+  entity_id      uuid NOT NULL,
+  role           text NOT NULL CHECK (role IN ('student', 'teacher')),
+  provisioned_by uuid REFERENCES users(id),
+  provisioned_at timestamptz DEFAULT now(),
+  used_at        timestamptz  -- populated on the user's first successful login
+);
+
+COMMENT ON TABLE provisioned_users IS 'Admin-managed allowlist: only provisioned emails can create new accounts';
+
 -- Auth Functions
 CREATE OR REPLACE FUNCTION update_updated_at_column()
 RETURNS TRIGGER AS $$

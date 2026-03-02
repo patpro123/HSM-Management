@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { apiGet } from '../api';
 import { Teacher360Data } from '../types';
 import PhoneLink from './PhoneLink';
+import TeacherStudentList from './TeacherStudentList';
 
 interface Teacher360ViewProps {
   teacherId?: string;
@@ -10,7 +11,7 @@ interface Teacher360ViewProps {
   isModal?: boolean;
 }
 
-type TabType = 'profile' | 'attendance' | 'payout';
+type TabType = 'profile' | 'attendance' | 'payout' | 'students';
 
 const PAYOUT_TYPE_LABELS: Record<string, string> = {
   fixed: 'Fixed Monthly Salary',
@@ -143,7 +144,7 @@ const Teacher360View: React.FC<Teacher360ViewProps> = ({
         <>
           {/* Tabs */}
           <div className="flex border-b px-6">
-            {(['profile', 'attendance', 'payout'] as TabType[]).map(tab => (
+            {(['profile', 'students', 'attendance', 'payout'] as TabType[]).map(tab => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
@@ -152,7 +153,7 @@ const Teacher360View: React.FC<Teacher360ViewProps> = ({
                     : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                   }`}
               >
-                {tab === 'payout' ? 'Payout' : tab === 'attendance' ? 'Attendance' : 'Profile'}
+                {tab === 'payout' ? 'Payout' : tab === 'attendance' ? 'Attendance' : tab === 'students' ? 'My Students' : 'Profile'}
               </button>
             ))}
           </div>
@@ -233,54 +234,20 @@ const Teacher360View: React.FC<Teacher360ViewProps> = ({
                   </div>
                 )}
 
-                {/* Enrolled Students */}
-                <div>
-                  <h3 className="font-semibold text-lg mb-3 text-gray-800">
-                    Enrolled Students
-                    {!studentsLoading && (
-                      <span className="ml-2 text-sm font-normal text-gray-400">({students.length})</span>
-                    )}
-                  </h3>
-                  {studentsLoading ? (
-                    <div className="flex items-center gap-2 text-gray-400 text-sm">
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-orange-400"></div>
-                      Loading students…
-                    </div>
-                  ) : students.length === 0 ? (
-                    <p className="text-gray-400 italic text-sm">No active students enrolled under this teacher.</p>
-                  ) : (
-                    <div className="overflow-hidden shadow ring-1 ring-black ring-opacity-5 rounded-lg">
-                      <table className="min-w-full divide-y divide-gray-200">
-                        <thead className="bg-gray-50">
-                          <tr>
-                            <th className="py-3 pl-4 pr-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Student</th>
-                            <th className="px-3 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Instrument</th>
-                            <th className="px-3 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Schedule</th>
-                            <th className="px-3 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Contact</th>
-                            <th className="px-3 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wide">Cls Left</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-100 bg-white">
-                          {students.map(s => (
-                            <tr key={`${s.id}-${s.batch_id}`} className="hover:bg-gray-50">
-                              <td className="py-3 pl-4 pr-3 text-sm font-medium text-gray-900">{s.name}</td>
-                              <td className="px-3 py-3 text-sm text-gray-600">{s.instrument}</td>
-                              <td className="px-3 py-3 text-sm text-gray-500">{s.recurrence}</td>
-                              <td className="px-3 py-3 text-sm text-gray-500"><PhoneLink phone={s.phone || s.guardian_contact} /></td>
-                              <td className="px-3 py-3 text-sm text-right">
-                                {s.classes_remaining !== null ? (
-                                  <span className={`font-medium ${s.classes_remaining <= 2 ? 'text-red-600' : 'text-gray-700'}`}>
-                                    {s.classes_remaining}
-                                  </span>
-                                ) : '—'}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-                </div>
+              </div>
+            )}
+
+            {/* ── MY STUDENTS TAB ── */}
+            {activeTab === 'students' && (
+              <div>
+                {studentsLoading ? (
+                  <div className="flex items-center gap-2 text-gray-400 text-sm py-4">
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-orange-400"></div>
+                    Loading students…
+                  </div>
+                ) : resolvedId ? (
+                  <TeacherStudentList students={students} teacherId={resolvedId} />
+                ) : null}
               </div>
             )}
 

@@ -59,6 +59,8 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students: propStu
   const user = getCurrentUser();
   const userEmail = user?.email?.toLowerCase();
   const isAdmin = user && user.roles.includes('admin');
+  const isTeacherOnly = user && !isAdmin && user?.roles.includes('teacher');
+  const isReadonly = isTeacherOnly;
 
   // Debug logs
   console.log('StudentManagement Debug:');
@@ -91,8 +93,8 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students: propStu
       }
     }
 
-    // Role-based filter for non-admins
-    if (!isAdmin) {
+    // Role-based filter for non-admins and non-teachers
+    if (!isAdmin && !isTeacherOnly) {
       const email = (student.email || (student as any).metadata?.email || '').toLowerCase();
       if (!userEmail || email !== userEmail) return false;
     }
@@ -282,10 +284,10 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students: propStu
 
   // Ageing helpers
   const AGE_BUCKETS = [
-    { key: 'fresh',    label: 'Fresh',      range: '0–7d',  dot: '🟢', color: 'bg-green-100 text-green-700 border-green-200',   maxDays: 7 },
-    { key: 'followup', label: 'Follow Up',  range: '8–14d', dot: '🟡', color: 'bg-yellow-100 text-yellow-700 border-yellow-200', maxDays: 14 },
-    { key: 'warm',     label: 'Warm',       range: '15–30d', dot: '🟠', color: 'bg-orange-100 text-orange-700 border-orange-200', maxDays: 30 },
-    { key: 'cold',     label: 'Cold',       range: '30+d',  dot: '🔴', color: 'bg-red-100 text-red-700 border-red-200',          maxDays: Infinity },
+    { key: 'fresh', label: 'Fresh', range: '0–7d', dot: '🟢', color: 'bg-green-100 text-green-700 border-green-200', maxDays: 7 },
+    { key: 'followup', label: 'Follow Up', range: '8–14d', dot: '🟡', color: 'bg-yellow-100 text-yellow-700 border-yellow-200', maxDays: 14 },
+    { key: 'warm', label: 'Warm', range: '15–30d', dot: '🟠', color: 'bg-orange-100 text-orange-700 border-orange-200', maxDays: 30 },
+    { key: 'cold', label: 'Cold', range: '30+d', dot: '🔴', color: 'bg-red-100 text-red-700 border-red-200', maxDays: Infinity },
   ];
 
   const getAgeDays = (createdAt: string) =>
@@ -297,7 +299,7 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students: propStu
   // Filtered prospect list for display
   const displayedProspects = prospectList
     .filter(p => {
-      if (filterStatus === 'active')   return p.is_active !== false;
+      if (filterStatus === 'active') return p.is_active !== false;
       if (filterStatus === 'inactive') return p.is_active === false;
       return true;
     })
@@ -305,8 +307,8 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students: propStu
       if (!searchTerm) return true;
       const q = searchTerm.toLowerCase();
       return (p.name || '').toLowerCase().includes(q) ||
-             (p.phone || '').toLowerCase().includes(q) ||
-             (p.metadata?.email || '').toLowerCase().includes(q);
+        (p.phone || '').toLowerCase().includes(q) ||
+        (p.metadata?.email || '').toLowerCase().includes(q);
     })
     .filter(p => {
       if (!ageFilter) return true;
@@ -353,12 +355,14 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students: propStu
               📊 Table
             </button>
           </div>
-          <button
-            onClick={handleAddStudent}
-            className="px-6 py-3 bg-gradient-to-r from-orange-500 to-amber-500 text-white rounded-lg font-semibold hover:from-orange-600 hover:to-amber-600 transition shadow-lg hover:shadow-xl"
-          >
-            + Add Student
-          </button>
+          {!isReadonly && (
+            <button
+              onClick={handleAddStudent}
+              className="px-6 py-3 bg-gradient-to-r from-orange-500 to-amber-500 text-white rounded-lg font-semibold hover:from-orange-600 hover:to-amber-600 transition shadow-lg hover:shadow-xl"
+            >
+              + Add Student
+            </button>
+          )}
         </div>
       </div>
 
@@ -483,9 +487,8 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students: propStu
                   <button
                     key={bucket.key}
                     onClick={() => setAgeFilter(isActive ? null : bucket.key)}
-                    className={`flex items-center gap-2 px-4 py-2 rounded-lg border-2 text-sm font-semibold transition ${
-                      isActive ? `${bucket.color} border-current shadow` : 'bg-white border-slate-200 text-slate-600 hover:border-slate-400'
-                    }`}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-lg border-2 text-sm font-semibold transition ${isActive ? `${bucket.color} border-current shadow` : 'bg-white border-slate-200 text-slate-600 hover:border-slate-400'
+                      }`}
                   >
                     <span>{bucket.dot}</span>
                     <span>{bucket.label}</span>
@@ -619,26 +622,30 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students: propStu
                   >
                     View 360°
                   </button>
-                  <button
-                    onClick={() => handleEditStudent(student)}
-                    className="flex-1 px-3 py-2 bg-orange-50 text-orange-600 rounded-lg font-medium hover:bg-orange-100 transition"
-                  >
-                    ✏️ Edit
-                  </button>
-                  {(student as any).is_active !== false ? (
-                    <button
-                      onClick={() => handleDeleteStudent((student as any).student_id)}
-                      className="flex-1 px-3 py-2 bg-red-50 text-red-600 rounded-lg font-medium hover:bg-red-100 transition"
-                    >
-                      🗑️
-                    </button>
-                  ) : (
-                    <button
-                      onClick={() => handleRestoreStudent((student as any).student_id)}
-                      className="flex-1 px-3 py-2 bg-green-50 text-green-600 rounded-lg font-medium hover:bg-green-100 transition"
-                    >
-                      ♻️ Restore
-                    </button>
+                  {!isReadonly && (
+                    <>
+                      <button
+                        onClick={() => handleEditStudent(student)}
+                        className="flex-1 px-3 py-2 bg-orange-50 text-orange-600 rounded-lg font-medium hover:bg-orange-100 transition"
+                      >
+                        ✏️ Edit
+                      </button>
+                      {(student as any).is_active !== false ? (
+                        <button
+                          onClick={() => handleDeleteStudent((student as any).student_id)}
+                          className="flex-1 px-3 py-2 bg-red-50 text-red-600 rounded-lg font-medium hover:bg-red-100 transition"
+                        >
+                          🗑️
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => handleRestoreStudent((student as any).student_id)}
+                          className="flex-1 px-3 py-2 bg-green-50 text-green-600 rounded-lg font-medium hover:bg-green-100 transition"
+                        >
+                          ♻️ Restore
+                        </button>
+                      )}
+                    </>
                   )}
                 </div>
               </div>
@@ -728,26 +735,30 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students: propStu
                           >
                             360°
                           </button>
-                          <button
-                            onClick={() => handleEditStudent(student)}
-                            className="px-3 py-1.5 bg-orange-50 text-orange-600 rounded-lg text-sm font-medium hover:bg-orange-100 transition"
-                          >
-                            ✏️ Edit
-                          </button>
-                          {(student as any).is_active !== false ? (
-                            <button
-                              onClick={() => handleDeleteStudent((student as any).student_id)}
-                              className="px-3 py-1.5 bg-red-50 text-red-600 rounded-lg text-sm font-medium hover:bg-red-100 transition"
-                            >
-                              🗑️
-                            </button>
-                          ) : (
-                            <button
-                              onClick={() => handleRestoreStudent((student as any).student_id)}
-                              className="px-3 py-1.5 bg-green-50 text-green-600 rounded-lg text-sm font-medium hover:bg-green-100 transition"
-                            >
-                              ♻️
-                            </button>
+                          {!isReadonly && (
+                            <>
+                              <button
+                                onClick={() => handleEditStudent(student)}
+                                className="px-3 py-1.5 bg-orange-50 text-orange-600 rounded-lg text-sm font-medium hover:bg-orange-100 transition"
+                              >
+                                ✏️ Edit
+                              </button>
+                              {(student as any).is_active !== false ? (
+                                <button
+                                  onClick={() => handleDeleteStudent((student as any).student_id)}
+                                  className="px-3 py-1.5 bg-red-50 text-red-600 rounded-lg text-sm font-medium hover:bg-red-100 transition"
+                                >
+                                  🗑️
+                                </button>
+                              ) : (
+                                <button
+                                  onClick={() => handleRestoreStudent((student as any).student_id)}
+                                  className="px-3 py-1.5 bg-green-50 text-green-600 rounded-lg text-sm font-medium hover:bg-green-100 transition"
+                                >
+                                  ♻️
+                                </button>
+                              )}
+                            </>
                           )}
                         </div>
                       </td>
@@ -786,6 +797,7 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students: propStu
           studentId={selectedStudentId}
           onClose={() => setSelectedStudentId(null)}
           isModal={true}
+          hidePayments={!!isReadonly}
         />
       )}
 
