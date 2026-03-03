@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { API_BASE_URL } from '../config';
 import './LandingPage.css';
 
@@ -19,6 +19,8 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLogin, authError }) => {
     const [batches, setBatches] = useState<any[]>([]);
     const [testimonialIndex, setTestimonialIndex] = useState(0);
     const [activeFaq, setActiveFaq] = useState<number | null>(null);
+    const instrumentGridRef = useRef<HTMLDivElement>(null);
+    const teachersGridRef = useRef<HTMLDivElement>(null);
 
     const faqs = [
         { q: "Does my child need prior experience?", a: "Not at all. We start from the very beginning and move at your child's pace." },
@@ -119,6 +121,34 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLogin, authError }) => {
         }, 4000);
         return () => clearInterval(timer);
     }, [testimonials.length]);
+
+    // Carousel auto-scroll (instruments + teachers)
+    useEffect(() => {
+        const setupCarousel = (el: HTMLDivElement | null) => {
+            if (!el) return () => {};
+            let isInteracting = false;
+            const onTouch = () => { isInteracting = true; };
+            const onTouchEnd = () => { setTimeout(() => { isInteracting = false; }, 2500); };
+            el.addEventListener('touchstart', onTouch, { passive: true });
+            el.addEventListener('touchend', onTouchEnd, { passive: true });
+            const timer = setInterval(() => {
+                if (isInteracting) return;
+                const cardWidth = (el.firstElementChild as HTMLElement)?.offsetWidth ?? window.innerWidth * 0.75;
+                const gap = 16;
+                const maxScroll = el.scrollWidth - el.clientWidth;
+                const next = el.scrollLeft + cardWidth + gap;
+                el.scrollTo({ left: next >= maxScroll - 10 ? 0 : next, behavior: 'smooth' });
+            }, 3000);
+            return () => {
+                clearInterval(timer);
+                el.removeEventListener('touchstart', onTouch);
+                el.removeEventListener('touchend', onTouchEnd);
+            };
+        };
+        const cleanup1 = setupCarousel(instrumentGridRef.current);
+        const cleanup2 = setupCarousel(teachersGridRef.current);
+        return () => { cleanup1(); cleanup2(); };
+    }, []);
 
     const toggleTheme = () => {
         const newTheme = !isDark;
@@ -260,9 +290,19 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLogin, authError }) => {
                                 <button onClick={handleOpenModal} className="btn btn-primary btn-cta-main glow-shadow">
                                     Book Your Free Demo Class →
                                 </button>
-                                <a href="#programs" className="btn btn-secondary btn-ghost">
-                                    See Our Programs ↓
-                                </a>
+                                <div className="hero-secondary-row">
+                                    <a
+                                        href="https://wa.me/919652444188?text=Hi%20HSM%2C%20I%27d%20like%20to%20book%20a%20demo%20class"
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="btn btn-ghost hero-whatsapp-ghost"
+                                    >
+                                        💬 WhatsApp
+                                    </a>
+                                    <a href="#programs" className="btn btn-secondary btn-ghost">
+                                        See Our Programs ↓
+                                    </a>
+                                </div>
                             </div>
 
                             <div className="trust-strip">
@@ -288,7 +328,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLogin, authError }) => {
                             Classical Indian. Contemporary Western. Under one roof.
                         </p>
 
-                        <div className="instrument-grid">
+                        <div className="instrument-grid" ref={instrumentGridRef}>
                             {[
                                 { id: 'keyboard', name: 'Keyboard', icon: '🎹', desc: 'Build musical foundations fast — ideal first instrument' },
                                 { id: 'piano', name: 'Piano', icon: '🎹', desc: 'Classical elegance; read music, compose, perform' },
@@ -350,7 +390,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLogin, authError }) => {
                             <span className="section-label">Learn from working musicians</span>
                             <h2 className="section-title serif-heading">Our teachers are performers first,<br />educators always.</h2>
                         </div>
-                        <div className="teachers-grid mt-4">
+                        <div className="teachers-grid mt-4" ref={teachersGridRef}>
                             {teachers.length > 0 ? teachers.map((teacher, idx) => (
                                 <div className="teacher-card pop-shadow" key={teacher.id || idx}>
                                     <div className="teacher-photo-wrapper">

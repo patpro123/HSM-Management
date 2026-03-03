@@ -523,6 +523,32 @@ img {
     color: white;
 }
 
+/* Hero secondary action row — WhatsApp + See Programs side by side */
+.hero-secondary-row {
+    display: flex;
+    gap: 0.75rem;
+    justify-content: center;
+    width: 100%;
+}
+
+.hero-whatsapp-ghost {
+    background: rgba(37, 211, 102, 0.15) !important;
+    color: white !important;
+    border: 1px solid rgba(37, 211, 102, 0.7) !important;
+    font-size: 1rem;
+    flex: 1;
+}
+
+.hero-whatsapp-ghost:hover {
+    background: #25D366 !important;
+    border-color: #25D366 !important;
+    color: white !important;
+}
+
+.hero-secondary-row .btn-ghost {
+    flex: 1;
+}
+
 .trust-strip {
     display: flex;
     flex-wrap: wrap;
@@ -541,8 +567,7 @@ img {
 
 @media (max-width: 767px) {
 
-    .btn-cta-main,
-    .btn-ghost {
+    .btn-cta-main {
         width: 100%;
     }
 
@@ -1393,5 +1418,68 @@ img {
 @media (min-width: 600px) {
     .form-grid {
         grid-template-columns: 1fr 1fr;
+    }
+}
+
+/* ========== MOBILE FIXES ========== */
+@media (max-width: 767px) {
+    /* Reduce section padding on mobile */
+    .section-padding {
+        padding-top: 3rem;
+        padding-bottom: 3rem;
+    }
+
+    /* Instrument section: allow center-content to be full-width block (not centering flex) */
+    .instrument-showcase .center-content,
+    .teachers-section .center-content {
+        display: block;
+    }
+
+    /* Instrument grid: horizontal scroll carousel */
+    .instrument-grid {
+        display: flex !important;
+        grid-template-columns: none !important;
+        flex-wrap: nowrap !important;
+        overflow-x: auto !important;
+        scroll-snap-type: x mandatory;
+        -webkit-overflow-scrolling: touch;
+        gap: 1rem;
+        padding-bottom: 1.5rem;
+        padding-top: 0.5rem;
+        width: 100%;
+        /* Fade-out right edge hint */
+        -webkit-mask-image: linear-gradient(to right, black 85%, transparent 100%);
+        mask-image: linear-gradient(to right, black 85%, transparent 100%);
+    }
+
+    /* Each card ~75vw so ~1.3 cards are visible — swipe is obvious */
+    .instrument-card {
+        flex: 0 0 75vw !important;
+        min-width: 220px !important;
+        max-width: 280px !important;
+        scroll-snap-align: start;
+    }
+
+    /* Teachers grid: horizontal scroll on mobile too */
+    .teachers-grid {
+        display: flex !important;
+        grid-template-columns: none !important;
+        flex-wrap: nowrap !important;
+        overflow-x: auto !important;
+        scroll-snap-type: x mandatory;
+        -webkit-overflow-scrolling: touch;
+        gap: 1rem;
+        padding-bottom: 1.5rem;
+        padding-top: 0.5rem;
+        width: 100%;
+        -webkit-mask-image: linear-gradient(to right, black 85%, transparent 100%);
+        mask-image: linear-gradient(to right, black 85%, transparent 100%);
+    }
+
+    .teacher-card {
+        flex: 0 0 75vw !important;
+        min-width: 220px !important;
+        max-width: 280px !important;
+        scroll-snap-align: start;
     }
 }
