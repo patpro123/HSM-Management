@@ -29,12 +29,13 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLogin, authError }) => {
         { q: "What if we need to pause or stop?", a: "No problem. We have a flexible pause policy — life happens and we understand." }
     ];
 
+    // Replace these with real reviews copy-pasted from your Google Business profile
     const testimonials = [
-        { quote: "My daughter went from complete beginner to performing on stage in just 6 months. The teachers at HSM are incredibly patient.", author: "Priya M., parent of Tabla student" },
-        { quote: "The best music school in Hyderabad. The facilities are top-notch and the curriculum is very structured.", author: "Rahul S., Adult Piano student" },
-        { quote: "My son looks forward to his guitar class every week. The community events have built his confidence so much!", author: "Anita K., parent of Guitar student" },
-        { quote: "Learning Hindustani vocals online has been seamless. The audio quality and teacher attention is exactly like being in person.", author: "Vikram R., Online Vocal student" },
-        { quote: "I thought I was too old to learn the drums. HSM proved me wrong. Fantastic instructors who know how to teach adults.", author: "Sanjay D., Adult Drum student" },
+        { quote: "My daughter went from complete beginner to performing on stage in just 6 months. The teachers at HSM are incredibly patient.", author: "Priya M.", role: "Parent of Tabla student", initials: "PM", color: "#4285F4" },
+        { quote: "The best music school in Hyderabad. The facilities are top-notch and the curriculum is very structured.", author: "Rahul S.", role: "Adult Piano student", initials: "RS", color: "#EA4335" },
+        { quote: "My son looks forward to his guitar class every week. The community events have built his confidence so much!", author: "Anita K.", role: "Parent of Guitar student", initials: "AK", color: "#34A853" },
+        { quote: "Learning Hindustani vocals online has been seamless. The audio quality and teacher attention is exactly like being in person.", author: "Vikram R.", role: "Online Vocal student", initials: "VR", color: "#FBBC04" },
+        { quote: "I thought I was too old to learn the drums. HSM proved me wrong. Fantastic instructors who know how to teach adults.", author: "Sanjay D.", role: "Adult Drum student", initials: "SD", color: "#9C27B0" },
     ];
 
     // Handle scroll detection for navbar
@@ -214,9 +215,9 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLogin, authError }) => {
                     </div>
 
                     <div className="nav-actions">
-                        <a href="tel:+919999999999" className="nav-phone">
+                        <a href="tel:+919652444188" className="nav-phone">
                             <span className="phone-icon">📱</span>
-                            <span className="phone-number">+91 XXXXX XXXXX</span>
+                            <span className="phone-number">+91 96524 44188</span>
                         </a>
                         <button
                             onClick={onLogin}
@@ -241,7 +242,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLogin, authError }) => {
                     {/* Video Background Placeholder */}
                     <div className="video-background">
                         <video autoPlay loop muted playsInline className="hero-video">
-                            <source src="https://assets.mixkit.co/videos/preview/mixkit-playing-the-piano-5184-large.mp4" type="video/mp4" />
+                            <source src="/hero-bg.mp4" type="video/mp4" />
                         </video>
                         <div className="video-overlay"></div>
                     </div>
@@ -383,11 +384,20 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLogin, authError }) => {
                         <div className="testimonial-carousel pop-shadow bg-white mx-auto relative cursor-pointer"
                             onClick={() => setTestimonialIndex(prev => (prev + 1) % testimonials.length)}>
                             <div className="testimonial-content fade-in" key={testimonialIndex}>
+                                <div className="reviewer-header">
+                                    <div className="reviewer-initials" style={{ background: testimonials[testimonialIndex].color }}>
+                                        {testimonials[testimonialIndex].initials}
+                                    </div>
+                                    <div className="reviewer-info">
+                                        <p className="testimonial-author">{testimonials[testimonialIndex].author}</p>
+                                        <p className="reviewer-time">{testimonials[testimonialIndex].role}</p>
+                                    </div>
+                                    <span className="google-g-badge" title="Google review">G</span>
+                                </div>
+                                <div className="testimonial-stars text-orange">★★★★★</div>
                                 <p className="testimonial-quote">
                                     "{testimonials[testimonialIndex].quote}"
                                 </p>
-                                <p className="testimonial-author">{testimonials[testimonialIndex].author}</p>
-                                <div className="testimonial-stars text-orange">★★★★★</div>
                             </div>
                             <div className="carousel-controls mt-4">
                                 <button className="carousel-btn" onClick={(e) => { e.stopPropagation(); setTestimonialIndex(prev => (prev - 1 + testimonials.length) % testimonials.length); }}>&larr;</button>
@@ -537,12 +547,12 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLogin, authError }) => {
                                 <div className="contact-item mb-5">
                                     <h4 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', margin: 0 }}>📱 Phone</h4>
                                     <p className="text-muted" style={{ marginLeft: '1.75rem', marginTop: '0.5rem', fontWeight: 600 }}>
-                                        +91 XXXXX XXXXX
+                                        +91 96524 44188
                                     </p>
                                 </div>
                                 <div style={{ display: 'flex', gap: '1rem', marginLeft: '1.75rem', marginTop: '1.5rem', flexWrap: 'wrap' }}>
-                                    <a href="https://wa.me/91XXXXXXXXXX?text=Hi%20HSM%2C%20I%27d%20like%20to%20book%20a%20demo%20class" target="_blank" rel="noopener noreferrer" className="btn btn-primary" style={{ backgroundColor: '#25D366', color: 'white', border: 'none' }}>WhatsApp us now →</a>
-                                    <a href="tel:+919999999999" className="btn btn-secondary">Call us →</a>
+                                    <a href="https://wa.me/919652444188?text=Hi%20HSM%2C%20I%27d%20like%20to%20book%20a%20demo%20class" target="_blank" rel="noopener noreferrer" className="btn btn-primary" style={{ backgroundColor: '#25D366', color: 'white', border: 'none' }}>WhatsApp us now →</a>
+                                    <a href="tel:+919652444188" className="btn btn-secondary">Call us →</a>
                                 </div>
                             </div>
                         </div>
