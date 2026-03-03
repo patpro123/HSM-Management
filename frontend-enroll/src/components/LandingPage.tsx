@@ -7,6 +7,9 @@ interface LandingPageProps {
     authError?: string;
 }
 
+// HSM Kismatpur — verified coordinates from Google Maps (Justdial structured data)
+const HSM_COORDINATES = { lat: 17.3471995, lng: 78.3909525 };
+
 const LandingPage: React.FC<LandingPageProps> = ({ onLogin, authError }) => {
     const [isScrolled, setIsScrolled] = useState(false);
     const [isDark, setIsDark] = useState(false);
@@ -561,7 +564,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLogin, authError }) => {
                     <div className="container split-layout">
                         <div className="split-visual location-map rounded-frame pop-shadow overflow-hidden">
                             <iframe
-                                src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3808.6657904092683!2d78.38466631536767!3d17.37984898808339!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x3bcb9500095817a1%3A0xe6bfdd6b7e8ed599!2sHyderabad%20School%20of%20Music!5e0!3m2!1sen!2sin!4v1709211019685!5m2!1sen!2sin"
+                                src={`https://maps.google.com/maps?q=${HSM_COORDINATES.lat},${HSM_COORDINATES.lng}&z=17&output=embed`}
                                 width="100%"
                                 height="100%"
                                 style={{ border: 0, minHeight: '400px' }}
