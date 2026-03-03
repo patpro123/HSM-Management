@@ -150,16 +150,16 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLogin, authError }) => {
         setBookingError('');
 
         const form = e.target as HTMLFormElement;
-        const payload = {
-            name: (form.elements.namedItem('name') as HTMLInputElement).value,
-            address: (form.elements.namedItem('address') as HTMLInputElement).value,
-            phone: (form.elements.namedItem('phone') as HTMLInputElement).value,
-            email: (form.elements.namedItem('email') as HTMLInputElement).value,
-            instrument: (form.elements.namedItem('instrument') as HTMLSelectElement).value,
-            source: (form.elements.namedItem('source') as HTMLSelectElement).value
-        };
 
         try {
+            const payload = {
+                name: (form.elements.namedItem('name') as HTMLInputElement).value,
+                phone: (form.elements.namedItem('phone') as HTMLInputElement).value,
+                email: (form.elements.namedItem('email') as HTMLInputElement)?.value || '',
+                instrument: (form.elements.namedItem('instrument') as HTMLSelectElement).value,
+                source: (form.elements.namedItem('source') as HTMLSelectElement)?.value || ''
+            };
+
             const res = await fetch(`${API_BASE_URL}/api/prospects`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
