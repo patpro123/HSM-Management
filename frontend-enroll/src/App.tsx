@@ -21,11 +21,12 @@ import UserManagement from './components/UserManagement';
 import EnrollmentForm from './components/EnrollmentForm';
 import PaymentModule from './components/PaymentModule';
 import FinanceModule from './components/FinanceModule';
+import MigrationTools from './components/MigrationTools';
 import hsmLogo from './images/hsmLogo.jpg';
 
 const App: React.FC = () => {
   // Add new profile page states
-  const [activeTab, setActiveTab] = useState<'stats' | 'students' | 'attendance' | 'payments' | 'teachers' | 'users' | 'student-profile' | 'enrollment'>(
+  const [activeTab, setActiveTab] = useState<'stats' | 'students' | 'attendance' | 'payments' | 'finance' | 'teachers' | 'users' | 'student-profile' | 'enrollment' | 'migration'>(
     getCurrentUser()?.roles?.includes('admin') ? 'stats' : 'student-profile'
   );
   const [students, setStudents] = useState<Student[]>([]);
@@ -226,6 +227,7 @@ const App: React.FC = () => {
         { key: 'finance', label: 'Finance' },
         { key: 'teachers', label: 'Teachers' },
         { key: 'users', label: 'Users' },
+        { key: 'migration', label: 'Migration' },
       ]
     : [
         { key: 'student-profile', label: 'My Profile' },
@@ -371,6 +373,9 @@ const App: React.FC = () => {
             )}
             {activeTab === 'users' && (
               <UserManagement />
+            )}
+            {activeTab === 'migration' && (
+              <MigrationTools />
             )}
             {activeTab === 'enrollment' && (
               <EnrollmentForm

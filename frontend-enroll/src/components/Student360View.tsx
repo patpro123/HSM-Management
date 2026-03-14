@@ -31,6 +31,7 @@ interface Student360Data {
       classes_remaining: number;
       classes_missed: number;
       classes_excused?: number;
+      instrument_credits?: Record<string, number>;
     };
   };
 }
@@ -327,6 +328,15 @@ const Student360View: React.FC<Student360ViewProps> = ({ email, studentId, onClo
                   <div className="bg-green-50 p-4 rounded-lg border border-green-100">
                     <div className="text-sm text-green-600 font-medium">Available Credit</div>
                     <div className="text-2xl font-bold text-green-800 mt-1">{data.payment.summary.classes_remaining}</div>
+                    {data.payment.summary.instrument_credits && Object.keys(data.payment.summary.instrument_credits).length > 1 && (
+                      <div className="flex flex-wrap gap-1 mt-2">
+                        {Object.entries(data.payment.summary.instrument_credits).map(([instrument, credits]) => (
+                          <span key={instrument} className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">
+                            {instrument}: {credits}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </div>
                   <div className="bg-orange-50 p-4 rounded-lg border border-orange-100">
                     <div className="text-sm text-orange-600 font-medium">Classes Missed</div>

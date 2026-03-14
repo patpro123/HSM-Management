@@ -1,0 +1,39 @@
+Instrument,Teacher,Batch Day,Start time,End Time,Batch size
+Guitar,Josva,Wednesday,6:30 PM,7:15 PM,5
+Guitar,Josva,Wednesday,7:15 PM,8:30 PM,5
+Keyboard/Piano,Josva,Wednesday,6:30 PM,7:15 PM,5
+Keyboard/Piano,Josva,Wednesday,7:15 PM,8:30 PM,5
+Guitar,Josva,Thursday,6:30 PM,7:15 PM,5
+Guitar,Josva,Thursday,7:15 PM,8:30 PM,5
+Keyboard,Josva,Thursday,6:30 PM,7:15 PM,5
+Keyboard,Josva,Thursday,7:15 PM,8:30 PM,5
+Guitar,Josva,Saturday,5:15 PM,6:00 PM,5
+Guitar,Josva,Saturday,6:00 PM,6:45 PM,5
+Guitar,Josva,Saturday,6:45 PM,7:30 PM,5
+Keyboard/Piano,Josva,Saturday,5:15 PM,6:00 PM,5
+Keyboard/Piano,Josva,Saturday,6:00 PM,6:45 PM,5
+Keyboard/Piano,Josva,Saturday,6:45 PM,7:30 PM,5
+Guitar,Josva,Sunday,5:00 PM,5:45 PM,5
+Guitar,Josva,Sunday,6:00 PM,6:45 PM,5
+Guitar,Josva,Sunday,6:45 PM,7:30 PM,5
+Keyboard/Piano,Josva,Sunday,5:00 PM,6:00 PM,5
+Keyboard/Piano,Josva,Sunday,6:00 PM,6:45 PM,5
+Keyboard/Piano,Josva,Sunday,6:45 PM,7:30 PM,5
+Guitar,Shiva,Friday,5:00 PM,5:45 PM,5
+Guitar,Shiva,Friday,6:00 PM,6:45 PM,5
+Guitar,Shiva,Friday,6:45 PM,7:30 PM,5
+Keyboard/Piano,Shiva,Friday,5:00 PM,6:00 PM,5
+Keyboard/Piano,Shiva,Friday,6:00 PM,6:45 PM,5
+Keyboard/Piano,Shiva,Friday,6:45 PM,7:30 PM,5
+Guitar,Shiva,Sunday,10:00 AM,10:45 AM,5
+Guitar,Shiva,Sunday,10:45 AM,11:30 AM,5
+Guitar,Shiva,Sunday,11:30 AM,12:15 PM,5
+Keyboard/Piano,Shiva,Sunday,10:00 AM,10:45 AM,5
+Keyboard/Piano,Shiva,Sunday,10:45 AM,11:30 AM,5
+Keyboard/Piano,Shiva,Sunday,11:30 AM,12:15 PM,5
+Drums,Subrata Bhaduri,Thursday,6:30 PM,7:15 PM,4
+Drums,Subrata Bhaduri,Thursday,7:15 PM,8:30 PM,4
+Drums,Subrata Bhaduri,Thursday,8:30 PM,9:15 PM,4
+Drums,Subrata Bhaduri,Saturday,5:00 PM,5:45 PM,4
+Drums,Subrata Bhaduri,Saturday,5:45 PM,6:30 PM,4
+Drums,Subrata Bhaduri,Saturday,6:30 PM,7:15 PM,4

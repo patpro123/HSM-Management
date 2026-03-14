@@ -104,9 +104,11 @@ const fetchStudent360Data = async (studentId) => {
           instrument: inst,
           teachers: new Set(),
           recurrences: [],
-          classes_remaining: parseInt(row.classes_remaining) || 0
+          classes_remaining: 0
         };
       }
+      // Accumulate classes_remaining across all slots for this instrument
+      instrumentGroups[inst].classes_remaining += parseInt(row.classes_remaining) || 0;
       if (row.teacher) instrumentGroups[inst].teachers.add(row.teacher);
       if (row.recurrence) instrumentGroups[inst].recurrences.push(row.recurrence);
     });
@@ -159,7 +161,10 @@ const fetchStudent360Data = async (studentId) => {
           classes_attended: classesAttended,
           classes_remaining: classesRemaining,
           classes_missed: classesMissed,
-          classes_excused: classesExcused
+          classes_excused: classesExcused,
+          instrument_credits: Object.fromEntries(
+            groupedBatches.map(b => [b.instrument, b.classes_remaining])
+          )
         }
       }
     };

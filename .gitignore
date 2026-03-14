@@ -19,6 +19,9 @@ node_modules/
 .DS_Store?
 ._*
 
+# Prod scripts (local dev tools, never commit)
+prod_script/
+
 # Logs
 logs
 *.log
