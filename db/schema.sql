@@ -44,7 +44,7 @@ END$$;
 
 -- Teacher payout types (added via migration 002)
 DO $$ BEGIN
-    CREATE TYPE payout_type AS ENUM ('fixed','per_class','per_student_monthly');
+    CREATE TYPE payout_type AS ENUM ('fixed','per_student_monthly');
 EXCEPTION
     WHEN duplicate_object THEN null;
 END$$;
@@ -98,13 +98,14 @@ CREATE TABLE IF NOT EXISTS teachers (
   created_at timestamptz DEFAULT now(),
   updated_at timestamptz DEFAULT now(),
   -- Added via migration 002
-  payout_type payout_type DEFAULT 'per_class',
-  rate numeric(10,2) DEFAULT 0 CHECK (rate >= 0)
+  payout_type payout_type DEFAULT 'per_student_monthly',
+  rate numeric(10,2) DEFAULT 0 CHECK (rate >= 0),
+  metadata jsonb DEFAULT '{}'::jsonb
 );
 
-COMMENT ON TABLE teachers IS 'Teacher profiles with payout configuration';
-COMMENT ON COLUMN teachers.payout_type IS 'Type of payout: fixed (monthly salary) or per_class (per session)';
-COMMENT ON COLUMN teachers.rate IS 'Rate amount: monthly salary for fixed, per-class amount for per_class';
+COMMENT ON TABLE teachers IS 'Teacher profiles and payout terms';
+COMMENT ON COLUMN teachers.payout_type IS 'Type of payout: fixed (monthly salary) or per_student_monthly (per student monthly basis)';
+COMMENT ON COLUMN teachers.rate IS 'Rate amount: monthly salary for fixed, per-student-monthly amount for per_student_monthly';
 
 -- Instruments table (available instruments for enrollment)
 CREATE TABLE IF NOT EXISTS instruments (
@@ -375,6 +376,20 @@ CREATE TABLE IF NOT EXISTS login_history (
 CREATE INDEX IF NOT EXISTS idx_login_history_user_id ON login_history(user_id);
 
 COMMENT ON TABLE login_history IS 'Audit trail of all login attempts (successful and failed)';
+
+-- Provisioned users: admin pre-registers an email before the user can log in (migration 015)
+CREATE TABLE IF NOT EXISTS provisioned_users (
+  id             uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  email          text UNIQUE NOT NULL,
+  entity_type    text NOT NULL CHECK (entity_type IN ('student', 'teacher', 'admin')),
+  entity_id      uuid,  -- NULL for admin provisioning (no linked entity required)
+  role           text NOT NULL CHECK (role IN ('student', 'teacher', 'admin')),
+  provisioned_by uuid REFERENCES users(id),
+  provisioned_at timestamptz DEFAULT now(),
+  used_at        timestamptz  -- populated on the user's first successful login
+);
+
+COMMENT ON TABLE provisioned_users IS 'Admin-managed allowlist: only provisioned emails can create new accounts';
 
 -- Auth Functions
 CREATE OR REPLACE FUNCTION update_updated_at_column()

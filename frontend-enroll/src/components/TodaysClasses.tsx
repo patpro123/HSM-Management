@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import { Student, Batch } from '../types';
+import PhoneLink from './PhoneLink';
 
 interface TodaysClassesProps {
   students: Student[];
@@ -82,8 +83,8 @@ const TodaysClasses: React.FC<TodaysClassesProps> = ({ students, batches }) => {
                         batchStudents.map(student => (
                           <tr key={student.id} className="hover:bg-slate-50">
                             <td className="px-6 py-3 font-medium text-slate-800">{student.name}</td>
-                            <td className="px-6 py-3 text-slate-600 text-sm">{student.phone}</td>
-                            <td className="px-6 py-3 text-slate-600 text-sm">{student.guardian_contact}</td>
+                            <td className="px-6 py-3 text-slate-600 text-sm"><PhoneLink phone={student.phone} /></td>
+                            <td className="px-6 py-3 text-slate-600 text-sm"><PhoneLink phone={student.guardian_contact} /></td>
                             <td className="px-6 py-3 text-right">
                               <button 
                                 className="text-green-600 hover:text-green-800 text-xs font-bold uppercase"

@@ -14,8 +14,8 @@ export const MOCK_INSTRUMENTS: Instrument[] = [
 export const MOCK_TEACHERS: Teacher[] = [
   { id: 't1', name: 'Rahul Sharma', phone: '9876543210', email: 'rahul@hsm.com', payout_type: 'fixed', rate: 30000 },
   { id: 't2', name: 'Priya Nair', phone: '9876543211', email: 'priya@hsm.com', payout_type: 'fixed', rate: 25000 },
-  { id: 't3', name: 'Amit Singh', phone: '9876543212', email: 'amit@hsm.com', payout_type: 'per_class', rate: 500 },
-  { id: 't4', name: 'Snehita Rao', phone: '9876543213', email: 'snehita@hsm.com', payout_type: 'per_class', rate: 600 },
+  { id: 't3', name: 'Amit Singh', phone: '9876543212', email: 'amit@hsm.com', payout_type: 'per_student_monthly', rate: 500 },
+  { id: 't4', name: 'Snehita Rao', phone: '9876543213', email: 'snehita@hsm.com', payout_type: 'per_student_monthly', rate: 600 },
 ];
 
 export const MOCK_BATCHES: Batch[] = [

@@ -326,6 +326,247 @@ LANDING_PAGE_DESIGN.md (Overview)
 
 ---
 
+## 🌐 Design Inspiration Research (Real-World Analysis)
+
+### Sites Analyzed for Structure & Inspiration
+
+#### 🎵 **Royal Academy of Music** ⭐ RECOMMENDED
+**URL:** [Royal Academy of Music - Awwwards Honorable Mention](https://www.awwwards.com/sites/royal-academy-of-music)
+
+**Why it works for HSM:**
+This award-winning institution perfectly balances institutional credibility with warmth. The design demonstrates how a prestigious music academy can feel both authoritative and approachable—exactly what HSM needs.
+
+**Key Design Elements to Adopt:**
+- **Typography:** "Inter Tight" with fluid, responsive scaling using clamp() — adapts elegantly from mobile to desktop
+- **Color Palette:** Deep charcoal (#222) + warm white, with warm orange (#FA5D29) for CTAs and "Learn" yellow (#FFF083) for highlights
+- **Layout Strategy:** Multi-tier sticky navigation, pill-shaped filter buttons with animated count indicators
+- **Whitespace:** Aggressive use of clamp() functions for proportional spacing (30px to 100px margins)
+- **Content Organization:** Card-based course/masterclass presentation system
+- **Vibe:** Professional yet approachable — sophisticated but not intimidating
+
+**Tailwind Implementation Notes:**
+```
+- font-serif for headings (Inter Tight equivalent)
+- text-slate-700 to text-amber-900 for warm tones
+- bg-white / bg-stone-50 for breathing room
+- accent-orange-500 for CTAs
+- leading-relaxed, tracking-wide for generous spacing
+```
+
+---
+
+#### 🎵 **Vienna Academy of Music and Arts**
+**URL:** [Topmark Studio Review](https://www.topmark.studio/blog/music-school-websites)
+
+**Why it works for HSM:**
+Master class in typography strategy. The use of playful cursive fonts for labels paired with elegant serifs for headings creates a "both creative AND professional" message—perfect for appealing to both young learners and serious students.
+
+**Key Design Elements:**
+- Playful, handwriting-style cursive font for section labels
+- Elegant serif fonts for headings
+- Creates "human softness" without sacrificing credibility
+- Strong color blocking to set text off from backgrounds
+
+---
+
+#### 🎵 **Notes n' Beats**
+**URL:** [Topmark Studio Review](https://www.topmark.studio/blog/music-school-websites)
+
+**Why it works for HSM:**
+Demonstrates the power of visual repetition and subtle motion. Orange concentric circles and layered scroll effects create a cohesive, delightful experience that feels alive and modern.
+
+**Key Design Elements:**
+- Distinctive brand color used repeatedly as unifying motif
+- Subtle scroll animations and layered effects
+- Repeating visual elements reinforce brand identity
+- Modern, interactive feel appeals to digital-native audiences
+
+---
+
+#### 🎵 **Webflow Music School Templates (Serenade & Forte)**
+**URL:** [Webflow Music School Templates](https://webflow.com/templates/search/music-school-96e00)
+
+**Why it works for HSM:**
+Production-ready templates showcasing diverse approaches: modern + professional, playful + bold, minimal + light, dark + contemporary. All templates include organized course listings, faculty bios, and clear enrollment CTAs.
+
+**Key Design Elements:**
+- Flexible multi-page configurations
+- Video integration (performances, testimonials)
+- Clear, organized class listings
+- Faculty/teacher profile sections
+- Testimonial carousels
+
+---
+
+#### 🎵 **LIM London School**
+**URL:** [Top School Website Designs of 2025](https://affoweb.com/blog/discover-the-top-school-website-designs-for-inspiration/)
+
+**Why it works for HSM:**
+Recognized as one of the best school websites of 2025 for brilliantly integrating brand graphics into visual music representations. Uses subtle animations and scroll effects that delight users while reinforcing the brand.
+
+**Key Design Elements:**
+- Graphical brand elements repurposed as music visualizations
+- Scroll-triggered animations revealing content progressively
+- Coherent brand language that *feels* musical
+- Subtle motion effects throughout
+
+---
+
+#### 🎵 **Manhattan School of Music**
+**URL:** [Top School Website Designs 2025](https://www.ubiqeducation.com/best-school-websites-2025)
+
+**Why it works for HSM:**
+Proves that prioritizing clear navigation and accessibility doesn't mean sacrificing aesthetics. Families want to find information about curriculum and enrollment without friction.
+
+**Key Design Elements:**
+- Intuitive information architecture
+- Clear pathways to programs, curriculum, and community events
+- Professional but not cold palette
+- Strong imagery paired with professional layout builds immediate trust
+
+---
+
+### Research Summary: 3 Recommended Design Directions
+
+#### **Direction 1: "Warm & Cultural Sophistication"** ⭐ BEST FOR HSM
+*Inspired by: Royal Academy of Music + Vienna Academy*
+
+**Visual vibe:** Blend Indian & Western aesthetics with warm, earthy tones and elegant typography. Premium yet approachable.
+
+**Best for:** Adult learners, professional musicians, parents seeking quality instruction
+
+**Key Tailwind patterns:**
+- `font-serif` for headings (elegant, musical)
+- `text-slate-700` / `text-amber-900` (warm earth tones)
+- `bg-white` / `bg-stone-50` (breathing room)
+- `accent-orange-500` / `accent-amber-600` (warm CTAs)
+- `leading-relaxed`, `tracking-wide` (generous spacing)
+
+---
+
+#### **Direction 2: "Modern & Playful"**
+*Inspired by: Notes n' Beats + LIM London + Webflow Playful Templates*
+
+**Visual vibe:** Clean, contemporary design with bold typography and vibrant accents. Energetic, accessible, creative.
+
+**Best for:** Young students (kids & teens), creative expression, enrollment conversions
+
+**Key Tailwind patterns:**
+- `font-sans` with `font-bold` headings
+- `bg-slate-900` / `bg-cyan-900` (modern dark)
+- `text-white` / `text-slate-100` (contrast)
+- `accent-blue-500` / `accent-purple-500` (vibrant)
+- Subtle `animate-bounce` or custom scroll animations
+
+---
+
+#### **Direction 3: "Minimalist & Focused"**
+*Inspired by: Webflow Minimal Templates + Manhattan School's Clarity*
+
+**Visual vibe:** Extremely clean, content-first design. Minimal color, maximum information focus. Trustworthy and no-nonsense.
+
+**Best for:** Adult learners, institutional credibility, accessibility-first audiences
+
+**Key Tailwind patterns:**
+- `font-sans` light to regular weight
+- `text-gray-700` on `bg-white` (high contrast)
+- `accent-slate-900` (minimal, used sparingly)
+- `max-w-4xl` container (reading comfort)
+- `space-y-8` / `space-y-12` (ample whitespace)
+
+---
+
+## 🎯 Recommended Design Direction for HSM: "Warm & Cultural Sophistication"
+
+### Why Royal Academy of Music Structure Fits HSM Best
+
+After analyzing 7+ award-winning music school websites, **the Royal Academy of Music** structure is the recommended template for HSM's landing page. Here's why:
+
+#### ✅ Perfect Alignment with HSM's Goals
+
+1. **Balances Credibility + Approachability**
+   - Royal Academy uses warm accents (orange) to humanize institutional authority
+   - HSM needs this: professionalism for parents, warmth for students
+
+2. **Elegant Typography Strategy**
+   - Fluid, responsive scaling means elegant desktop + readable mobile
+   - No jarring breakpoints = cohesive experience across all devices
+
+3. **Color Palette Translates Perfectly**
+   - Deep charcoal + warm white + orange accent = sophisticated yet warm
+   - Can be adapted for Indian music aesthetic by adding gold/rust accents
+
+4. **Card-Based Content Organization**
+   - Royal Academy's course/masterclass card system maps directly to HSM's 8 instruments
+   - Allows easy expansion as HSM grows
+
+5. **Navigation & Filter System**
+   - Sticky header with pill-shaped filter buttons
+   - Students can filter by "Beginner," "Intermediate," "Advanced" or by instrument
+   - Animated count indicators show available slots
+
+6. **Whitespace Philosophy**
+   - Uses clamp() functions for proportional spacing
+   - Feels premium and breathing-room-generous on desktop
+   - Doesn't feel cramped or overwhelming on mobile
+
+#### 📋 Structural Breakdown to Implement
+
+**Royal Academy Section | HSM Equivalent:**
+
+1. **Header + Navigation** → Same sticky header approach
+2. **Hero Section** → "Discover Your Musical Voice" with video background
+3. **Academy Grid System** → "Choose Your Instrument" (8 cards for Keyboard, Guitar, Piano, etc.)
+4. **Filter Navigation** → Filter by level (beginner/intermediate/advanced)
+5. **Masterclass Cards** → "Our Teachers" or "Teacher Profiles"
+6. **Event Calendar** → "Upcoming Performances & Events"
+7. **About Section** → "Why HSM" or "Our Philosophy"
+8. **Testimonials** → "Student Success Stories" carousel
+9. **Final CTA** → "Enroll Now" with urgency (limited slots)
+10. **Footer** → Contact info, links, social media
+
+#### 🎨 Color Adaptation for HSM
+
+**Royal Academy Palette:**
+- Primary: Deep charcoal (#222)
+- Accent: Warm orange (#FA5D29)
+- Secondary: Soft grays
+- Highlight: Learn yellow (#FFF083)
+
+**HSM Adaptation (Keeping Royal Academy Structure):**
+- Primary: Deep slate-900 or slate-950 (keeps premium feel)
+- Accent: Warm amber-600 or orange-500 (Hindu/Indian music association)
+- Secondary: Slate-100 / stone-50 (breathing room)
+- Highlight: Gold-400 or amber-300 (for "Featured Teacher" or "Top Courses")
+- Optional: Add subtle saffron (Indian flag color) as accent on cards
+
+#### 🔧 Technical Implementation Notes
+
+Royal Academy's approach uses:
+- `clamp()` functions for responsive typography
+- CSS Grid for card layouts
+- Smooth scroll animations (can use Framer Motion)
+- Sticky positioning for nav
+- SCSS variables for color system
+
+All achievable with **Next.js + Tailwind CSS + Framer Motion** as planned.
+
+---
+
+## 🚀 Next Steps
+
+1. **Design Phase:** Create Figma mockups based on Royal Academy structure, adapted for HSM content
+2. **Content Gathering:**
+   - High-quality photos of HSM teachers
+   - Student success stories (with permissions)
+   - Instrument showcase imagery
+   - Performance videos
+3. **Development Setup:** Use Next.js + Tailwind, reference [IMPLEMENTATION_ROADMAP.md](./IMPLEMENTATION_ROADMAP.md)
+4. **Color System:** Create CSS variables mirroring Royal Academy's approach but with HSM's warm earth tones
+5. **Content Strategy:** Adapt copy from [CONTENT_STRATEGY.md](./CONTENT_STRATEGY.md) to match this direction
+
+---
+
 ## 🔐 Important Notes
 
 ### Brand Guidelines

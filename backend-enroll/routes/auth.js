@@ -26,16 +26,24 @@ router.get('/google',
  * Google OAuth callback
  * GET /api/auth/google/callback
  */
-router.get('/google/callback',
-  passport.authenticate('google', { 
-    failureRedirect: '/login?error=auth_failed',
-    session: false  // We'll use JWT instead of sessions
-  }),
-  async (req, res) => {
+router.get('/google/callback', (req, res, next) => {
+  const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173'
+
+  passport.authenticate('google', { session: false }, async (err, user, info) => {
+    if (err) {
+      console.error('OAuth error:', err)
+      return res.redirect(`${frontendUrl}/?error=auth_error`)
+    }
+
+    if (!user) {
+      const code = info?.message === 'not_provisioned' ? 'not_provisioned' : 'auth_failed'
+      return res.redirect(`${frontendUrl}/?error=${code}`)
+    }
+
     try {
       // Generate JWT tokens
-      const accessToken = generateToken(req.user)
-      const refreshToken = await generateRefreshToken(req.user.id)
+      const accessToken = generateToken(user)
+      const refreshToken = await generateRefreshToken(user.id)
 
       // Set refresh token as httpOnly cookie (more secure)
       res.cookie('refreshToken', refreshToken, {
@@ -46,14 +54,13 @@ router.get('/google/callback',
       })
 
       // Redirect to frontend main app with access token
-      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173'
       res.redirect(`${frontendUrl}/?token=${accessToken}`)
     } catch (error) {
       console.error('Error in OAuth callback:', error)
-      res.redirect('/login?error=token_generation_failed')
+      res.redirect(`${frontendUrl}/?error=token_generation_failed`)
     }
-  }
-)
+  })(req, res, next)
+})
 
 /**
  * Get current user profile

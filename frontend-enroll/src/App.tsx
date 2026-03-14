@@ -1,17 +1,18 @@
 
 import React, { useState, useEffect } from 'react';
 import StudentProfile from './pages/StudentProfile';
-import { 
-  Student, 
-  Batch, 
-  AttendanceRecord, 
-  PaymentRecord, 
+import {
+  Student,
+  Batch,
+  AttendanceRecord,
+  PaymentRecord,
   BatchAssignment,
   Instrument
 } from './types';
 import { API_BASE_URL } from './config';
 import { getCurrentUser, login, logout, handleOAuthCallback, isAuthenticated, setToken } from './auth';
 import { apiGet } from './api';
+import DevSwitcher from './components/DevSwitcher';
 import StatsOverview from './components/StatsOverview';
 // @ts-ignore - Explicitly import .tsx to avoid resolving to the legacy .jsx file
 import AttendanceDashboard from './components/AttendanceDashboard';
@@ -21,18 +22,21 @@ import UserManagement from './components/UserManagement';
 import EnrollmentForm from './components/EnrollmentForm';
 import PaymentModule from './components/PaymentModule';
 import FinanceModule from './components/FinanceModule';
-import MigrationTools from './components/MigrationTools';
+import Teacher360View from './components/Teacher360View';
 import hsmLogo from './images/hsmLogo.jpg';
+import LandingPage from './components/LandingPage';
+import NotificationsPanel from './components/NotificationsPanel';
 
 const App: React.FC = () => {
   // Add new profile page states
-  const [activeTab, setActiveTab] = useState<'stats' | 'students' | 'attendance' | 'payments' | 'finance' | 'teachers' | 'users' | 'student-profile' | 'enrollment' | 'migration'>(
-    getCurrentUser()?.roles?.includes('admin') ? 'stats' : 'student-profile'
+  const [activeTab, setActiveTab] = useState<'stats' | 'students' | 'attendance' | 'payments' | 'finance' | 'teachers' | 'users' | 'student-profile' | 'teacher-profile' | 'enrollment'>(
+    getCurrentUser()?.roles?.includes('admin') ? 'stats' : getCurrentUser()?.roles?.includes('teacher') ? 'teacher-profile' : 'student-profile'
   );
   const [students, setStudents] = useState<Student[]>([]);
   const [batches, setBatches] = useState<Batch[]>([]);
   const [instruments, setInstruments] = useState<Instrument[]>([]);
   const [enrollments, setEnrollments] = useState<BatchAssignment[]>([]);
+  const [prospects, setProspects] = useState<any[]>([]);
   const [attendance, setAttendance] = useState<AttendanceRecord[]>([]);
   const [payments, setPayments] = useState<PaymentRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -40,31 +44,31 @@ const App: React.FC = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [user, setUser] = useState(getCurrentUser());
   const [authChecked, setAuthChecked] = useState(false);
-  const [oauthBypassed, setOauthBypassed] = useState(false);
+  const [bypassedUser, setBypassedUser] = useState<any>(null);
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [devProfile, setDevProfile] = useState<'admin' | 'teacher' | 'student'>('admin');
+  const [devOverride, setDevOverride] = useState<{ email: string; name: string } | null>(null);
 
   // Handle OAuth callback on mount
   useEffect(() => {
+    // Check for OAuth error params first (e.g. not_provisioned, auth_failed)
+    const urlParams = new URLSearchParams(window.location.search);
+    const errorParam = urlParams.get('error');
+    if (errorParam) {
+      setAuthError(errorParam);
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+
     // Check backend config for OAuth bypass
     fetch(`${API_BASE_URL}/api/auth/config`)
       .then(res => res.json())
       .then(data => {
         if (data.authDisabled && data.user) {
-          setOauthBypassed(true);
-          // Create a fake JWT token for localStorage
-          const fakePayload = {
-            userId: data.user.id,
-            email: data.user.email,
-            name: data.user.name,
-            roles: data.user.roles,
-            exp: Math.floor(Date.now() / 1000) + 86400 // 1 day expiry
-          };
-          const fakeToken = [
-            'header',
-            btoa(JSON.stringify(fakePayload)),
-            'signature'
-          ].join('.');
-          setToken(fakeToken);
-          setUser(data.user);
+          // In local dev mode with auth bypassed, we simply save the user.
+          // We don't auto-login here so the landing page still shows!
+          setBypassedUser(data.user);
+          setDevProfile(data.profile || 'admin');
+          setDevOverride(data.devOverride || null);
           setAuthChecked(true);
         } else {
           // Normal OAuth flow
@@ -83,12 +87,14 @@ const App: React.FC = () => {
   useEffect(() => {
     if (user) {
       const isAdminRole = user.roles.includes('admin');
-      // If admin is on student profile (default), switch to dashboard to avoid blank page
-      if (isAdminRole && activeTab === 'student-profile') {
+      const isTeacherRole = !isAdminRole && user.roles.includes('teacher');
+      if (isAdminRole && (activeTab === 'student-profile' || activeTab === 'teacher-profile')) {
         setActiveTab('stats');
       }
-      // If student is on admin tabs, switch to profile
-      if (!isAdminRole && activeTab !== 'student-profile') {
+      if (isTeacherRole && activeTab !== 'teacher-profile') {
+        setActiveTab('teacher-profile');
+      }
+      if (!isAdminRole && !isTeacherRole && activeTab !== 'student-profile') {
         setActiveTab('student-profile');
       }
     }
@@ -107,12 +113,13 @@ const App: React.FC = () => {
       if (isAdminOrTeacher) {
         // Fetch all data in parallel using authenticated API calls
         // We catch errors individually so one failure doesn't break the entire dashboard
-        const [studentsData, batchesData, instrumentsData, paymentsData, attendanceData] = await Promise.all([
+        const [studentsData, batchesData, instrumentsData, paymentsData, attendanceData, prospectsData] = await Promise.all([
           apiGet('/api/enrollments').catch(e => { console.error('Enrollments fetch failed', e); return { enrollments: [] }; }),
           apiGet('/api/batches').catch(e => { console.error('Batches fetch failed', e); return { batches: [] }; }),
           apiGet('/api/instruments').catch(e => { console.error('Instruments fetch failed', e); return { instruments: [] }; }),
           apiGet('/api/payments').catch(e => { console.error('Payments fetch failed', e); return { payments: [] }; }),
-          apiGet('/api/attendance').catch(e => { console.error('Attendance fetch failed', e); return { attendance: [] }; })
+          apiGet('/api/attendance').catch(e => { console.error('Attendance fetch failed', e); return { attendance: [] }; }),
+          apiGet('/api/prospects').catch(e => { console.error('Prospects fetch failed', e); return { prospects: [] }; }),
         ]);
 
         setStudents(studentsData.enrollments || []);
@@ -120,6 +127,7 @@ const App: React.FC = () => {
         setInstruments(instrumentsData.instruments || []);
         setPayments(paymentsData.payments || []);
         setAttendance(attendanceData.attendance || []);
+        setProspects(prospectsData.prospects || []);
       } else {
         // For student/parent users, fetch only what they need and have access to
         try {
@@ -157,7 +165,7 @@ const App: React.FC = () => {
     } else if (authChecked) {
       setLoading(false);
     }
-  }, [authChecked]);
+  }, [authChecked, user]);
 
   const handleTabChange = (tab: typeof activeTab) => {
     setActiveTab(tab);
@@ -169,6 +177,24 @@ const App: React.FC = () => {
     setUser(null);
     // Will trigger login screen to show since isAuthenticated() will return false
     window.location.href = '/';
+  };
+
+  // Dev-only: switch profile without server restart or page reload
+  const handleDevSwitched = (newUser: any) => {
+    const fakePayload = {
+      userId: newUser.id,
+      email: newUser.email,
+      name: newUser.name,
+      roles: newUser.roles,
+      exp: Math.floor(Date.now() / 1000) + 86400,
+    };
+    const fakeToken = ['header', btoa(JSON.stringify(fakePayload)), 'signature'].join('.');
+    setToken(fakeToken);
+    setBypassedUser(newUser);
+    setDevProfile(newUser.roles.includes('admin') ? 'admin' : newUser.roles.includes('teacher') ? 'teacher' : 'student');
+    const isDefaultUser = ['1111', '2222', '3333'].some(p => newUser.id.startsWith(p));
+    setDevOverride(isDefaultUser ? null : { email: newUser.email, name: newUser.name });
+    setUser(newUser); // triggers fetchData via useEffect
   };
 
   // Show loading while checking auth
@@ -183,53 +209,64 @@ const App: React.FC = () => {
     );
   }
 
-  // Show login screen if not authenticated
-  if (!isAuthenticated() && !oauthBypassed) {
+  // Show landing page if not authenticated
+  if (!isAuthenticated()) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-4">
-        <div className="bg-white rounded-2xl shadow-2xl p-8 md:p-12 max-w-md w-full">
-          <div className="text-center mb-8">
-            <img src={hsmLogo} alt="HSM Logo" className="w-24 h-24 mx-auto mb-4 rounded-full shadow-lg" />
-            <h1 className="text-3xl font-bold text-slate-900 mb-2">HSM Management</h1>
-            <p className="text-slate-600 italic">"Unleash the <span className="text-red-500 not-italic font-bold">MUSICIAN</span> in you"</p>
-          </div>
-          <button
-            onClick={() => login(API_BASE_URL)}
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-4 px-6 rounded-lg transition-colors flex items-center justify-center gap-3 shadow-lg"
-          >
-            <svg className="w-6 h-6" viewBox="0 0 24 24">
-              <path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-              <path fill="currentColor" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-              <path fill="currentColor" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
-              <path fill="currentColor" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
-            </svg>
-            Sign in with Google
-          </button>
-          <p className="mt-6 text-center text-sm text-slate-500">
-            Secure authentication powered by Google OAuth
-          </p>
-        </div>
-      </div>
+      <>
+        <LandingPage
+          authError={authError ?? undefined}
+          onLogin={() => {
+            if (bypassedUser) {
+              // Dev mode bypass: Login instantly with dummy user
+              const fakePayload = {
+                userId: bypassedUser.id,
+                email: bypassedUser.email,
+                name: bypassedUser.name,
+                roles: bypassedUser.roles,
+                exp: Math.floor(Date.now() / 1000) + 86400 // 1 day expiry
+              };
+              const fakeToken = ['header', btoa(JSON.stringify(fakePayload)), 'signature'].join('.');
+              setToken(fakeToken);
+              setUser(bypassedUser);
+            } else {
+              // Production: trigger actual OAuth flow
+              login(API_BASE_URL);
+            }
+          }}
+        />
+        {bypassedUser && (
+          <DevSwitcher
+            currentProfile={devProfile}
+            currentOverride={devOverride}
+            onSwitched={handleDevSwitched}
+          />
+        )}
+      </>
     );
   }
 
   // Main app UI
   const isAdmin = user && user.roles.includes('admin');
-  const isStudentOrParent = user && !isAdmin && (user.roles.includes('student') || user.roles.includes('parent'));
+  const isTeacherOnly = user && !isAdmin && user.roles.includes('teacher');
+  const isStudentOrParent = user && !isAdmin && !isTeacherOnly && (user.roles.includes('student') || user.roles.includes('parent'));
 
   // Menu items by role
   const menuItems = isAdmin
     ? [
-        { key: 'stats', label: 'Dashboard' },
-        { key: 'students', label: 'Students' },
+      { key: 'stats', label: 'Dashboard' },
+      { key: 'students', label: 'Students' },
+      { key: 'attendance', label: 'Attendance' },
+      { key: 'payments', label: 'Payments' },
+      { key: 'finance', label: 'Finance' },
+      { key: 'teachers', label: 'Teachers' },
+      { key: 'users', label: 'Users' },
+    ]
+    : isTeacherOnly
+      ? [
+        { key: 'teacher-profile', label: 'My Profile' },
         { key: 'attendance', label: 'Attendance' },
-        { key: 'payments', label: 'Payments' },
-        { key: 'finance', label: 'Finance' },
-        { key: 'teachers', label: 'Teachers' },
-        { key: 'users', label: 'Users' },
-        { key: 'migration', label: 'Migration' },
       ]
-    : [
+      : [
         { key: 'student-profile', label: 'My Profile' },
       ];
 
@@ -277,9 +314,9 @@ const App: React.FC = () => {
               </svg>
             </button>
             <div className="w-full bg-white rounded-xl overflow-hidden p-3 flex items-center justify-center shadow-lg">
-              <img 
-                src={hsmLogo} 
-                alt="HSM Logo" 
+              <img
+                src={hsmLogo}
+                alt="HSM Logo"
                 className="w-full h-auto object-contain"
               />
             </div>
@@ -323,77 +360,113 @@ const App: React.FC = () => {
         </nav>
       </>
 
-      <main className="flex-1 p-4 md:p-10 overflow-y-auto max-h-screen md:ml-0">
-        {/* Main content by tab */}
-        {isAdmin ? (
-          <div className="bg-white rounded-xl p-8 shadow-sm border border-slate-100">
-            {activeTab === 'stats' && (
-              <StatsOverview 
-                students={students.filter(s => (s as any).is_active !== false)}
-                enrollments={enrollments}
-                attendance={attendance}
-                payments={payments}
-                onNavigate={setActiveTab}
-              />
-            )}
-            {activeTab === 'students' && (
-              <StudentHub 
-                students={students}
-                batches={batches}
-                instruments={instruments}
-                onRefresh={fetchData}
-              />
-            )}
-            {activeTab === 'attendance' && (
-              <AttendanceDashboard 
-                batches={batches}
-                onRefresh={fetchData}
-              />
-            )}
-            {activeTab === 'payments' && (
-              <PaymentModule 
-                students={students}
-                payments={payments}
-                onRefresh={fetchData}
-              />
-            )}
-            {activeTab === 'finance' && (
-              <FinanceModule
-                students={students}
-                batches={batches}
-                payments={payments}
-                instruments={instruments}
-              />
-            )}
-            {activeTab === 'teachers' && (
-              <TeacherManagement
-                instruments={instruments}
-                onRefresh={fetchData}
-              />
-            )}
-            {activeTab === 'users' && (
-              <UserManagement />
-            )}
-            {activeTab === 'migration' && (
-              <MigrationTools />
-            )}
-            {activeTab === 'enrollment' && (
-              <EnrollmentForm
-                students={students}
-                batches={batches}
-                instruments={instruments}
-                onRefresh={fetchData}
-              />
-            )}
+      <main className="flex-1 overflow-y-auto max-h-screen md:ml-0 flex flex-col bg-slate-50">
+
+        {/* Top Header */}
+        <header className="bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between sticky top-0 z-30 shadow-sm">
+          <div className="flex items-center gap-4">
+            <h2 className="text-xl font-bold tracking-tight text-slate-800 ml-12 md:ml-0">
+              {menuItems.find(item => item.key === activeTab)?.label || 'Dashboard'}
+            </h2>
           </div>
-        ) : (
-          <div className="bg-white rounded-xl p-8 shadow-sm border border-slate-100">
-            {activeTab === 'student-profile' && (
-              <StudentProfile />
-            )}
+          <div className="flex items-center gap-4">
+            {isAdmin && <NotificationsPanel onNavigation={(path) => handleTabChange(path as any)} />}
+            <div className="hidden md:flex flex-col text-right">
+              <span className="text-sm font-bold text-slate-700">{user?.name || user?.email}</span>
+              <span className="text-xs text-slate-500 capitalize">{user?.roles[0]}</span>
+            </div>
           </div>
-        )}
+        </header>
+
+        <div className="p-4 md:p-10">
+          {/* Main content by tab */}
+          {isAdmin ? (
+            <div className="bg-white rounded-xl p-8 shadow-sm border border-slate-100">
+              {activeTab === 'stats' && (
+                <StatsOverview
+                  students={students.filter(s => (s as any).is_active !== false)}
+                  prospectsCount={prospects.length}
+                  attendance={attendance}
+                  payments={payments}
+                  onNavigate={setActiveTab}
+                />
+              )}
+              {activeTab === 'students' && (
+                <StudentHub
+                  students={students}
+                  batches={batches}
+                  instruments={instruments}
+                  prospects={prospects}
+                  onRefresh={fetchData}
+                />
+              )}
+              {activeTab === 'attendance' && (
+                <AttendanceDashboard
+                  batches={batches}
+                  onRefresh={fetchData}
+                />
+              )}
+              {activeTab === 'payments' && (
+                <PaymentModule
+                  students={students}
+                  payments={payments}
+                  onRefresh={fetchData}
+                />
+              )}
+              {activeTab === 'finance' && (
+                <FinanceModule
+                  students={students}
+                  batches={batches}
+                  payments={payments}
+                  instruments={instruments}
+                />
+              )}
+              {activeTab === 'teachers' && (
+                <TeacherManagement
+                  instruments={instruments}
+                  onRefresh={fetchData}
+                />
+              )}
+              {activeTab === 'users' && (
+                <UserManagement />
+              )}
+              {activeTab === 'enrollment' && (
+                <EnrollmentForm
+                  students={students}
+                  batches={batches}
+                  instruments={instruments}
+                  onRefresh={fetchData}
+                />
+              )}
+            </div>
+          ) : isTeacherOnly ? (
+            <div className="bg-white rounded-xl p-8 shadow-sm border border-slate-100">
+              {activeTab === 'teacher-profile' && (
+                <Teacher360View selfView isModal={false} />
+              )}
+              {activeTab === 'attendance' && (
+                <AttendanceDashboard
+                  batches={batches}
+                  onRefresh={fetchData}
+                />
+              )}
+            </div>
+          ) : (
+            <div className="bg-white rounded-xl p-8 shadow-sm border border-slate-100">
+              {activeTab === 'student-profile' && (
+                <StudentProfile />
+              )}
+            </div>
+          )}
+        </div>
       </main>
+      {bypassedUser && (
+        <DevSwitcher
+          currentProfile={devProfile}
+          currentOverride={devOverride}
+          onSwitched={handleDevSwitched}
+        />
+      )}
     </div>
   );
 };

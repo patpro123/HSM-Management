@@ -5,9 +5,18 @@ const pool = require('../db');
 // GET /api/teachers - List all teachers
 router.get('/', async (req, res) => {
   try {
-    const result = await pool.query('SELECT * FROM teachers ORDER BY name');
+    const result = await pool.query(`
+      SELECT t.*,
+        COALESCE(t.metadata->>'email', '') AS email,
+        COUNT(b.id)::int AS batch_count
+      FROM teachers t
+      LEFT JOIN batches b ON b.teacher_id = t.id
+      GROUP BY t.id
+      ORDER BY t.name
+    `);
     res.json({ teachers: result.rows });
   } catch (err) {
+    console.error('Fetch teachers error:', err);
     res.status(500).json({ error: 'Failed to fetch teachers' });
   }
 });
@@ -24,7 +33,7 @@ router.post('/', async (req, res) => {
       `INSERT INTO teachers (name, phone, payout_type, rate, is_active, metadata) 
        VALUES ($1, $2, $3, $4, $5, $6) 
        RETURNING *`,
-      [name, phone || null, payout_type || 'per_class', rate || 0, is_active !== undefined ? is_active : true, metadata]
+      [name, phone || null, payout_type || 'per_student_monthly', rate || 0, is_active !== undefined ? is_active : true, metadata]
     );
     res.status(201).json({ teacher: result.rows[0] });
   } catch (err) {

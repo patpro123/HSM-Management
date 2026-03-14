@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hyderabad School of Music | Light Theme</title>
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=Outfit:wght@800&display=swap"
+        rel="stylesheet">
+
+    <link rel="stylesheet" href="styles.css">
+</head>
+
+<body class="light-theme">
+
+    <div class="ambient-glow glow-1"></div>
+    <div class="ambient-glow glow-2"></div>
+
+    <!-- Navigation -->
+    <nav class="navbar" id="navbar">
+        <div class="nav-container">
+            <a href="#" class="logo">
+                <img src="HSM_WhiteLogo.png" alt="HSM Logo" class="inverted-logo" style="height: 32px; width: auto;" />
+            </a>
+
+            <div class="nav-links">
+                <a href="#programs">Programs</a>
+                <a href="#faculty">Faculty</a>
+                <a href="#about">About</a>
+            </div>
+
+            <div class="nav-actions">
+                <a href="#" class="btn btn-outline">Sign In</a>
+                <a href="#" class="btn btn-primary float-hover">Enroll Now</a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <header class="hero" id="home">
+        <div class="hero-content">
+            <div class="badge fade-up">
+                <span class="badge-dot"></span>
+                <span>Admissions Now Open for 2026 Batch</span>
+            </div>
+
+            <h1 class="hero-title fade-up stagger-1">
+                Harmonize Your <br>
+                <span class="gradient-text">Potential.</span>
+            </h1>
+
+            <p class="hero-subtitle fade-up stagger-2">
+                Join Hyderabad's premier academy for classical and contemporary music. Master your craft with
+                world-class faculty in a bright, modern environment.
+            </p>
+
+            <div class="hero-cta fade-up stagger-3">
+                <a href="#programs" class="btn btn-primary btn-large float-hover">Explore Instruments</a>
+                <a href="#about" class="btn btn-secondary btn-large">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                    </svg>
+                    Watch Performances
+                </a>
+            </div>
+        </div>
+
+        <div class="hero-visual fade-in stagger-4">
+            <div class="abstract-shape shape-main"></div>
+            <div class="abstract-shape shape-accent"></div>
+            <div class="floating-note note-1">♪</div>
+            <div class="floating-note note-2">♫</div>
+            <div class="floating-note note-3">♬</div>
+        </div>
+
+        <div class="scroll-indicator">
+            <div class="mouse">
+                <div class="wheel"></div>
+            </div>
+            <span class="scroll-text">Discover More</span>
+        </div>
+    </header>
+
+    <!-- Logo / Trust Bar -->
+    <section class="trust-bar fade-up-scroll">
+        <p class="trust-text">CERTIFIED EXCELLENCE BY</p>
+        <div class="trust-logos">
+            <div class="trust-logo">TRINITY COLLEGE</div>
+            <div class="trust-logo">ABRSM</div>
+            <div class="trust-logo">ROCK SCHOOL</div>
+            <div class="trust-logo">GANDHARVA MAHAVIDYALAYA</div>
+        </div>
+    </section>
+
+    <!-- Programs (Bento Grid) -->
+    <section class="programs" id="programs">
+        <div class="section-header fade-up-scroll">
+            <h2 class="section-title">Master Your <span class="serif-italic">Instrument</span></h2>
+            <p class="section-desc">From classical foundations to modern performance. Tailored curriculums for every age
+                and skill level.</p>
+        </div>
+
+        <div class="bento-grid">
+            <!-- Main Featured -->
+            <div class="bento-item featured fade-up-scroll card-glass" data-delay="0">
+                <div class="card-bg guitar-bg border-image"></div>
+                <div class="card-content">
+                    <div class="card-tag">Most Popular</div>
+                    <h3>Acoustic & Electric Guitar</h3>
+                    <p>Master fingerstyle, strumming techniques, and lead solos.</p>
+                    <a href="#" class="card-link mt-auto">View Curriculum →</a>
+                </div>
+            </div>
+
+            <!-- Standard Items -->
+            <div class="bento-item fade-up-scroll card-glass" data-delay="100">
+                <div class="card-bg piano-bg border-image"></div>
+                <div class="card-content">
+                    <h3>Piano & Keyboard</h3>
+                    <p>Classical foundations to contemporary pop.</p>
+                </div>
+            </div>
+
+            <div class="bento-item fade-up-scroll card-glass" data-delay="200">
+                <div class="card-bg vocal-bg border-image"></div>
+                <div class="card-content">
+                    <h3>Vocals</h3>
+                    <p>Hindustani, Carnatic, and Western styles.</p>
+                </div>
+            </div>
+
+            <div class="bento-item fade-up-scroll card-glass" data-delay="0">
+                <div class="card-bg drums-bg border-image"></div>
+                <div class="card-content">
+                    <h3>Drums & Percussion</h3>
+                    <p>Rhythm, timing, and dynamic groove control.</p>
+                </div>
+            </div>
+
+            <div class="bento-item wide fade-up-scroll card-glass" data-delay="100">
+                <div class="card-bg"></div>
+                <div class="card-visual-element">
+                    <div class="sound-bars">
+                        <span></span><span></span><span></span><span></span><span></span>
+                    </div>
+                </div>
+                <div class="card-content">
+                    <div class="card-tag blue">New Program</div>
+                    <h3>Music Production</h3>
+                    <p>Learn Ableton, recording techniques, and sound design in our new studio.</p>
+                    <a href="#" class="card-link mt-auto">Explore Studio →</a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Testimonials / Social Proof -->
+    <section class="testimonials" id="about">
+        <div class="section-header center fade-up-scroll">
+            <h2 class="section-title">Voices of <span class="gradient-text">HSM</span></h2>
+        </div>
+
+        <div class="testimonial-carousel fade-up-scroll">
+            <div class="testimonial-track" id="testimonialTrack">
+                <!-- Cards injected by JS -->
+            </div>
+        </div>
+    </section>
+
+    <!-- Faculty Teaser -->
+    <section class="faculty-teaser" id="faculty">
+        <div class="container fade-up-scroll">
+            <div class="faculty-grid">
+                <div class="faculty-info">
+                    <h2 class="section-title">Learn from the <br><span class="serif-italic">Masters</span></h2>
+                    <p class="section-desc">Our faculty consists of active recording artists, symphony members, and
+                        award-winning educators dedicated to your growth.</p>
+                    <a href="#" class="btn btn-secondary mt-8 float-hover">Meet the Team</a>
+                </div>
+                <div class="faculty-cards">
+                    <div class="faculty-card glass-panel float-1">
+                        <div class="faculty-avatar avatar-1"></div>
+                        <div class="faculty-details">
+                            <h4>Ravi Kumar</h4>
+                            <p>Head of Strings</p>
+                        </div>
+                    </div>
+                    <div class="faculty-card glass-panel float-2">
+                        <div class="faculty-avatar avatar-2"></div>
+                        <div class="faculty-details">
+                            <h4>Anita Sharma</h4>
+                            <p>Vocal Director</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- CTA Section -->
+    <section class="cta-section">
+        <div class="cta-container glass-panel fade-up-scroll">
+            <div class="cta-glow"></div>
+            <h2 class="gradient-text">Ready to start playing?</h2>
+            <p>Book a free 30-minute trial session today and meet your future instructor.</p>
+            <form class="cta-form inline-form">
+                <input type="email" placeholder="Enter your email address" required class="glass-input">
+                <button type="submit" class="btn btn-primary float-hover">Get Started</button>
+            </form>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="footer-grid">
+            <div class="footer-brand">
+                <a href="#" class="logo mb-4">
+                    <img src="HSM_WhiteLogo.png" alt="HSM Logo" class="inverted-logo"
+                        style="height: 48px; width: auto;" />
+                </a>
+                <p class="text-muted">Hyderabad's premier destination for musical excellence and artistic development.
+                </p>
+            </div>
+
+            <div class="footer-links">
+                <h4>Programs</h4>
+                <a href="#">Guitar</a>
+                <a href="#">Piano</a>
+                <a href="#">Vocals</a>
+                <a href="#">Drums</a>
+            </div>
+
+            <div class="footer-links">
+                <h4>Academy</h4>
+                <a href="#">About Us</a>
+                <a href="#">Faculty</a>
+                <a href="#">Events</a>
+                <a href="#">Careers</a>
+            </div>
+
+            <div class="footer-links">
+                <h4>Contact</h4>
+                <a href="#">support@hsm.edu.in</a>
+                <a href="#">+91 98765 43210</a>
+                <p class="text-muted mt-2">123 Jubilee Hills,<br>Hyderabad, TS 500033</p>
+            </div>
+        </div>
+
+        <div class="footer-bottom">
+            <p>&copy; 2026 Hyderabad School of Music. All rights reserved.</p>
+            <div class="legal-links">
+                <a href="#">Privacy</a>
+                <a href="#">Terms</a>
+            </div>
+        </div>
+    </footer>
+
+    <script src="script.js"></script>
+</body>
+
+</html>

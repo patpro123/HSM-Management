@@ -1,9 +1,11 @@
 const express = require('express');
 const router = express.Router();
 const pool = require('../db');
+const { authenticateJWT } = require('../auth/jwtMiddleware');
+const { authorizeRole } = require('../auth/rbacMiddleware');
 
-// PUT /api/students/:id - Update student details and enrollments
-router.put('/:id', async (req, res) => {
+// PUT /api/students/:id - Update student details and enrollments (admin only)
+router.put('/:id', authenticateJWT, authorizeRole(['admin']), async (req, res) => {
   const { id } = req.params;
   const { name, dob, phone, guardian_contact, metadata, batches } = req.body;
 
@@ -45,7 +47,7 @@ router.put('/:id', async (req, res) => {
       total_credits: totalCredits
     };
 
-    // 1. Update Student Basic Info
+    // 1. Update Student Basic Info & Upgrade Prospect to Permanent
     const updateQuery = `
       UPDATE students 
       SET name = COALESCE($1, name),
@@ -53,17 +55,18 @@ router.put('/:id', async (req, res) => {
           phone = COALESCE($3, phone),
           guardian_contact = COALESCE($4, guardian_contact),
           metadata = $5,
+          student_type = 'permanent',
           updated_at = NOW()
       WHERE id = $6
       RETURNING *
     `;
-    
+
     const studentRes = await client.query(updateQuery, [
-      name, 
-      dob || null, 
-      phone, 
-      guardian_contact, 
-      JSON.stringify(finalMetadata), 
+      name,
+      dob || null,
+      phone,
+      guardian_contact,
+      JSON.stringify(finalMetadata),
       id
     ]);
 
@@ -74,7 +77,7 @@ router.put('/:id', async (req, res) => {
         "SELECT id FROM enrollments WHERE student_id = $1 AND status = 'active'",
         [id]
       );
-      
+
       let enrollmentId;
       if (enrollmentRes.rows.length === 0) {
         const newEnr = await client.query(
@@ -92,7 +95,7 @@ router.put('/:id', async (req, res) => {
         [enrollmentId]
       );
       const currentBatches = currentBatchesRes.rows;
-      
+
       const newBatchIds = batches.map(b => String(b.batch_id));
       const currentBatchIds = currentBatches.map(b => String(b.batch_id));
 
@@ -127,12 +130,12 @@ router.put('/:id', async (req, res) => {
       for (const b of toUpdate) {
         const existingRecord = currentBatches.find(cb => String(cb.batch_id) === String(b.batch_id));
         if (existingRecord) {
-           await client.query(
-             `UPDATE enrollment_batches 
+          await client.query(
+            `UPDATE enrollment_batches 
               SET payment_frequency = $1, enrolled_on = $2
               WHERE id = $3`,
-             [b.payment_frequency || 'monthly', b.enrolled_on || new Date(), existingRecord.id]
-           );
+            [b.payment_frequency || 'monthly', b.enrolled_on || new Date(), existingRecord.id]
+          );
         }
       }
     }

@@ -18,9 +18,9 @@ INSERT INTO teachers (id,name,phone,role,payout_terms)
 VALUES
 ('10000000-0000-0000-0000-000000000001','Ravi Kumar','+91-9000000001','teacher','{"type":"fixed","salary":30000}'::jsonb),
 ('10000000-0000-0000-0000-000000000002','Anita Sharma','+91-9000000002','teacher','{"type":"fixed","salary":25000}'::jsonb),
-('10000000-0000-0000-0000-000000000003','Suresh Patel','+91-9000000003','teacher','{"type":"per_class","rate":200}'::jsonb),
-('10000000-0000-0000-0000-000000000004','Meena Iyer','+91-9000000004','teacher','{"type":"per_class","rate":220}'::jsonb),
-('10000000-0000-0000-0000-000000000005','Vikram Rao','+91-9000000005','teacher','{"type":"per_class","rate":180}'::jsonb)
+('10000000-0000-0000-0000-000000000003','Suresh Patel','+91-9000000003','teacher','{"type":"per_student_monthly","rate":200}'::jsonb),
+('10000000-0000-0000-0000-000000000004','Meena Iyer','+91-9000000004','teacher','{"type":"per_student_monthly","rate":220}'::jsonb),
+('10000000-0000-0000-0000-000000000005','Vikram Rao','+91-9000000005','teacher','{"type":"per_student_monthly","rate":180}'::jsonb)
 ON CONFLICT (id) DO NOTHING;
 
 -- Students

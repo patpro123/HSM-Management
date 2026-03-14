@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const pool = require('../db'); // Adjust path to your db configuration
+const { authenticateJWT } = require('../auth/jwtMiddleware');
 
 const fetchStudent360Data = async (studentId) => {
     // 1. Fetch Personal Details
@@ -169,6 +170,25 @@ const fetchStudent360Data = async (studentId) => {
       }
     };
 };
+
+// GET /api/students/me/360 - self-service: resolves student via student_guardians link
+router.get('/me/360', authenticateJWT, async (req, res) => {
+  try {
+    const linkResult = await pool.query(
+      `SELECT student_id FROM student_guardians WHERE user_id = $1 LIMIT 1`,
+      [req.user.id]
+    );
+    if (linkResult.rows.length === 0) {
+      return res.status(404).json({ error: 'No student profile linked to your account. Please contact the school.' });
+    }
+    const data = await fetchStudent360Data(linkResult.rows[0].student_id);
+    if (!data) return res.status(404).json({ error: 'Student not found' });
+    res.json(data);
+  } catch (error) {
+    console.error('Error fetching student 360 data for self:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
 
 // GET /api/students/:id/360
 router.get('/:id/360', async (req, res) => {

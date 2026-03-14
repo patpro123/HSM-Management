@@ -1,11 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { apiGet, apiPost, apiDelete } from '../api';
+import PhoneLink from './PhoneLink';
 
 interface Student360ViewProps {
   email?: string;
   studentId?: string | number;
   onClose?: () => void;
   isModal?: boolean;
+  hidePayments?: boolean;
+  selfMode?: boolean; // uses /me/360 — resolves student via student_guardians (JWT-based)
 }
 
 interface Student360Data {
@@ -43,7 +46,7 @@ interface Document {
   uploaded_at: string;
 }
 
-const Student360View: React.FC<Student360ViewProps> = ({ email, studentId, onClose, isModal = false }) => {
+const Student360View: React.FC<Student360ViewProps> = ({ email, studentId, onClose, isModal = false, hidePayments = false, selfMode = false }) => {
   const [activeTab, setActiveTab] = useState<'personal' | 'academic' | 'payment'>('personal');
   const [data, setData] = useState<Student360Data | null>(null);
   const [loading, setLoading] = useState(true);
@@ -52,15 +55,16 @@ const Student360View: React.FC<Student360ViewProps> = ({ email, studentId, onClo
   const [uploadSuccess, setUploadSuccess] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!email && !studentId) return;
-    
+    if (!selfMode && !email && !studentId) return;
+
     const fetchData = async () => {
       try {
         setLoading(true);
-        // Using apiGet wrapper if available, or fetch directly
-        const url = studentId 
-          ? `/api/students/${studentId}/360` 
-          : `/api/students/email/${encodeURIComponent(email || '')}/360`;
+        const url = selfMode
+          ? '/api/students/me/360'
+          : studentId
+            ? `/api/students/${studentId}/360`
+            : `/api/students/email/${encodeURIComponent(email || '')}/360`;
         const result = await apiGet(url);
         setData(result);
 
@@ -77,7 +81,7 @@ const Student360View: React.FC<Student360ViewProps> = ({ email, studentId, onClo
     };
 
     fetchData();
-  }, [email, studentId]);
+  }, [selfMode, email, studentId]);
 
   const fetchDocuments = async (id: string) => {
     try {
@@ -136,7 +140,7 @@ const Student360View: React.FC<Student360ViewProps> = ({ email, studentId, onClo
     }
   };
 
-  if (!email && !studentId) return null;
+  if (!selfMode && !email && !studentId) return null;
 
   const content = (
     <div className={`bg-white ${isModal ? 'rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] flex flex-col' : 'min-h-screen'}`}>
@@ -181,19 +185,20 @@ const Student360View: React.FC<Student360ViewProps> = ({ email, studentId, onClo
         <>
           {/* Tabs */}
           <div className="flex border-b px-6">
-            {(['personal', 'academic', 'payment'] as const).map((tab) => (
-              <button
-                key={tab}
-                onClick={() => setActiveTab(tab)}
-                className={`mr-8 py-4 text-sm font-medium capitalize border-b-2 transition-colors ${
-                  activeTab === tab
-                    ? 'border-blue-500 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
-              >
-                {tab} Details
-              </button>
-            ))}
+            {(['personal', 'academic', 'payment'] as const)
+              .filter(tab => !(hidePayments && tab === 'payment'))
+              .map((tab) => (
+                <button
+                  key={tab}
+                  onClick={() => setActiveTab(tab)}
+                  className={`mr-8 py-4 text-sm font-medium capitalize border-b-2 transition-colors ${activeTab === tab
+                      ? 'border-blue-500 text-blue-600'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                    }`}
+                >
+                  {tab} Details
+                </button>
+              ))}
           </div>
 
           <div className={`p-6 ${isModal ? 'overflow-y-auto' : ''}`}>
@@ -205,8 +210,8 @@ const Student360View: React.FC<Student360ViewProps> = ({ email, studentId, onClo
                     <h3 className="font-semibold text-lg mb-4 text-gray-800">Basic Information</h3>
                     <dl className="space-y-3 text-sm">
                       <div className="flex justify-between"><dt className="text-gray-500">Date of Birth:</dt> <dd>{new Date(data.personal.details.dob).toLocaleDateString()}</dd></div>
-                      <div className="flex justify-between"><dt className="text-gray-500">Phone:</dt> <dd>{data.personal.details.phone}</dd></div>
-                      <div className="flex justify-between"><dt className="text-gray-500">Guardian:</dt> <dd>{data.personal.details.guardian_contact}</dd></div>
+                      <div className="flex justify-between"><dt className="text-gray-500">Phone:</dt> <dd><PhoneLink phone={data.personal.details.phone} /></dd></div>
+                      <div className="flex justify-between"><dt className="text-gray-500">Guardian:</dt> <dd><PhoneLink phone={data.personal.details.guardian_contact} /></dd></div>
                       <div className="flex justify-between"><dt className="text-gray-500">Address:</dt> <dd className="text-right max-w-xs">{data.personal.details.metadata?.address || 'N/A'}</dd></div>
                     </dl>
                   </div>
@@ -261,7 +266,7 @@ const Student360View: React.FC<Student360ViewProps> = ({ email, studentId, onClo
 
                 <div>
                   <h3 className="font-semibold text-lg mb-4 text-gray-800">Academic Achievements</h3>
-                  
+
                   {uploadSuccess && (
                     <div className="mb-4 p-3 bg-green-100 text-green-700 rounded-lg text-sm font-medium">
                       {uploadSuccess}
@@ -293,13 +298,13 @@ const Student360View: React.FC<Student360ViewProps> = ({ email, studentId, onClo
                               </div>
                             </div>
                             <div className="flex gap-2">
-                              <button 
+                              <button
                                 onClick={() => handleDownload(doc.id, doc.filename)}
                                 className="text-blue-600 hover:text-blue-800 text-sm font-medium"
                               >
                                 Download
                               </button>
-                              <button 
+                              <button
                                 onClick={() => handleDeleteDocument(doc.id)}
                                 className="text-red-600 hover:text-red-800 text-sm font-medium"
                               >
