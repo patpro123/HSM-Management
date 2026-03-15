@@ -298,6 +298,15 @@ router.get('/credit-report', async (req, res) => {
           totalCreditsBought = parseInt(lastPayment.metadata.credits_bought);
         } else if (lastPayment.classes_count) {
           totalCreditsBought = lastPayment.classes_count;
+        } else if (lastPayment.metadata?.period_start && lastPayment.metadata?.period_end) {
+          // Infer from period duration: 1 month=8, 3 months=24, 6 months=48, 12 months=96
+          const start = new Date(lastPayment.metadata.period_start);
+          const end = new Date(lastPayment.metadata.period_end);
+          const months = (end.getFullYear() - start.getFullYear()) * 12 + (end.getMonth() - start.getMonth());
+          if (months <= 1) totalCreditsBought = 8;
+          else if (months <= 3) totalCreditsBought = 24;
+          else if (months <= 6) totalCreditsBought = 48;
+          else totalCreditsBought = 96;
         } else {
           const freq = lastPayment.metadata?.payment_frequency || '';
           if (freq.includes('monthly')) totalCreditsBought = 8;
@@ -345,22 +354,30 @@ router.get('/credit-report', async (req, res) => {
       let nextPaymentDate = null;
       let isOverdue = false;
       if (lastPayment) {
-        let frequency = lastPayment.metadata?.payment_frequency;
-        if (!frequency && lastPayment.metadata?.payment_for) {
-          const pf = (lastPayment.metadata.payment_for || '').toLowerCase();
-          if (pf.includes('monthly')) frequency = 'monthly';
-          else if (pf.includes('quarterly')) frequency = 'quarterly';
-          else if (pf.includes('half')) frequency = 'half_yearly';
-          else if (pf.includes('yearly')) frequency = 'yearly';
-        }
-        if (frequency) {
-          const next = new Date(lastPayment.timestamp);
-          if (frequency === 'monthly') next.setMonth(next.getMonth() + 1);
-          else if (frequency === 'quarterly') next.setMonth(next.getMonth() + 3);
-          else if (frequency === 'half_yearly') next.setMonth(next.getMonth() + 6);
-          else if (frequency === 'yearly') next.setFullYear(next.getFullYear() + 1);
+        // Primary: use period_end stored directly in metadata
+        if (lastPayment.metadata?.period_end) {
+          const next = new Date(lastPayment.metadata.period_end);
           nextPaymentDate = next.toISOString();
           if (new Date() > next) isOverdue = true;
+        } else {
+          // Fallback: compute from payment_frequency
+          let frequency = lastPayment.metadata?.payment_frequency;
+          if (!frequency && lastPayment.metadata?.payment_for) {
+            const pf = (lastPayment.metadata.payment_for || '').toLowerCase();
+            if (pf.includes('monthly')) frequency = 'monthly';
+            else if (pf.includes('quarterly')) frequency = 'quarterly';
+            else if (pf.includes('half')) frequency = 'half_yearly';
+            else if (pf.includes('yearly')) frequency = 'yearly';
+          }
+          if (frequency) {
+            const next = new Date(lastPayment.timestamp);
+            if (frequency === 'monthly') next.setMonth(next.getMonth() + 1);
+            else if (frequency === 'quarterly') next.setMonth(next.getMonth() + 3);
+            else if (frequency === 'half_yearly') next.setMonth(next.getMonth() + 6);
+            else if (frequency === 'yearly') next.setFullYear(next.getFullYear() + 1);
+            nextPaymentDate = next.toISOString();
+            if (new Date() > next) isOverdue = true;
+          }
         }
       }
 
