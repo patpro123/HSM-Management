@@ -20,6 +20,8 @@ const PaymentModule: React.FC<PaymentModuleProps> = ({ students, payments, onRef
     payment_frequency: 'monthly' as PaymentFrequency,
     payment_date: new Date().toISOString().split('T')[0]
   });
+  const [paymentBatchId, setPaymentBatchId] = useState<string>('');
+  const [studentBatches, setStudentBatches] = useState<Array<{ batch_id: string; instrument: string; recurrence: string }>>([]);
   const [filterStudent, setFilterStudent] = useState<string>('all');
   const [startDate, setStartDate] = useState<string>('');
   const [endDate, setEndDate] = useState<string>('');
@@ -28,20 +30,42 @@ const PaymentModule: React.FC<PaymentModuleProps> = ({ students, payments, onRef
 
   useEffect(() => {
     if (formData.student_id) {
-      const fetchStatus = async () => {
+      const fetchStatusAndBatches = async () => {
         setLoadingStatus(true);
         try {
-          const data = await apiGet(`/api/payments/status/${formData.student_id}`);
-          setPaymentStatus(data);
+          const [statusData, enrollmentsData] = await Promise.all([
+            apiGet(`/api/payments/status/${formData.student_id}`),
+            apiGet(`/api/enrollments`)
+          ]);
+          setPaymentStatus(statusData);
+
+          // Build per-instrument batch list for this student
+          const studentEnrollmentBatches = (enrollmentsData.enrollments || [])
+            .filter((eb: any) => eb.student_id === formData.student_id)
+            .map((eb: any) => ({
+              batch_id: eb.batch_id,
+              instrument: eb.instrument_name || eb.instrument || 'Unknown',
+              recurrence: eb.recurrence || ''
+            }));
+          setStudentBatches(studentEnrollmentBatches);
+
+          // Auto-select batch if only one
+          if (studentEnrollmentBatches.length === 1) {
+            setPaymentBatchId(studentEnrollmentBatches[0].batch_id);
+          } else {
+            setPaymentBatchId('');
+          }
         } catch (error) {
           console.error('Error fetching payment status:', error);
         } finally {
           setLoadingStatus(false);
         }
       };
-      fetchStatus();
+      fetchStatusAndBatches();
     } else {
       setPaymentStatus(null);
+      setStudentBatches([]);
+      setPaymentBatchId('');
     }
   }, [formData.student_id]);
 
@@ -97,7 +121,8 @@ const PaymentModule: React.FC<PaymentModuleProps> = ({ students, payments, onRef
           ...formData,
           student_id: formData.student_id,
           amount: parseFloat(formData.amount),
-          class_credits: classCredits
+          class_credits: classCredits,
+          batch_id: paymentBatchId || undefined
         });
         alert('Payment recorded successfully!');
       }
@@ -310,6 +335,27 @@ const PaymentModule: React.FC<PaymentModuleProps> = ({ students, payments, onRef
                 </select>
               </div>
 
+              {!editingPayment && formData.student_id && studentBatches.length > 1 && (
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-2">
+                    Instrument (credits go to which instrument?)
+                  </label>
+                  <select
+                    value={paymentBatchId}
+                    onChange={e => setPaymentBatchId(e.target.value)}
+                    className="w-full px-4 py-2 rounded-lg border border-slate-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none"
+                  >
+                    <option value="">-- Select instrument --</option>
+                    {studentBatches.map(b => (
+                      <option key={b.batch_id} value={b.batch_id}>
+                        {b.instrument}{b.recurrence ? ` (${b.recurrence})` : ''}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-slate-400 mt-1">Credits will be added to the selected instrument's balance.</p>
+                </div>
+              )}
+
               {formData.student_id && (
                 <div className="bg-slate-50 border border-slate-200 rounded-lg p-4">
                   <h4 className="text-sm font-semibold text-slate-700 mb-3">Student Status</h4>
@@ -318,10 +364,19 @@ const PaymentModule: React.FC<PaymentModuleProps> = ({ students, payments, onRef
                   ) : paymentStatus ? (
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
                       <div>
-                        <span className="block text-slate-500 text-xs">Classes Left</span>
+                        <span className="block text-slate-500 text-xs">Classes Left (Total)</span>
                         <span className={`font-bold text-lg ${paymentStatus.classes_remaining <= 2 ? 'text-red-600' : 'text-emerald-600'}`}>
                           {paymentStatus.classes_remaining}
                         </span>
+                        {paymentStatus.instrument_breakdown && Object.keys(paymentStatus.instrument_breakdown).length > 1 && (
+                          <div className="flex flex-wrap gap-1 mt-1">
+                            {Object.entries(paymentStatus.instrument_breakdown as Record<string, number>).map(([inst, rem]) => (
+                              <span key={inst} className={`text-xs px-2 py-0.5 rounded-full ${rem <= 1 ? 'bg-red-100 text-red-700' : 'bg-slate-100 text-slate-600'}`}>
+                                {inst}: {rem}
+                              </span>
+                            ))}
+                          </div>
+                        )}
                       </div>
                       <div>
                         <span className="block text-slate-500 text-xs">Last Payment</span>

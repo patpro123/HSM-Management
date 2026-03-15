@@ -182,12 +182,14 @@ CREATE TABLE IF NOT EXISTS attendance_records (
   finalized_at timestamptz,
   confidence numeric DEFAULT NULL, -- AI confidence score for WhatsApp-based attendance
   notes text,
-  created_at timestamptz DEFAULT now()
+  created_at timestamptz DEFAULT now(),
+  is_extra boolean NOT NULL DEFAULT FALSE
 );
 
 COMMENT ON TABLE attendance_records IS 'Daily attendance tracking with AI-assisted WhatsApp integration';
 COMMENT ON COLUMN attendance_records.source IS 'Source of attendance: whatsapp (AI), web (dashboard), or manual';
 COMMENT ON COLUMN attendance_records.confidence IS 'AI confidence score when source is whatsapp';
+COMMENT ON COLUMN attendance_records.is_extra IS 'TRUE for makeup/extra-session records. Multiple is_extra=TRUE records may exist for the same (batch_id, student_id, session_date).';
 
 -- Packages table (pricing and class bundles)
 CREATE TABLE IF NOT EXISTS packages (

@@ -91,6 +91,20 @@ export interface PaymentRecord {
   timestamp: string;
 }
 
+export interface CreditReport {
+  student_id: string;
+  student_name: string;
+  phone: string | null;
+  classes_attended: number;
+  classes_missed: number;
+  total_credits_bought: number;
+  last_credit_date: string | null;
+  instrument_credits: Record<string, number>;
+  credits_remaining: number;
+  next_payment_date: string | null;
+  is_overdue: boolean;
+}
+
 export interface Teacher360Data {
   profile: {
     id: string;

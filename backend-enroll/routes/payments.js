@@ -45,24 +45,32 @@ router.get('/status/:studentId', async (req, res) => {
     const lastPaymentRes = await pool.query(paymentQuery, params);
     const lastPayment = lastPaymentRes.rows[0] || null;
 
-    // 2. Fetch Classes Remaining
+    // 2. Fetch Classes Remaining (total + per-instrument breakdown)
     let classesRemaining = 0;
-    if (batch_id) {
+    const breakdownRes = await pool.query(`
+      SELECT i.name as instrument, SUM(eb.classes_remaining) as remaining
+      FROM enrollment_batches eb
+      JOIN enrollments e ON eb.enrollment_id = e.id
+      JOIN batches b ON eb.batch_id = b.id
+      JOIN instruments i ON b.instrument_id = i.id
+      WHERE e.student_id = $1
+      GROUP BY i.name
+      ORDER BY i.name
+    `, [studentId]);
+    const instrumentBreakdown = Object.fromEntries(
+      breakdownRes.rows.map(r => [r.instrument, parseInt(r.remaining) || 0])
+    );
+    classesRemaining = Object.values(instrumentBreakdown).reduce((sum, v) => sum + v, 0);
+
+    // If batch_id provided and breakdown is empty (edge case), fall back to direct lookup
+    if (batch_id && breakdownRes.rows.length === 0) {
       const creditRes = await pool.query(`
-        SELECT eb.classes_remaining 
+        SELECT eb.classes_remaining
         FROM enrollment_batches eb
         JOIN enrollments e ON eb.enrollment_id = e.id
         WHERE e.student_id = $1 AND eb.batch_id = $2
       `, [studentId, batch_id]);
       if (creditRes.rows.length > 0) classesRemaining = creditRes.rows[0].classes_remaining;
-    } else {
-      const creditRes = await pool.query(`
-        SELECT SUM(eb.classes_remaining) as total 
-        FROM enrollment_batches eb
-        JOIN enrollments e ON eb.enrollment_id = e.id
-        WHERE e.student_id = $1
-      `, [studentId]);
-      classesRemaining = creditRes.rows[0].total || 0;
     }
 
     // 3. Calculate Dates
@@ -96,6 +104,7 @@ router.get('/status/:studentId', async (req, res) => {
     res.json({
       last_payment: lastPayment,
       classes_remaining: parseInt(classesRemaining),
+      instrument_breakdown: instrumentBreakdown,
       expected_start_date: expectedStartDate,
       is_overdue: isOverdue
     });
@@ -231,6 +240,152 @@ router.put('/:id', async (req, res) => {
     res.status(500).json({ error: 'Failed to update payment' });
   } finally {
     client.release();
+  }
+});
+
+// GET /api/payments/credit-report?student_ids=1,2,3
+// Returns attendance + payment credit summary per student (since last payment cycle)
+router.get('/credit-report', async (req, res) => {
+  const { student_ids } = req.query;
+
+  try {
+    // Fetch students — either specific IDs or all active students
+    let studentsRes;
+    if (student_ids) {
+      const ids = student_ids.split(',').map(id => id.trim()).filter(Boolean);
+      studentsRes = await pool.query(
+        `SELECT id, name, phone, guardian_contact, metadata
+         FROM students
+         WHERE id = ANY($1::uuid[])
+         ORDER BY name`,
+        [ids]
+      );
+    } else {
+      studentsRes = await pool.query(
+        `SELECT s.id, s.name, s.phone, s.guardian_contact, s.metadata
+         FROM students s
+         JOIN enrollments e ON e.student_id = s.id AND e.status = 'active'
+         ORDER BY s.name`
+      );
+    }
+
+    const students = studentsRes.rows;
+
+    const reports = await Promise.all(students.map(async (student) => {
+      const sid = student.id;
+
+      // 1. Last payment
+      const lastPaymentRes = await pool.query(
+        `SELECT p.*, pkg.classes_count
+         FROM payments p
+         LEFT JOIN packages pkg ON p.package_id = pkg.id
+         WHERE p.student_id = $1
+         ORDER BY p.timestamp DESC LIMIT 1`,
+        [sid]
+      );
+      const lastPayment = lastPaymentRes.rows[0] || null;
+
+      // Determine credits bought and last payment date
+      let totalCreditsBought = 0;
+      let lastCreditDate = null;
+      let lastPaymentDate = null;
+
+      if (lastPayment) {
+        lastCreditDate = lastPayment.timestamp;
+        lastPaymentDate = lastPayment.timestamp;
+
+        if (lastPayment.metadata?.credits_bought) {
+          totalCreditsBought = parseInt(lastPayment.metadata.credits_bought);
+        } else if (lastPayment.classes_count) {
+          totalCreditsBought = lastPayment.classes_count;
+        } else {
+          const freq = lastPayment.metadata?.payment_frequency || '';
+          if (freq.includes('monthly')) totalCreditsBought = 8;
+          else if (freq.includes('quarterly')) totalCreditsBought = 24;
+          else if (freq.includes('half')) totalCreditsBought = 48;
+          else if (freq.includes('yearly')) totalCreditsBought = 96;
+        }
+      }
+
+      // 2. Attendance since last payment
+      let attendanceQuery = `
+        SELECT
+          COUNT(*) FILTER (WHERE status = 'present') AS attended,
+          COUNT(*) FILTER (WHERE status = 'absent') AS missed
+        FROM attendance_records
+        WHERE student_id = $1
+      `;
+      const attendanceParams = [sid];
+      if (lastPaymentDate) {
+        attendanceQuery += ` AND session_date >= $2::date`;
+        attendanceParams.push(lastPaymentDate);
+      }
+      const attendanceRes = await pool.query(attendanceQuery, attendanceParams);
+      const classesAttended = parseInt(attendanceRes.rows[0]?.attended || 0);
+      const classesMissed = parseInt(attendanceRes.rows[0]?.missed || 0);
+
+      // 3. Classes remaining per instrument
+      const creditsRes = await pool.query(
+        `SELECT i.name AS instrument, SUM(eb.classes_remaining) AS remaining
+         FROM enrollment_batches eb
+         JOIN enrollments e ON eb.enrollment_id = e.id
+         JOIN batches b ON eb.batch_id = b.id
+         JOIN instruments i ON b.instrument_id = i.id
+         WHERE e.student_id = $1 AND e.status = 'active'
+         GROUP BY i.name
+         ORDER BY i.name`,
+        [sid]
+      );
+      const instrumentCredits = Object.fromEntries(
+        creditsRes.rows.map(r => [r.instrument, parseInt(r.remaining) || 0])
+      );
+      const creditsRemaining = Object.values(instrumentCredits).reduce((sum, v) => sum + v, 0);
+
+      // 4. Next payment date
+      let nextPaymentDate = null;
+      let isOverdue = false;
+      if (lastPayment) {
+        let frequency = lastPayment.metadata?.payment_frequency;
+        if (!frequency && lastPayment.metadata?.payment_for) {
+          const pf = (lastPayment.metadata.payment_for || '').toLowerCase();
+          if (pf.includes('monthly')) frequency = 'monthly';
+          else if (pf.includes('quarterly')) frequency = 'quarterly';
+          else if (pf.includes('half')) frequency = 'half_yearly';
+          else if (pf.includes('yearly')) frequency = 'yearly';
+        }
+        if (frequency) {
+          const next = new Date(lastPayment.timestamp);
+          if (frequency === 'monthly') next.setMonth(next.getMonth() + 1);
+          else if (frequency === 'quarterly') next.setMonth(next.getMonth() + 3);
+          else if (frequency === 'half_yearly') next.setMonth(next.getMonth() + 6);
+          else if (frequency === 'yearly') next.setFullYear(next.getFullYear() + 1);
+          nextPaymentDate = next.toISOString();
+          if (new Date() > next) isOverdue = true;
+        }
+      }
+
+      // 5. Phone resolution: student phone first, guardian contact as fallback
+      const phone = student.phone || student.guardian_contact || null;
+
+      return {
+        student_id: sid,
+        student_name: student.name,
+        phone,
+        classes_attended: classesAttended,
+        classes_missed: classesMissed,
+        total_credits_bought: totalCreditsBought,
+        last_credit_date: lastCreditDate,
+        instrument_credits: instrumentCredits,
+        credits_remaining: creditsRemaining,
+        next_payment_date: nextPaymentDate,
+        is_overdue: isOverdue
+      };
+    }));
+
+    res.json({ reports });
+  } catch (err) {
+    console.error('Error fetching credit report:', err);
+    res.status(500).json({ error: 'Failed to fetch credit report' });
   }
 });
 

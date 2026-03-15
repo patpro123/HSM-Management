@@ -539,7 +539,7 @@ app.get('/api/batches/:batchId/students', async (req, res) => {
     const params = [batchId]
 
     if (date) {
-      query += `, ar.status as attendance_status `
+      query += `, ar.status as attendance_status, EXISTS(SELECT 1 FROM attendance_records x WHERE x.student_id = s.id AND x.batch_id = eb.batch_id AND x.session_date = $2 AND x.is_extra = TRUE) as has_extra `
     }
 
     query += `
@@ -549,7 +549,7 @@ app.get('/api/batches/:batchId/students', async (req, res) => {
     `
 
     if (date) {
-      query += ` LEFT JOIN attendance_records ar ON ar.student_id = s.id AND ar.batch_id = eb.batch_id AND ar.session_date = $2 `
+      query += ` LEFT JOIN attendance_records ar ON ar.student_id = s.id AND ar.batch_id = eb.batch_id AND ar.session_date = $2 AND ar.is_extra = FALSE `
       params.push(date)
     }
 
@@ -643,56 +643,85 @@ app.post('/api/attendance', rbac.filterTeacherData, async (req, res) => {
   try {
     await client.query('BEGIN')
 
+    // Credit helpers: guests (out-of-turn) use instrument-based deduction since they're
+    // enrolled in a different batch of the same instrument.
+    const deductCredit = (sId, bId, isGuest) => {
+      if (isGuest) {
+        return client.query(`
+          UPDATE enrollment_batches eb
+          SET classes_remaining = COALESCE(eb.classes_remaining, 0) - 1
+          FROM enrollments e
+          JOIN batches b ON b.id = eb.batch_id
+          WHERE eb.enrollment_id = e.id AND e.student_id = $1 AND e.status = 'active'
+            AND b.instrument_id = (SELECT instrument_id FROM batches WHERE id = $2)
+        `, [sId, bId])
+      }
+      return client.query(`
+        UPDATE enrollment_batches eb
+        SET classes_remaining = COALESCE(eb.classes_remaining, 0) - 1
+        FROM enrollments e
+        WHERE eb.enrollment_id = e.id AND e.student_id = $1 AND eb.batch_id = $2
+      `, [sId, bId])
+    }
+    const refundCredit = (sId, bId, isGuest) => {
+      if (isGuest) {
+        return client.query(`
+          UPDATE enrollment_batches eb
+          SET classes_remaining = COALESCE(eb.classes_remaining, 0) + 1
+          FROM enrollments e
+          JOIN batches b ON b.id = eb.batch_id
+          WHERE eb.enrollment_id = e.id AND e.student_id = $1 AND e.status = 'active'
+            AND b.instrument_id = (SELECT instrument_id FROM batches WHERE id = $2)
+        `, [sId, bId])
+      }
+      return client.query(`
+        UPDATE enrollment_batches eb
+        SET classes_remaining = COALESCE(eb.classes_remaining, 0) + 1
+        FROM enrollments e
+        WHERE eb.enrollment_id = e.id AND e.student_id = $1 AND eb.batch_id = $2
+      `, [sId, bId])
+    }
+
     for (const record of records) {
-      const { batch_id, student_id, date, status } = record
+      const { batch_id, student_id, date, status, is_extra, is_guest } = record
 
-      // Check if record exists
-      const checkRes = await client.query(
-        'SELECT id, status FROM attendance_records WHERE batch_id = $1 AND student_id = $2 AND session_date = $3',
-        [batch_id, student_id, date]
-      )
-
-      if (checkRes.rows.length > 0) {
-        const oldStatus = checkRes.rows[0].status
-        // Update
+      if (is_extra) {
+        // Extra/makeup session: always INSERT a new record (no duplicate check).
+        // Multiple extra records for the same (batch_id, student_id, session_date) are allowed.
         await client.query(
-          'UPDATE attendance_records SET status = $1, source = $2, finalized_at = NOW() WHERE id = $3',
-          [status, 'manual', checkRes.rows[0].id]
-        )
-
-        // Handle credit adjustment on status change
-        if (oldStatus !== 'present' && status === 'present') {
-          // Changed to Present: Decrement credit
-          await client.query(`
-            UPDATE enrollment_batches eb
-            SET classes_remaining = COALESCE(eb.classes_remaining, 0) - 1
-            FROM enrollments e
-            WHERE eb.enrollment_id = e.id AND e.student_id = $1 AND eb.batch_id = $2
-          `, [student_id, batch_id])
-        } else if (oldStatus === 'present' && status !== 'present') {
-          // Changed from Present to Absent/Excused: Refund credit
-          await client.query(`
-            UPDATE enrollment_batches eb
-            SET classes_remaining = COALESCE(eb.classes_remaining, 0) + 1
-            FROM enrollments e
-            WHERE eb.enrollment_id = e.id AND e.student_id = $1 AND eb.batch_id = $2
-          `, [student_id, batch_id])
-        }
-      } else {
-        // Insert
-        await client.query(
-          'INSERT INTO attendance_records (batch_id, student_id, session_date, status, source, finalized_at) VALUES ($1, $2, $3, $4, $5, NOW())',
+          'INSERT INTO attendance_records (batch_id, student_id, session_date, status, source, is_extra, finalized_at) VALUES ($1, $2, $3, $4, $5, TRUE, NOW())',
           [batch_id, student_id, date, status, 'manual']
         )
-
-        // If new record is Present, decrement credit
         if (status === 'present') {
-          await client.query(`
-            UPDATE enrollment_batches eb
-            SET classes_remaining = COALESCE(eb.classes_remaining, 0) - 1
-            FROM enrollments e
-            WHERE eb.enrollment_id = e.id AND e.student_id = $1 AND eb.batch_id = $2
-          `, [student_id, batch_id])
+          await deductCredit(student_id, batch_id, is_guest)
+        }
+      } else {
+        // Regular session: check if record exists and update-or-insert
+        const checkRes = await client.query(
+          'SELECT id, status FROM attendance_records WHERE batch_id = $1 AND student_id = $2 AND session_date = $3 AND is_extra = FALSE',
+          [batch_id, student_id, date]
+        )
+
+        if (checkRes.rows.length > 0) {
+          const oldStatus = checkRes.rows[0].status
+          await client.query(
+            'UPDATE attendance_records SET status = $1, source = $2, finalized_at = NOW() WHERE id = $3',
+            [status, 'manual', checkRes.rows[0].id]
+          )
+
+          if (oldStatus !== 'present' && status === 'present') {
+            await deductCredit(student_id, batch_id, is_guest)
+          } else if (oldStatus === 'present' && status !== 'present') {
+            await refundCredit(student_id, batch_id, is_guest)
+          }
+        } else {
+          await client.query(
+            'INSERT INTO attendance_records (batch_id, student_id, session_date, status, source, is_extra, finalized_at) VALUES ($1, $2, $3, $4, $5, FALSE, NOW())',
+            [batch_id, student_id, date, status, 'manual']
+          )
+          if (status === 'present') {
+            await deductCredit(student_id, batch_id, is_guest)
+          }
         }
       }
     }
@@ -703,6 +732,58 @@ app.post('/api/attendance', rbac.filterTeacherData, async (req, res) => {
     await client.query('ROLLBACK')
     console.error('Attendance save error:', err)
     res.status(500).json({ error: 'Failed to save attendance' })
+  } finally {
+    client.release()
+  }
+})
+
+// POST /api/attendance/extra/remove - Remove all extra-session records for a student on a date and refund credits
+app.post('/api/attendance/extra/remove', async (req, res) => {
+  const { batch_id, student_id, date } = req.body
+  if (!batch_id || !student_id || !date) {
+    return res.status(400).json({ error: 'batch_id, student_id and date are required' })
+  }
+
+  const client = await pool.connect()
+  try {
+    await client.query('BEGIN')
+
+    // Find all extra records for this student/batch/date
+    const existing = await client.query(
+      'SELECT id, status FROM attendance_records WHERE batch_id = $1 AND student_id = $2 AND session_date = $3 AND is_extra = TRUE',
+      [batch_id, student_id, date]
+    )
+
+    if (existing.rows.length === 0) {
+      await client.query('ROLLBACK')
+      return res.json({ message: 'No extra records found' })
+    }
+
+    // Count present records to refund
+    const presentCount = existing.rows.filter(r => r.status === 'present').length
+
+    // Delete all extra records
+    await client.query(
+      'DELETE FROM attendance_records WHERE batch_id = $1 AND student_id = $2 AND session_date = $3 AND is_extra = TRUE',
+      [batch_id, student_id, date]
+    )
+
+    // Refund credits for each deleted present record
+    if (presentCount > 0) {
+      await client.query(`
+        UPDATE enrollment_batches eb
+        SET classes_remaining = COALESCE(eb.classes_remaining, 0) + $3
+        FROM enrollments e
+        WHERE eb.enrollment_id = e.id AND e.student_id = $1 AND eb.batch_id = $2
+      `, [student_id, batch_id, presentCount])
+    }
+
+    await client.query('COMMIT')
+    res.json({ message: 'Extra session removed', refunded: presentCount })
+  } catch (err) {
+    await client.query('ROLLBACK')
+    console.error('Delete extra attendance error:', err)
+    res.status(500).json({ error: 'Failed to remove extra session' })
   } finally {
     client.release()
   }
