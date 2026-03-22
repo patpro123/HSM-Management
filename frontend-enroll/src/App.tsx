@@ -41,7 +41,7 @@ const App: React.FC = () => {
   const [payments, setPayments] = useState<PaymentRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [moreMenuOpen, setMoreMenuOpen] = useState(false);
   const [user, setUser] = useState(getCurrentUser());
   const [authChecked, setAuthChecked] = useState(false);
   const [bypassedUser, setBypassedUser] = useState<any>(null);
@@ -169,7 +169,7 @@ const App: React.FC = () => {
 
   const handleTabChange = (tab: typeof activeTab) => {
     setActiveTab(tab);
-    setMobileMenuOpen(false); // Close mobile menu when tab changes
+    setMoreMenuOpen(false); // Close mobile menu when tab changes
   };
 
   const handleLogout = () => {
@@ -253,66 +253,32 @@ const App: React.FC = () => {
   // Menu items by role
   const menuItems = isAdmin
     ? [
-      { key: 'stats', label: 'Dashboard' },
-      { key: 'students', label: 'Students' },
-      { key: 'attendance', label: 'Attendance' },
-      { key: 'payments', label: 'Payments' },
-      { key: 'finance', label: 'Finance' },
-      { key: 'teachers', label: 'Teachers' },
-      { key: 'users', label: 'Users' },
+      { key: 'stats', label: 'Dashboard', icon: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6' },
+      { key: 'students', label: 'Students', icon: 'M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z' },
+      { key: 'attendance', label: 'Attendance', icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4' },
+      { key: 'payments', label: 'Payments', icon: 'M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z' },
+      { key: 'finance', label: 'Finance', icon: 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z' },
+      { key: 'teachers', label: 'Teachers', icon: 'M12 14l9-5-9-5-9 5 9 5zm0 0l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0012 20.055a11.952 11.952 0 00-6.824-2.998 12.078 12.078 0 01.665-6.479L12 14z' },
+      { key: 'users', label: 'Users', icon: 'M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z' },
     ]
     : isTeacherOnly
       ? [
-        { key: 'teacher-profile', label: 'My Profile' },
-        { key: 'attendance', label: 'Attendance' },
+        { key: 'teacher-profile', label: 'My Profile', icon: 'M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z' },
+        { key: 'attendance', label: 'Attendance', icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4' },
       ]
       : [
-        { key: 'student-profile', label: 'My Profile' },
+        { key: 'student-profile', label: 'My Profile', icon: 'M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z' },
       ];
+
+  const PRIMARY_TAB_COUNT = 4;
+  const primaryTabs = menuItems.slice(0, PRIMARY_TAB_COUNT);
+  const moreTabs = menuItems.slice(PRIMARY_TAB_COUNT);
 
   return (
     <div className="min-h-screen flex flex-col md:flex-row bg-slate-50">
-      {/* Sidebar Navigation (always visible, but menu items filtered) */}
-      <>
-        {/* Mobile Menu Button */}
-        <button
-          onClick={() => setMobileMenuOpen(true)}
-          className="md:hidden fixed top-4 left-4 z-40 p-3 bg-gradient-to-r from-orange-500 to-amber-500 text-white rounded-lg shadow-lg hover:shadow-xl transition"
-          aria-label="Open menu"
-        >
-          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-          </svg>
-        </button>
-        {/* Backdrop Overlay for Mobile */}
-        {mobileMenuOpen && (
-          <div
-            className="md:hidden fixed inset-0 bg-black bg-opacity-50 z-40 transition-opacity"
-            onClick={() => setMobileMenuOpen(false)}
-          />
-        )}
-        {/* Sidebar Navigation */}
-        <nav className={`
-          fixed md:relative
-          w-64 h-full
-          bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900 
-          text-white p-6 
-          flex-shrink-0 flex flex-col
-          transition-transform duration-300 ease-in-out
-          z-50
-          ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
-        `}>
+      {/* Sidebar Navigation — desktop only */}
+      <nav className="hidden md:flex fixed md:relative w-64 h-full bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900 text-white p-6 flex-shrink-0 flex-col z-50">
           <div className="flex flex-col items-center gap-4 mb-8 text-center">
-            {/* Close button for mobile */}
-            <button
-              onClick={() => setMobileMenuOpen(false)}
-              className="md:hidden self-end p-2 text-slate-400 hover:text-white transition"
-              aria-label="Close menu"
-            >
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
             <div className="w-full bg-white rounded-xl overflow-hidden p-3 flex items-center justify-center shadow-lg">
               <img
                 src={hsmLogo}
@@ -327,10 +293,7 @@ const App: React.FC = () => {
               <li key={item.key}>
                 <button
                   className={`w-full text-left px-4 py-3 rounded-lg font-semibold transition-colors ${activeTab === item.key ? 'bg-orange-600 text-white' : 'hover:bg-slate-800 text-slate-200'}`}
-                  onClick={() => {
-                    setActiveTab(item.key as typeof activeTab);
-                    setMobileMenuOpen(false);
-                  }}
+                  onClick={() => setActiveTab(item.key as typeof activeTab)}
                 >
                   {item.label}
                 </button>
@@ -358,14 +321,13 @@ const App: React.FC = () => {
             </div>
           </div>
         </nav>
-      </>
 
-      <main className="flex-1 overflow-y-auto max-h-screen md:ml-0 flex flex-col bg-slate-50">
+      <main className="flex-1 overflow-y-auto max-h-screen md:ml-0 flex flex-col bg-slate-50 pb-16 md:pb-0">
 
         {/* Top Header */}
         <header className="bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between sticky top-0 z-30 shadow-sm">
           <div className="flex items-center gap-4">
-            <h2 className="text-xl font-bold tracking-tight text-slate-800 ml-12 md:ml-0">
+            <h2 className="text-xl font-bold tracking-tight text-slate-800">
               {menuItems.find(item => item.key === activeTab)?.label || 'Dashboard'}
             </h2>
           </div>
@@ -466,6 +428,83 @@ const App: React.FC = () => {
           currentOverride={devOverride}
           onSwitched={handleDevSwitched}
         />
+      )}
+
+      {/* Bottom Tab Bar — mobile only */}
+      <nav
+        className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 z-50 flex items-stretch"
+        style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+      >
+        {primaryTabs.map(item => (
+          <button
+            key={item.key}
+            onClick={() => handleTabChange(item.key as typeof activeTab)}
+            className={`flex-1 flex flex-col items-center justify-center py-2 gap-0.5 text-[10px] font-semibold transition-colors ${activeTab === item.key ? 'text-orange-500' : 'text-slate-400'}`}
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={item.icon} />
+            </svg>
+            {item.label}
+          </button>
+        ))}
+        {moreTabs.length > 0 && (
+          <button
+            onClick={() => setMoreMenuOpen(true)}
+            className={`flex-1 flex flex-col items-center justify-center py-2 gap-0.5 text-[10px] font-semibold transition-colors ${moreTabs.some(t => t.key === activeTab) ? 'text-orange-500' : 'text-slate-400'}`}
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h.01M12 12h.01M19 12h.01M6 12a1 1 0 11-2 0 1 1 0 012 0zm7 0a1 1 0 11-2 0 1 1 0 012 0zm7 0a1 1 0 11-2 0 1 1 0 012 0z" />
+            </svg>
+            More
+          </button>
+        )}
+      </nav>
+
+      {/* More Sheet — mobile only */}
+      {moreMenuOpen && (
+        <>
+          <div
+            className="md:hidden fixed inset-0 bg-black bg-opacity-40 z-50"
+            onClick={() => setMoreMenuOpen(false)}
+          />
+          <div
+            className="md:hidden fixed bottom-0 left-0 right-0 bg-white rounded-t-2xl z-50 p-4"
+            style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 1rem)' }}
+          >
+            <div className="w-10 h-1 bg-slate-200 rounded-full mx-auto mb-4" />
+            <div className="space-y-1">
+              {moreTabs.map(item => (
+                <button
+                  key={item.key}
+                  onClick={() => { handleTabChange(item.key as typeof activeTab); setMoreMenuOpen(false); }}
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-semibold transition-colors text-left ${activeTab === item.key ? 'bg-orange-50 text-orange-600' : 'text-slate-700 hover:bg-slate-50'}`}
+                >
+                  <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={item.icon} />
+                  </svg>
+                  {item.label}
+                </button>
+              ))}
+            </div>
+            <div className="mt-4 pt-4 border-t border-slate-100">
+              {user && (
+                <div className="px-4 py-2 mb-2">
+                  <div className="font-semibold text-sm text-slate-700">{user.name || user.email}</div>
+                  <div className="text-xs text-slate-400 capitalize">{user.roles.join(', ')}</div>
+                </div>
+              )}
+              <button
+                onClick={handleLogout}
+                className="w-full flex items-center gap-3 px-4 py-3 rounded-xl font-semibold text-red-600 hover:bg-red-50 transition-colors"
+              >
+                <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                </svg>
+                Logout
+              </button>
+            </div>
+          </div>
+        </>
       )}
     </div>
   );
