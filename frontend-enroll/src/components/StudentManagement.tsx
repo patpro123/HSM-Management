@@ -6,7 +6,10 @@ import { API_BASE_URL } from '../config';
 import Student360View from './Student360View';
 import StudentDetails, { EnrollmentSelection } from './StudentDetails';
 import ProspectModal from './ProspectModal';
-import PhoneLink from './PhoneLink';
+import StudentFilters from './StudentManagement/StudentFilters';
+import StudentCardGrid from './StudentManagement/StudentCardGrid';
+import StudentTableView from './StudentManagement/StudentTableView';
+import ProspectList from './StudentManagement/ProspectList';
 
 interface StudentManagementProps {
   students: Student[];
@@ -16,19 +19,26 @@ interface StudentManagementProps {
   onRefresh: () => void;
 }
 
+const AGE_BUCKETS = [
+  { key: 'fresh', label: 'Fresh', range: '0–7d', dot: '🟢', color: 'bg-green-100 text-green-700 border-green-200', maxDays: 7 },
+  { key: 'followup', label: 'Follow Up', range: '8–14d', dot: '🟡', color: 'bg-yellow-100 text-yellow-700 border-yellow-200', maxDays: 14 },
+  { key: 'warm', label: 'Warm', range: '15–30d', dot: '🟠', color: 'bg-orange-100 text-orange-700 border-orange-200', maxDays: 30 },
+  { key: 'cold', label: 'Cold', range: '30+d', dot: '🔴', color: 'bg-red-100 text-red-700 border-red-200', maxDays: Infinity },
+];
+
+const getAgeDays = (createdAt: string) =>
+  Math.floor((Date.now() - new Date(createdAt).getTime()) / 86400000);
+
+const getAgeBucket = (days: number) =>
+  AGE_BUCKETS.find(b => days <= b.maxDays) || AGE_BUCKETS[3];
+
 const StudentManagement: React.FC<StudentManagementProps> = ({ students: propStudents, batches, instruments, prospects, onRefresh }) => {
   const [successBanner, setSuccessBanner] = useState('');
   const [errorBanner, setErrorBanner] = useState('');
   const [students, setStudents] = useState<Student[]>(propStudents || []);
   const [teachers, setTeachers] = useState<any[]>([]);
-  // Default filter to Keyboard instrument if present
   const [filterInstruments, setFilterInstruments] = useState<(string | number)[]>([]);
   const [filterBatches, setFilterBatches] = useState<(string | number)[]>([]);
-
-  useEffect(() => {
-    setStudents(propStudents || []);
-  }, [propStudents]);
-
   const [filterTeacher, setFilterTeacher] = useState<string>('all');
   const [filterStatus, setFilterStatus] = useState<'active' | 'inactive' | 'all'>('active');
   const [filterType, setFilterType] = useState<'permanent' | 'prospect'>('permanent');
@@ -41,28 +51,35 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students: propStu
   const [viewMode, setViewMode] = useState<'card' | 'table'>('card');
   const [selectedStudentId, setSelectedStudentId] = useState<string | number | null>(null);
 
-  // Fetch teachers on mount
+  useEffect(() => {
+    setStudents(propStudents || []);
+  }, [propStudents]);
+
   useEffect(() => {
     apiGet('/api/teachers').then(res => setTeachers(res.teachers || []));
   }, []);
 
-  // Clear invalid batch filters when instruments change
   useEffect(() => {
     const relevantBatchIds = batches
       .filter(b => filterInstruments.includes(b.instrument_id))
       .map(b => b.id);
-
     setFilterBatches(prev => prev.filter(id => relevantBatchIds.includes(id as any)));
   }, [filterInstruments, batches]);
 
-  // Get logged-in user from existing auth system
+  useEffect(() => {
+    if (filterType === 'prospect') {
+      apiGet('/api/prospects?include_inactive=true')
+        .then(res => setProspectList(res.prospects || []))
+        .catch(err => console.error('Failed to fetch prospects', err));
+    }
+  }, [filterType]);
+
   const user = getCurrentUser();
   const userEmail = user?.email?.toLowerCase();
   const isAdmin = user && user.roles.includes('admin');
   const isTeacherOnly = user && !isAdmin && user?.roles.includes('teacher');
   const isReadonly = isTeacherOnly;
 
-  // Debug logs
   console.log('StudentManagement Debug:');
   console.log('- Logged in user:', user);
   console.log('- User email (lowercase):', userEmail);
@@ -72,59 +89,68 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students: propStu
   console.log('- Instruments received:', instruments?.length, instruments);
   console.log('- Batches received:', batches?.length, batches);
 
-  // Filter students by instrument, teacher, and search term
   const filteredStudents = students.filter(student => {
     const studentBatches = (student as any).batches || [];
     const isActive = (student as any).is_active !== false;
 
-    // Status filter
     if (filterStatus !== 'all') {
       if (filterStatus === 'active' && !isActive) return false;
       if (filterStatus === 'inactive' && isActive) return false;
     }
 
-    // Search term filter
     if (searchTerm) {
       const lowerSearch = searchTerm.toLowerCase();
       const nameMatch = ((student as any).name || '').toLowerCase().includes(lowerSearch);
       const emailMatch = (student.email || ((student as any).metadata?.email) || '').toLowerCase().includes(lowerSearch);
-      if (!nameMatch && !emailMatch) {
-        return false;
-      }
+      if (!nameMatch && !emailMatch) return false;
     }
 
-    // Role-based filter for non-admins and non-teachers
     if (!isAdmin && !isTeacherOnly) {
       const email = (student.email || (student as any).metadata?.email || '').toLowerCase();
       if (!userEmail || email !== userEmail) return false;
     }
 
-    // If student is inactive, skip batch/instrument/teacher filters as they have no active enrollments
     if (!isActive) return true;
 
-    // Instrument filter
     if (filterInstruments.length > 0) {
       const hasInstrument = studentBatches.some((batch: any) => batch.instrument_id && filterInstruments.includes(batch.instrument_id));
       if (!hasInstrument) return false;
     }
 
-    // Batch filter
     if (filterBatches.length > 0) {
       const hasBatch = studentBatches.some((batch: any) => batch.batch_id && filterBatches.includes(batch.batch_id));
       if (!hasBatch) return false;
     }
 
-    // Teacher filter
     if (filterTeacher !== 'all') {
-      // This relies on `teacher_id` being present in the student's batch data, which will require a backend adjustment.
       const hasTeacher = studentBatches.some((batch: any) => batch.teacher_id && String(batch.teacher_id) === filterTeacher);
       if (!hasTeacher) return false;
     }
 
-    return true; // If all filters pass, include the student
+    return true;
   });
 
   console.log('- Filtered students count:', filteredStudents.length);
+
+  const displayedProspects = prospectList
+    .filter(p => {
+      if (filterStatus === 'active') return p.is_active !== false;
+      if (filterStatus === 'inactive') return p.is_active === false;
+      return true;
+    })
+    .filter(p => {
+      if (!searchTerm) return true;
+      const q = searchTerm.toLowerCase();
+      return (p.name || '').toLowerCase().includes(q) ||
+        (p.phone || '').toLowerCase().includes(q) ||
+        (p.metadata?.email || '').toLowerCase().includes(q);
+    })
+    .filter(p => {
+      if (!ageFilter) return true;
+      return getAgeBucket(getAgeDays(p.created_at)).key === ageFilter;
+    });
+
+  const relevantBatches = batches.filter(b => filterInstruments.includes(b.instrument_id));
 
   const handleAddStudent = () => {
     setEditingStudent(null);
@@ -137,7 +163,6 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students: propStu
   };
 
   const handleSaveStudent = async (formData: any, selectedBatches: EnrollmentSelection[], prospectId?: string) => {
-    // Validate batch selection for new students
     if (!editingStudent && selectedBatches.length === 0) {
       setErrorBanner('Please select at least one batch. A student must be enrolled in a batch.');
       setTimeout(() => setErrorBanner(''), 3000);
@@ -149,7 +174,6 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students: propStu
       let method = 'POST';
 
       if (editingStudent) {
-        // Defensive: fallback to student.id if editingStudent.id is missing
         const studentId = editingStudent.id || (editingStudent as any)?.student_id;
         if (!studentId) {
           setErrorBanner('Cannot update: student ID is missing.');
@@ -158,12 +182,10 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students: propStu
         url = `/api/students/${studentId}`;
         method = 'PUT';
       } else if (prospectId) {
-        // If converting a prospect, hit the PUT endpoint so it upgrades them rather than creating duplicate
         url = `/api/students/${prospectId}`;
         method = 'PUT';
       }
 
-      // Format data for backend: combine first_name + last_name into name field
       const backendData = {
         first_name: formData.first_name,
         last_name: formData.last_name,
@@ -183,7 +205,6 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students: propStu
           guardian_phone: formData.guardian_phone || null
         },
         batches: selectedBatches.map(batch => {
-          // Find instrument_id from batches prop
           const batchObj = batches.find(b => String(b.id) === String(batch.batch_id));
           return {
             batch_id: batch.batch_id,
@@ -226,10 +247,7 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students: propStu
   };
 
   const handleDeleteStudent = async (id: number | string) => {
-    if (!confirm('Are you sure you want to delete this student? This will also remove their enrollments.')) {
-      return;
-    }
-
+    if (!confirm('Are you sure you want to delete this student? This will also remove their enrollments.')) return;
     try {
       await apiDelete(`/api/students/${id}`);
       setSuccessBanner('Student deleted successfully!');
@@ -244,7 +262,6 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students: propStu
 
   const handleRestoreStudent = async (id: number | string) => {
     if (!confirm('Are you sure you want to restore this student?')) return;
-
     try {
       await apiPost(`/api/students/${id}/restore`, {});
       setSuccessBanner('Student restored successfully!');
@@ -254,66 +271,6 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students: propStu
       setErrorBanner('Error restoring student');
     }
   };
-
-  const handleInstrumentToggle = (instrumentId: string | number) => {
-    setFilterInstruments(prev =>
-      prev.includes(instrumentId)
-        ? prev.filter(id => id !== instrumentId)
-        : [...prev, instrumentId]
-    );
-  };
-
-  const handleBatchToggle = (batchId: string | number) => {
-    setFilterBatches(prev =>
-      prev.includes(batchId)
-        ? prev.filter(id => id !== batchId)
-        : [...prev, batchId]
-    );
-  };
-
-  const relevantBatches = batches.filter(b => filterInstruments.includes(b.instrument_id));
-
-  // Fetch all prospects (incl. inactive) when prospect type is selected
-  useEffect(() => {
-    if (filterType === 'prospect') {
-      apiGet('/api/prospects?include_inactive=true')
-        .then(res => setProspectList(res.prospects || []))
-        .catch(err => console.error('Failed to fetch prospects', err));
-    }
-  }, [filterType]);
-
-  // Ageing helpers
-  const AGE_BUCKETS = [
-    { key: 'fresh', label: 'Fresh', range: '0–7d', dot: '🟢', color: 'bg-green-100 text-green-700 border-green-200', maxDays: 7 },
-    { key: 'followup', label: 'Follow Up', range: '8–14d', dot: '🟡', color: 'bg-yellow-100 text-yellow-700 border-yellow-200', maxDays: 14 },
-    { key: 'warm', label: 'Warm', range: '15–30d', dot: '🟠', color: 'bg-orange-100 text-orange-700 border-orange-200', maxDays: 30 },
-    { key: 'cold', label: 'Cold', range: '30+d', dot: '🔴', color: 'bg-red-100 text-red-700 border-red-200', maxDays: Infinity },
-  ];
-
-  const getAgeDays = (createdAt: string) =>
-    Math.floor((Date.now() - new Date(createdAt).getTime()) / 86400000);
-
-  const getAgeBucket = (days: number) =>
-    AGE_BUCKETS.find(b => days <= b.maxDays) || AGE_BUCKETS[3];
-
-  // Filtered prospect list for display
-  const displayedProspects = prospectList
-    .filter(p => {
-      if (filterStatus === 'active') return p.is_active !== false;
-      if (filterStatus === 'inactive') return p.is_active === false;
-      return true;
-    })
-    .filter(p => {
-      if (!searchTerm) return true;
-      const q = searchTerm.toLowerCase();
-      return (p.name || '').toLowerCase().includes(q) ||
-        (p.phone || '').toLowerCase().includes(q) ||
-        (p.metadata?.email || '').toLowerCase().includes(q);
-    })
-    .filter(p => {
-      if (!ageFilter) return true;
-      return getAgeBucket(getAgeDays(p.created_at)).key === ageFilter;
-    });
 
   return (
     <div className="space-y-6">
@@ -327,6 +284,7 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students: propStu
           {errorBanner}
         </div>
       )}
+
       <div className="flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
         <div className="flex-1 w-full md:w-auto">
           <input
@@ -338,19 +296,16 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students: propStu
           />
         </div>
         <div className="flex gap-3">
-          {/* View Toggle */}
           <div className="flex bg-slate-100 rounded-lg p-1">
             <button
               onClick={() => setViewMode('card')}
-              className={`px-4 py-2 rounded-md font-medium transition ${viewMode === 'card' ? 'bg-white text-orange-600 shadow' : 'text-slate-600 hover:text-slate-900'
-                }`}
+              className={`px-4 py-2 rounded-md font-medium transition ${viewMode === 'card' ? 'bg-white text-orange-600 shadow' : 'text-slate-600 hover:text-slate-900'}`}
             >
               📇 Cards
             </button>
             <button
               onClick={() => setViewMode('table')}
-              className={`px-4 py-2 rounded-md font-medium transition ${viewMode === 'table' ? 'bg-white text-orange-600 shadow' : 'text-slate-600 hover:text-slate-900'
-                }`}
+              className={`px-4 py-2 rounded-md font-medium transition ${viewMode === 'table' ? 'bg-white text-orange-600 shadow' : 'text-slate-600 hover:text-slate-900'}`}
             >
               📊 Table
             </button>
@@ -366,412 +321,61 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students: propStu
         </div>
       </div>
 
-      {/* Filters */}
-      <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-4">
-        <div className="flex flex-wrap gap-8">
-          {/* Type filter */}
-          <div>
-            <h3 className="text-sm font-bold text-slate-700 mb-3">Student Type</h3>
-            <div className="flex gap-4">
-              {([['permanent', 'Students'], ['prospect', 'Prospects']] as const).map(([type, label]) => (
-                <label key={type} className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="radio"
-                    name="filterType"
-                    checked={filterType === type}
-                    onChange={() => { setFilterType(type); setAgeFilter(null); }}
-                    className="text-orange-600 focus:ring-orange-500"
-                  />
-                  <span className="text-sm text-slate-700">
-                    {label}
-                    {type === 'prospect' && prospects.length > 0 && (
-                      <span className="ml-1 px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded-full text-xs font-bold">{prospects.length}</span>
-                    )}
-                  </span>
-                </label>
-              ))}
-            </div>
-          </div>
-          {/* Status filter */}
-          <div>
-            <h3 className="text-sm font-bold text-slate-700 mb-3">Status</h3>
-            <div className="flex gap-4">
-              {(['active', 'inactive', 'all'] as const).map(status => (
-                <label key={status} className="flex items-center gap-2 cursor-pointer">
-                  <input type="radio" name="status" checked={filterStatus === status} onChange={() => setFilterStatus(status)} className="text-orange-600 focus:ring-orange-500" />
-                  <span className="text-sm text-slate-700 capitalize">{status}</span>
-                </label>
-              ))}
-            </div>
-          </div>
-        </div>
-        <div>
-          <h3 className="text-sm font-bold text-slate-700 mb-3">Filter by Instrument</h3>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            {(instruments || []).map(inst => (
-              <label key={inst.id} className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={filterInstruments.includes(inst.id)}
-                  onChange={() => handleInstrumentToggle(inst.id)}
-                  className="w-4 h-4 text-orange-600 rounded focus:ring-2 focus:ring-orange-500"
-                />
-                <span className="text-sm text-slate-700">{inst.name}</span>
-              </label>
-            ))}
-          </div>
-          {filterInstruments.length > 0 && (
-            <button
-              onClick={() => setFilterInstruments([])}
-              className="mt-3 text-xs text-orange-600 hover:text-orange-800 font-medium"
-            >
-              Clear filters
-            </button>
-          )}
-        </div>
+      <StudentFilters
+        filterType={filterType}
+        filterStatus={filterStatus}
+        filterTeacher={filterTeacher}
+        filterInstruments={filterInstruments}
+        filterBatches={filterBatches}
+        instruments={instruments}
+        batches={batches}
+        teachers={teachers}
+        prospects={prospects}
+        relevantBatches={relevantBatches}
+        onFilterTypeChange={(type) => { setFilterType(type); setAgeFilter(null); }}
+        onFilterStatusChange={setFilterStatus}
+        onFilterTeacherChange={setFilterTeacher}
+        onInstrumentToggle={(id) => setFilterInstruments(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])}
+        onBatchToggle={(id) => setFilterBatches(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])}
+        onClearInstruments={() => setFilterInstruments([])}
+        onClearBatches={() => setFilterBatches([])}
+      />
 
-        {filterInstruments.length > 0 && relevantBatches.length > 0 && (
-          <div>
-            <h3 className="text-sm font-bold text-slate-700 mb-3">Filter by Batch</h3>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              {relevantBatches.map(batch => (
-                <label key={batch.id} className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={filterBatches.includes(batch.id)}
-                    onChange={() => handleBatchToggle(batch.id)}
-                    className="w-4 h-4 text-orange-600 rounded focus:ring-2 focus:ring-orange-500"
-                  />
-                  <span className="text-sm text-slate-700">
-                    {batch.recurrence} {batch.start_time ? `(${String(batch.start_time).slice(0, 5)})` : ''}
-                  </span>
-                </label>
-              ))}
-            </div>
-            {filterBatches.length > 0 && (
-              <button
-                onClick={() => setFilterBatches([])}
-                className="mt-3 text-xs text-orange-600 hover:text-orange-800 font-medium"
-              >
-                Clear batch filters
-              </button>
-            )}
-          </div>
-        )}
-
-        <div>
-          <h3 className="text-sm font-bold text-slate-700 mb-3">Filter by Teacher</h3>
-          <select
-            value={filterTeacher}
-            onChange={e => setFilterTeacher(e.target.value)}
-            className="w-full md:w-64 px-4 py-2 rounded-lg border border-slate-300 focus:border-orange-500 focus:ring-2 focus:ring-orange-200 outline-none"
-          >
-            <option value="all">All Teachers</option>
-            {teachers.map(teacher => (
-              <option key={teacher.id} value={teacher.id}>{teacher.name}</option>
-            ))}
-          </select>
-        </div>
-      </div>
-
-      {/* Prospects Display */}
       {filterType === 'prospect' && (
-        <>
-          {/* Ageing heatmap */}
-          {prospectList.length > 0 && (
-            <div className="flex flex-wrap gap-3 mb-2">
-              {AGE_BUCKETS.map(bucket => {
-                const count = prospectList.filter(p => getAgeBucket(getAgeDays(p.created_at)).key === bucket.key).length;
-                const isActive = ageFilter === bucket.key;
-                return (
-                  <button
-                    key={bucket.key}
-                    onClick={() => setAgeFilter(isActive ? null : bucket.key)}
-                    className={`flex items-center gap-2 px-4 py-2 rounded-lg border-2 text-sm font-semibold transition ${isActive ? `${bucket.color} border-current shadow` : 'bg-white border-slate-200 text-slate-600 hover:border-slate-400'
-                      }`}
-                  >
-                    <span>{bucket.dot}</span>
-                    <span>{bucket.label}</span>
-                    <span className="text-xs opacity-70">{bucket.range}</span>
-                    <span className={`ml-1 px-1.5 py-0.5 rounded-full text-xs font-bold ${isActive ? 'bg-white bg-opacity-60' : 'bg-slate-100'}`}>{count}</span>
-                  </button>
-                );
-              })}
-              {ageFilter && (
-                <button onClick={() => setAgeFilter(null)} className="text-xs text-slate-500 hover:text-slate-700 underline self-center">Clear</button>
-              )}
-            </div>
-          )}
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {prospectList.length === 0 ? (
-              <div className="col-span-full text-center py-20 text-slate-400">
-                No prospects yet. They appear when someone signs up for a demo on the landing page.
-              </div>
-            ) : displayedProspects.length === 0 ? (
-              <div className="col-span-full text-center py-12 text-slate-400">No prospects match the current filters.</div>
-            ) : (
-              displayedProspects.map(p => {
-                const initials = (p.name || 'P').split(' ').map((n: string) => n[0]).slice(0, 2).join('');
-                const ageDays = getAgeDays(p.created_at);
-                const age = getAgeBucket(ageDays);
-                return (
-                  <div
-                    key={p.id}
-                    onClick={() => setSelectedProspect(p)}
-                    className={`bg-white rounded-xl p-5 hover:shadow-lg transition-shadow cursor-pointer border-2 ${p.is_active === false ? 'border-slate-200 opacity-60' : 'border-purple-200'}`}
-                  >
-                    <div className="flex items-start justify-between mb-3">
-                      <div className="flex items-center gap-3">
-                        <div className="w-11 h-11 rounded-full bg-gradient-to-br from-purple-500 to-violet-500 text-white flex items-center justify-center font-bold text-base shadow">
-                          {initials}
-                        </div>
-                        <div>
-                          <h3 className="font-bold text-slate-900 text-sm">{p.name}</h3>
-                          <p className="text-xs text-slate-500">{p.metadata?.email || p.phone || '—'}</p>
-                        </div>
-                      </div>
-                      <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${age.color}`}>{age.dot} {ageDays}d</span>
-                    </div>
-                    <div className="flex items-center justify-between text-xs text-slate-500">
-                      <span>{p.metadata?.interested_instrument ? `🎵 ${p.metadata.interested_instrument}` : '🎵 Any'}</span>
-                      <span className={`px-2 py-0.5 rounded-full font-semibold ${age.color}`}>{age.label}</span>
-                    </div>
-                    {p.is_active === false && <p className="text-xs text-red-500 mt-2 font-semibold">Inactive</p>}
-                  </div>
-                );
-              })
-            )}
-          </div>
-        </>
+        <ProspectList
+          prospectList={prospectList}
+          displayedProspects={displayedProspects}
+          ageFilter={ageFilter}
+          ageBuckets={AGE_BUCKETS}
+          getAgeDays={getAgeDays}
+          getAgeBucket={getAgeBucket}
+          onAgeFilterChange={setAgeFilter}
+          onSelectProspect={setSelectedProspect}
+        />
       )}
 
-      {/* Students Display */}
-      {filterType === 'permanent' && viewMode === 'card' ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredStudents.length === 0 ? (
-            <div className="col-span-full text-center py-20 text-slate-400">
-              No students found. Add a new student to get started.
-            </div>
-          ) : (
-            filteredStudents.map(student => (
-              <div key={student.id} className="bg-white border border-slate-200 rounded-xl p-6 hover:shadow-lg transition-shadow">
-                <div className="flex items-start justify-between mb-2">
-                  <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-full bg-gradient-to-br from-orange-500 to-amber-500 text-white flex items-center justify-center font-bold text-lg shadow-lg">
-                      {(() => {
-                        if (student.first_name && student.last_name) {
-                          return `${student.first_name[0]}${student.last_name[0]}`;
-                        }
-                        const name = (student as any).name || 'N A';
-                        const parts = name.split(' ');
-                        return parts.length > 1 ? `${parts[0][0]}${parts[parts.length - 1][0]}` : name.substring(0, 2).toUpperCase();
-                      })()}
-                    </div>
-                    <div>
-                      <h3 className="font-bold text-slate-900">
-                        {student.first_name && student.last_name ? `${student.first_name} ${student.last_name}` : (student as any).name || 'Unknown'}
-                      </h3>
-                      <p className="text-xs text-slate-500">{((student as any).metadata?.email) || student.email || 'No email'}</p>
-                    </div>
-                  </div>
-                </div>
-                {(student as any).is_active === false && (
-                  <div className="mb-4">
-                    <span className="px-2 py-1 bg-red-100 text-red-800 text-xs font-bold rounded-full">Inactive</span>
-                  </div>
-                )}
+      {filterType === 'permanent' && viewMode === 'card' && (
+        <StudentCardGrid
+          students={filteredStudents}
+          isReadonly={!!isReadonly}
+          onView360={setSelectedStudentId}
+          onEdit={handleEditStudent}
+          onDelete={handleDeleteStudent}
+          onRestore={handleRestoreStudent}
+        />
+      )}
 
-                <div className="space-y-2 text-sm mb-4">
-                  <div className="flex items-center gap-2 text-slate-600">
-                    <span>📱</span>
-                    <PhoneLink phone={student.phone} fallback="N/A" />
-                  </div>
-                  <div className="flex items-center gap-2 text-slate-600">
-                    <span>👤</span>
-                    <span>{((student as any).metadata?.guardian_name) || student.guardian_name || (student as any).guardian_contact || 'N/A'}</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-slate-600">
-                    <span>📞</span>
-                    <PhoneLink phone={((student as any).metadata?.guardian_phone) || student.guardian_phone} fallback="N/A" />
-                  </div>
-                  <div className="flex items-start gap-2 text-slate-600">
-                    <span className="mt-1">📍</span>
-                    <span className="flex-1">{((student as any).metadata?.address) || student.address || 'No address provided'}</span>
-                  </div>
-                </div>
+      {filterType === 'permanent' && viewMode === 'table' && (
+        <StudentTableView
+          students={filteredStudents}
+          isReadonly={!!isReadonly}
+          onView360={setSelectedStudentId}
+          onEdit={handleEditStudent}
+          onDelete={handleDeleteStudent}
+          onRestore={handleRestoreStudent}
+        />
+      )}
 
-                {/* Show enrolled instruments */}
-                {(student as any).batches && (student as any).batches.length > 0 && (
-                  <div className="mb-4 pb-4 border-b border-slate-100">
-                    <p className="text-xs font-semibold text-slate-600 mb-2">Instruments:</p>
-                    <div className="flex flex-wrap gap-2">
-                      {[...new Set<string>((student as any).batches.map((b: any) => b.instrument).filter(Boolean))].map((instrument, idx) => (
-                        <span key={idx} className="px-2 py-1 bg-orange-100 text-orange-800 rounded-full text-xs font-semibold">
-                          {instrument}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                <div className="flex gap-2 pt-4 border-t border-slate-100">
-                  <button
-                    onClick={() => setSelectedStudentId(student.id || (student as any).student_id)}
-                    className="flex-1 px-3 py-2 bg-blue-50 text-blue-600 rounded-lg font-medium hover:bg-blue-100 transition"
-                  >
-                    View 360°
-                  </button>
-                  {!isReadonly && (
-                    <>
-                      <button
-                        onClick={() => handleEditStudent(student)}
-                        className="flex-1 px-3 py-2 bg-orange-50 text-orange-600 rounded-lg font-medium hover:bg-orange-100 transition"
-                      >
-                        ✏️ Edit
-                      </button>
-                      {(student as any).is_active !== false ? (
-                        <button
-                          onClick={() => handleDeleteStudent((student as any).student_id)}
-                          className="flex-1 px-3 py-2 bg-red-50 text-red-600 rounded-lg font-medium hover:bg-red-100 transition"
-                        >
-                          🗑️
-                        </button>
-                      ) : (
-                        <button
-                          onClick={() => handleRestoreStudent((student as any).student_id)}
-                          className="flex-1 px-3 py-2 bg-green-50 text-green-600 rounded-lg font-medium hover:bg-green-100 transition"
-                        >
-                          ♻️ Restore
-                        </button>
-                      )}
-                    </>
-                  )}
-                </div>
-              </div>
-            ))
-          )}
-        </div>
-      ) : filterType === 'permanent' ? (
-        /* Table View */
-        <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
-          {filteredStudents.length === 0 ? (
-            <div className="text-center py-20 text-slate-400">
-              No students found. Add a new student to get started.
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-slate-50 border-b border-slate-200">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-bold text-slate-700 uppercase tracking-wider">Student</th>
-                    <th className="px-6 py-3 text-left text-xs font-bold text-slate-700 uppercase tracking-wider">Contact</th>
-                    <th className="px-6 py-3 text-left text-xs font-bold text-slate-700 uppercase tracking-wider">Guardian</th>
-                    <th className="px-6 py-3 text-left text-xs font-bold text-slate-700 uppercase tracking-wider">Enrollments</th>
-                    <th className="px-6 py-3 text-left text-xs font-bold text-slate-700 uppercase tracking-wider">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-200">
-                  {filteredStudents.map(student => (
-                    <tr key={student.id} className="hover:bg-slate-50 transition">
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-orange-500 to-amber-500 text-white flex items-center justify-center font-bold text-sm shadow-md">
-                            {(() => {
-                              if (student.first_name && student.last_name) {
-                                return `${student.first_name[0]}${student.last_name[0]}`;
-                              }
-                              const name = (student as any).name || 'N A';
-                              const parts = name.split(' ');
-                              return parts.length > 1 ? `${parts[0][0]}${parts[parts.length - 1][0]}` : name.substring(0, 2).toUpperCase();
-                            })()}
-                          </div>
-                          <div>
-                            <div className="font-semibold text-slate-900">
-                              {student.first_name && student.last_name ? `${student.first_name} ${student.last_name}` : (student as any).name || 'Unknown'}
-                              {(student as any).is_active === false && (
-                                <span className="ml-2 px-2 py-0.5 bg-red-100 text-red-800 text-xs rounded-full">Inactive</span>
-                              )}
-                            </div>
-                            <div className="text-xs text-slate-500">{((student as any).metadata?.email) || student.email || 'No email'}</div>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="text-sm text-slate-600">
-                          <PhoneLink phone={student.phone} fallback="N/A" />
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="text-sm text-slate-600">
-                          <div>{((student as any).metadata?.guardian_name) || student.guardian_name || (student as any).guardian_contact || 'N/A'}</div>
-                          <div className="text-xs text-slate-500"><PhoneLink phone={((student as any).metadata?.guardian_phone) || student.guardian_phone} fallback="N/A" /></div>
-                          <div className="text-xs text-slate-500">{((student as any).metadata?.address) || student.address || ''}</div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        {(student as any).batches && (student as any).batches.length > 0 ? (
-                          <div className="space-y-1">
-                            {(student as any).batches.map((batch: any, idx: number) => (
-                              <div key={idx} className="flex items-center gap-2">
-                                <span className="px-2 py-0.5 bg-blue-100 text-blue-800 rounded text-xs font-medium">
-                                  {batch.instrument || 'Unknown'}
-                                </span>
-                                <span className="text-xs text-slate-500">
-                                  {batch.teacher || 'No teacher'}
-                                </span>
-                              </div>
-                            ))}
-                          </div>
-                        ) : (
-                          <span className="text-xs text-slate-400 italic">Not enrolled</span>
-                        )}
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="flex gap-2">
-                          <button
-                            onClick={() => setSelectedStudentId(student.id || (student as any).student_id)}
-                            className="px-3 py-1.5 bg-blue-50 text-blue-600 rounded-lg text-sm font-medium hover:bg-blue-100 transition"
-                          >
-                            360°
-                          </button>
-                          {!isReadonly && (
-                            <>
-                              <button
-                                onClick={() => handleEditStudent(student)}
-                                className="px-3 py-1.5 bg-orange-50 text-orange-600 rounded-lg text-sm font-medium hover:bg-orange-100 transition"
-                              >
-                                ✏️ Edit
-                              </button>
-                              {(student as any).is_active !== false ? (
-                                <button
-                                  onClick={() => handleDeleteStudent((student as any).student_id)}
-                                  className="px-3 py-1.5 bg-red-50 text-red-600 rounded-lg text-sm font-medium hover:bg-red-100 transition"
-                                >
-                                  🗑️
-                                </button>
-                              ) : (
-                                <button
-                                  onClick={() => handleRestoreStudent((student as any).student_id)}
-                                  className="px-3 py-1.5 bg-green-50 text-green-600 rounded-lg text-sm font-medium hover:bg-green-100 transition"
-                                >
-                                  ♻️
-                                </button>
-                              )}
-                            </>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      ) : null}
-
-      {/* Add/Edit Modal */}
       {showAddModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
@@ -780,7 +384,6 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students: propStu
                 {editingStudent ? 'Edit Student' : 'Add New Student'}
               </h2>
             </div>
-
             <StudentDetails
               student={editingStudent}
               batches={batches}
