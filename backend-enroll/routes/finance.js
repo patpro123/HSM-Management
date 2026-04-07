@@ -432,7 +432,10 @@ router.get('/payslip/:teacherId', async (req, res) => {
       const isExcluded = !isDeferred && classesAttended <= 1;
 
       // Effective rate (for per_student_monthly teachers)
-      const rateKey = `${s.instrument_id}::${s.trinity_grade}`;
+      // Vocal instruments store their rate under 'Fixed' grade key (trinity_grade is NULL for vocals)
+      const isVocal = VOCAL_INSTRUMENTS.includes(s.instrument_name.toLowerCase());
+      const gradeKey = isVocal ? 'Fixed' : s.trinity_grade;
+      const rateKey = `${s.instrument_id}::${gradeKey}`;
       const effectiveRate = gradeRateMap[rateKey] || 0;
 
       let status = 'billable';
