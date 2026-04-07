@@ -226,6 +226,7 @@ app.use('/api/payments',     require('./routes/payments'));
 app.use('/api/users',        require('./routes/users'));
 app.use('/api/finance',      require('./routes/finance'));
 app.use('/api/finance',      require('./routes/payouts'));
+app.use('/api/fee-structures', require('./routes/fee-structures'));
 app.use('/api/notifications',require('./routes/notifications'));
 app.use('/api/prospects',    require('./routes/prospects'));
 app.use('/api/migration',    require('./routes/migration'));

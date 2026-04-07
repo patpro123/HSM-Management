@@ -176,4 +176,342 @@ router.post('/fees', async (req, res) => {
   }
 });
 
+// ── GRADE RATES ENDPOINTS ─────────────────────────────────────────────────────
+
+const VOCAL_INSTRUMENTS = ['hindustani vocals', 'carnatic vocals'];
+const TRINITY_GRADES = ['Initial','Grade 1','Grade 2','Grade 3','Grade 4','Grade 5','Grade 6','Grade 7','Grade 8'];
+
+// GET /api/finance/grade-rates
+// Returns all instrument_grade_rates joined with instrument names
+router.get('/grade-rates', async (req, res) => {
+  try {
+    const ratesRes = await pool.query(
+      `SELECT igr.id, igr.instrument_id, i.name AS instrument_name,
+              igr.trinity_grade, igr.rate_per_student
+       FROM instrument_grade_rates igr
+       JOIN instruments i ON i.id = igr.instrument_id
+       ORDER BY i.name, igr.trinity_grade`
+    );
+    const instrumentsRes = await pool.query('SELECT id, name FROM instruments ORDER BY name');
+    res.json({ rates: ratesRes.rows, instruments: instrumentsRes.rows });
+  } catch (err) {
+    console.error('Get grade rates error:', err);
+    res.status(500).json({ error: 'Failed to fetch grade rates' });
+  }
+});
+
+// POST /api/finance/grade-rates
+// Upsert a rate for instrument + grade
+router.post('/grade-rates', async (req, res) => {
+  const { instrument_id, trinity_grade, rate_per_student } = req.body;
+  if (!instrument_id || !trinity_grade || rate_per_student == null) {
+    return res.status(400).json({ error: 'instrument_id, trinity_grade and rate_per_student required' });
+  }
+  try {
+    const result = await pool.query(
+      `INSERT INTO instrument_grade_rates (instrument_id, trinity_grade, rate_per_student)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (instrument_id, trinity_grade)
+       DO UPDATE SET rate_per_student = EXCLUDED.rate_per_student, updated_at = now()
+       RETURNING *`,
+      [instrument_id, trinity_grade, rate_per_student]
+    );
+    res.json({ rate: result.rows[0] });
+  } catch (err) {
+    console.error('Save grade rate error:', err);
+    res.status(500).json({ error: 'Failed to save grade rate' });
+  }
+});
+
+// GET /api/finance/grade-rates/overrides/:teacherId
+// Returns all overrides for a teacher
+router.get('/grade-rates/overrides/:teacherId', async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT tgro.id, tgro.instrument_id, i.name AS instrument_name,
+              tgro.trinity_grade, tgro.rate_per_student
+       FROM teacher_grade_rate_overrides tgro
+       JOIN instruments i ON i.id = tgro.instrument_id
+       WHERE tgro.teacher_id = $1
+       ORDER BY i.name, tgro.trinity_grade`,
+      [req.params.teacherId]
+    );
+    res.json({ overrides: result.rows });
+  } catch (err) {
+    console.error('Get overrides error:', err);
+    res.status(500).json({ error: 'Failed to fetch overrides' });
+  }
+});
+
+// POST /api/finance/grade-rates/overrides/:teacherId
+// Upsert a teacher-level rate override
+router.post('/grade-rates/overrides/:teacherId', async (req, res) => {
+  const { instrument_id, trinity_grade, rate_per_student } = req.body;
+  if (!instrument_id || !trinity_grade || rate_per_student == null) {
+    return res.status(400).json({ error: 'instrument_id, trinity_grade and rate_per_student required' });
+  }
+  try {
+    const result = await pool.query(
+      `INSERT INTO teacher_grade_rate_overrides (teacher_id, instrument_id, trinity_grade, rate_per_student)
+       VALUES ($1, $2, $3, $4)
+       ON CONFLICT (teacher_id, instrument_id, trinity_grade)
+       DO UPDATE SET rate_per_student = EXCLUDED.rate_per_student, updated_at = now()
+       RETURNING *`,
+      [req.params.teacherId, instrument_id, trinity_grade, rate_per_student]
+    );
+    res.json({ override: result.rows[0] });
+  } catch (err) {
+    console.error('Save override error:', err);
+    res.status(500).json({ error: 'Failed to save override' });
+  }
+});
+
+// DELETE /api/finance/grade-rates/overrides/:teacherId/:overrideId
+router.delete('/grade-rates/overrides/:teacherId/:overrideId', async (req, res) => {
+  try {
+    await pool.query(
+      'DELETE FROM teacher_grade_rate_overrides WHERE id = $1 AND teacher_id = $2',
+      [req.params.overrideId, req.params.teacherId]
+    );
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Delete override error:', err);
+    res.status(500).json({ error: 'Failed to delete override' });
+  }
+});
+
+// ── PAYSLIP ENDPOINT ──────────────────────────────────────────────────────────
+
+// GET /api/finance/payslip/:teacherId?month=YYYY-MM
+router.get('/payslip/:teacherId', async (req, res) => {
+  const { teacherId } = req.params;
+  const monthStr = req.query.month || new Date().toISOString().slice(0, 7);
+  const [year, month] = monthStr.split('-').map(Number);
+
+  const periodStart = new Date(year, month - 1, 1);
+  const periodEnd   = new Date(year, month, 0); // last day of month
+  const deferralCutoff = 20; // students enrolled after this day deferred to next month
+
+  try {
+    // 1. Teacher profile
+    const teacherRes = await pool.query(
+      `SELECT id, name, phone, payout_type, rate,
+              COALESCE(metadata->>'email', '') AS email
+       FROM teachers WHERE id = $1`,
+      [teacherId]
+    );
+    if (teacherRes.rows.length === 0) {
+      return res.status(404).json({ error: 'Teacher not found' });
+    }
+    const teacher = teacherRes.rows[0];
+
+    // 2. Batches for this teacher (non-makeup)
+    const batchesRes = await pool.query(
+      `SELECT b.id, b.recurrence, b.start_time, b.end_time,
+              i.id AS instrument_id, i.name AS instrument_name
+       FROM batches b
+       JOIN instruments i ON i.id = b.instrument_id
+       WHERE b.teacher_id = $1 AND b.is_makeup = false
+       ORDER BY i.name, b.start_time`,
+      [teacherId]
+    );
+    const batches = batchesRes.rows;
+    const batchIds = batches.map(b => b.id);
+
+    if (batchIds.length === 0) {
+      return res.json({
+        teacher: { id: teacher.id, name: teacher.name, phone: teacher.phone,
+                   email: teacher.email, payout_type: teacher.payout_type, rate: parseFloat(teacher.rate) },
+        period: { month: monthStr, start: periodStart.toISOString().slice(0,10),
+                  end: periodEnd.toISOString().slice(0,10) },
+        attendance: [], batches: [], summary: { total_payable: 0, deferred_count: 0, excluded_count: 0 }
+      });
+    }
+
+    // 3. Teacher attendance for the month
+    const taRes = await pool.query(
+      `SELECT batch_id, status, session_date FROM teacher_attendance
+       WHERE batch_id = ANY($1)
+         AND session_date >= $2 AND session_date <= $3`,
+      [batchIds, periodStart.toISOString().slice(0,10), periodEnd.toISOString().slice(0,10)]
+    );
+    const taByBatch = {};
+    taRes.rows.forEach(r => {
+      if (!taByBatch[r.batch_id]) taByBatch[r.batch_id] = { conducted: 0, not_conducted: 0 };
+      if (r.status === 'conducted') taByBatch[r.batch_id].conducted++;
+      else taByBatch[r.batch_id].not_conducted++;
+    });
+
+    // Also count implicit sessions from student attendance where teacher_attendance not marked
+    const implicitRes = await pool.query(
+      `SELECT ar.batch_id, COUNT(DISTINCT ar.session_date) AS implicit_conducted
+       FROM attendance_records ar
+       LEFT JOIN teacher_attendance ta
+         ON ta.batch_id = ar.batch_id AND ta.session_date = ar.session_date
+       WHERE ar.batch_id = ANY($1)
+         AND ar.session_date >= $2 AND ar.session_date <= $3
+         AND ta.id IS NULL
+       GROUP BY ar.batch_id`,
+      [batchIds, periodStart.toISOString().slice(0,10), periodEnd.toISOString().slice(0,10)]
+    );
+    implicitRes.rows.forEach(r => {
+      if (!taByBatch[r.batch_id]) taByBatch[r.batch_id] = { conducted: 0, not_conducted: 0 };
+      taByBatch[r.batch_id].conducted += parseInt(r.implicit_conducted);
+    });
+
+    // 4. Students per batch with enrollment info and attendance counts for the month
+    const studentsRes = await pool.query(
+      `SELECT
+         s.id AS student_id, s.name AS student_name,
+         b.id AS batch_id,
+         i.id AS instrument_id, i.name AS instrument_name,
+         eb.trinity_grade,
+         eb.enrolled_on AS batch_enrolled_on,
+         e.enrolled_on AS enrollment_date,
+         e.created_at AS enrollment_created_at,
+         COUNT(CASE WHEN ar.status = 'present'
+                     AND ar.session_date >= $2 AND ar.session_date <= $3
+                    THEN 1 END) AS classes_attended_month
+       FROM enrollment_batches eb
+       JOIN enrollments e ON e.id = eb.enrollment_id
+       JOIN students s ON s.id = e.student_id
+       JOIN batches b ON b.id = eb.batch_id
+       JOIN instruments i ON i.id = b.instrument_id
+       LEFT JOIN attendance_records ar ON ar.student_id = s.id AND ar.batch_id = b.id
+       WHERE b.teacher_id = $1
+         AND b.is_makeup = false
+         AND e.status = 'active'
+       GROUP BY s.id, s.name, b.id, i.id, i.name,
+                eb.trinity_grade, eb.enrolled_on, e.enrolled_on, e.created_at
+       ORDER BY i.name, s.name`,
+      [teacherId, periodStart.toISOString().slice(0,10), periodEnd.toISOString().slice(0,10)]
+    );
+
+    // 5. School-wide grade rates for instruments this teacher teaches
+    const instrumentIds = [...new Set(batches.map(b => b.instrument_id))];
+    const gradeRatesRes = await pool.query(
+      `SELECT instrument_id, trinity_grade, rate_per_student
+       FROM instrument_grade_rates
+       WHERE instrument_id = ANY($1)`,
+      [instrumentIds]
+    );
+    const gradeRateMap = {};
+    gradeRatesRes.rows.forEach(r => {
+      const key = `${r.instrument_id}::${r.trinity_grade}`;
+      gradeRateMap[key] = parseFloat(r.rate_per_student);
+    });
+
+    // 6. Teacher-level overrides
+    const overridesRes = await pool.query(
+      `SELECT instrument_id, trinity_grade, rate_per_student
+       FROM teacher_grade_rate_overrides
+       WHERE teacher_id = $1 AND instrument_id = ANY($2)`,
+      [teacherId, instrumentIds]
+    );
+    overridesRes.rows.forEach(r => {
+      const key = `${r.instrument_id}::${r.trinity_grade}`;
+      gradeRateMap[key] = parseFloat(r.rate_per_student); // override wins
+    });
+
+    // 7. Classify each student: billable / deferred / excluded
+    const batchMap = {};
+    batches.forEach(b => { batchMap[b.id] = b; });
+
+    const studentResults = studentsRes.rows.map(s => {
+      const classesAttended = parseInt(s.classes_attended_month) || 0;
+
+      // Enrollment date for deferral check — use earliest of enrollment dates
+      const enrollDate = new Date(s.enrollment_date || s.enrollment_created_at);
+      const enrollDay = enrollDate.getDate();
+      const enrollMonth = enrollDate.getMonth() + 1;
+      const enrollYear = enrollDate.getFullYear();
+      const isNewThisMonth = enrollYear === year && enrollMonth === month;
+      const isDeferred = isNewThisMonth && enrollDay > deferralCutoff;
+
+      // Excluded: first class is free — only >1 class counts
+      const isExcluded = !isDeferred && classesAttended <= 1;
+
+      // Effective rate (for per_student_monthly teachers)
+      const rateKey = `${s.instrument_id}::${s.trinity_grade}`;
+      const effectiveRate = gradeRateMap[rateKey] || 0;
+
+      let status = 'billable';
+      if (isDeferred) status = 'deferred';
+      else if (isExcluded) status = 'excluded';
+
+      return {
+        student_id: s.student_id,
+        student_name: s.student_name,
+        batch_id: s.batch_id,
+        instrument_id: s.instrument_id,
+        instrument_name: s.instrument_name,
+        trinity_grade: s.trinity_grade,
+        enrollment_date: enrollDate.toISOString().slice(0, 10),
+        classes_attended: classesAttended,
+        status,
+        rate: effectiveRate,
+        subtotal: status === 'billable' ? effectiveRate : 0
+      };
+    });
+
+    // 8. Build per-batch summaries
+    const batchSummaries = batches.map(b => {
+      const isVocal = VOCAL_INSTRUMENTS.includes(b.instrument_name.toLowerCase());
+      const attendance = taByBatch[b.id] || { conducted: 0, not_conducted: 0 };
+      const students = studentResults.filter(s => s.batch_id === b.id);
+      const billableStudents = students.filter(s => s.status === 'billable');
+      const batchSubtotal = billableStudents.reduce((sum, s) => sum + s.subtotal, 0);
+
+      return {
+        batch_id: b.id,
+        instrument_id: b.instrument_id,
+        instrument_name: b.instrument_name,
+        recurrence: b.recurrence,
+        start_time: b.start_time?.slice(0, 5),
+        end_time: b.end_time?.slice(0, 5),
+        is_vocal: isVocal,
+        attendance: {
+          conducted: attendance.conducted,
+          not_conducted: attendance.not_conducted
+        },
+        students,
+        billable_count: billableStudents.length,
+        batch_subtotal: batchSubtotal
+      };
+    });
+
+    // 9. Overall summary
+    const billableTotal = batchSummaries.reduce((sum, b) => sum + b.batch_subtotal, 0);
+    const totalPayable = teacher.payout_type === 'fixed' ? parseFloat(teacher.rate) : billableTotal;
+
+    res.json({
+      teacher: {
+        id: teacher.id,
+        name: teacher.name,
+        phone: teacher.phone || '',
+        email: teacher.email || '',
+        payout_type: teacher.payout_type,
+        rate: parseFloat(teacher.rate)
+      },
+      period: {
+        month: monthStr,
+        start: periodStart.toISOString().slice(0, 10),
+        end: periodEnd.toISOString().slice(0, 10)
+      },
+      batches: batchSummaries,
+      summary: {
+        total_payable: totalPayable,
+        fixed_salary: teacher.payout_type === 'fixed' ? parseFloat(teacher.rate) : null,
+        per_student_total: teacher.payout_type === 'per_student_monthly' ? billableTotal : null,
+        deferred_count: studentResults.filter(s => s.status === 'deferred').length,
+        excluded_count: studentResults.filter(s => s.status === 'excluded').length,
+        billable_count: studentResults.filter(s => s.status === 'billable').length
+      }
+    });
+  } catch (err) {
+    console.error('Payslip error:', err);
+    res.status(500).json({ error: 'Failed to generate payslip' });
+  }
+});
+
 module.exports = router;

@@ -37,7 +37,8 @@ router.post('/', authenticateJWT, authorizeRole(['admin']), async (req, res) => 
       });
 
       instrumentFreqs.forEach(freq => {
-        if (freq === 'monthly') totalCredits += 8;
+        if (freq === 'trial') totalCredits += 4;
+        else if (freq === 'monthly') totalCredits += 8;
         else if (freq === 'quarterly') totalCredits += 24;
         else if (freq === 'half_yearly') totalCredits += 48;
         else if (freq === 'yearly') totalCredits += 96;
@@ -78,7 +79,7 @@ router.post('/', authenticateJWT, authorizeRole(['admin']), async (req, res) => 
     let enrollmentBatchRows = [];
     if (Array.isArray(batches)) {
       for (const batch of batches) {
-        const { batch_id, payment_frequency, classes_remaining, enrolled_on } = batch;
+        const { batch_id, payment_frequency, classes_remaining, enrolled_on, trinity_grade, fee_structure_id } = batch;
 
         let initialCredits = classes_remaining || 0;
         const freq = (payment_frequency || '').toLowerCase();
@@ -86,8 +87,15 @@ router.post('/', authenticateJWT, authorizeRole(['admin']), async (req, res) => 
         if (!initialCredits && freq === 'quarterly') initialCredits = 24;
 
         const batchResult = await client.query(
-          'INSERT INTO enrollment_batches (enrollment_id, batch_id, payment_frequency, classes_remaining, enrolled_on) VALUES ($1, $2, $3, $4, $5) RETURNING *',
-          [enrollment.id, batch_id, payment_frequency || 'monthly', initialCredits, enrolled_on || new Date()]
+          `INSERT INTO enrollment_batches
+             (enrollment_id, batch_id, payment_frequency, classes_remaining, enrolled_on, trinity_grade, fee_structure_id)
+           VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+          [
+            enrollment.id, batch_id, payment_frequency || 'monthly', initialCredits,
+            enrolled_on || new Date(),
+            trinity_grade || 'Initial',
+            fee_structure_id || null
+          ]
         );
         enrollmentBatchRows.push(batchResult.rows[0]);
       }
@@ -229,7 +237,8 @@ router.put('/:id', authenticateJWT, authorizeRole(['admin']), async (req, res) =
       });
 
       instrumentFreqs.forEach(freq => {
-        if (freq === 'monthly') totalCredits += 8;
+        if (freq === 'trial') totalCredits += 4;
+        else if (freq === 'monthly') totalCredits += 8;
         else if (freq === 'quarterly') totalCredits += 24;
         else if (freq === 'half_yearly') totalCredits += 48;
         else if (freq === 'yearly') totalCredits += 96;
@@ -310,7 +319,8 @@ router.put('/:id', authenticateJWT, authorizeRole(['admin']), async (req, res) =
       for (const b of toAdd) {
         let initialCredits = 0;
         const freq = (b.payment_frequency || 'monthly').toLowerCase();
-        if (freq === 'monthly') initialCredits = 8;
+        if (freq === 'trial') initialCredits = 4;
+        else if (freq === 'monthly') initialCredits = 8;
         else if (freq === 'quarterly') initialCredits = 24;
         else if (freq === 'half_yearly') initialCredits = 48;
         else if (freq === 'yearly') initialCredits = 96;

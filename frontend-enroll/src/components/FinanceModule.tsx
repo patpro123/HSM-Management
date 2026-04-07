@@ -5,6 +5,8 @@ import { Teacher, Expense, FeeStructure, MonthlyBudget } from './FinanceModule/t
 import OverviewTab from './FinanceModule/OverviewTab';
 import ExpensesTab from './FinanceModule/ExpensesTab';
 import BudgetTab from './FinanceModule/BudgetTab';
+import PayslipsTab from './FinanceModule/PayslipsTab';
+import FeeRatesTab from './FinanceModule/FeeRatesTab';
 
 interface FinanceModuleProps {
   students: Student[];
@@ -14,9 +16,9 @@ interface FinanceModuleProps {
 }
 
 const FinanceModule: React.FC<FinanceModuleProps> = ({ students, batches, payments, instruments }) => {
-  const [activeTab, setActiveTab] = useState<'overview' | 'expenses' | 'budget'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'expenses' | 'budget' | 'payslips' | 'fee-rates'>('overview');
   const [teachers, setTeachers] = useState<Teacher[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [_loading, setLoading] = useState(true);
   const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7));
 
   const [expenses, setExpenses] = useState<Expense[]>([]);
@@ -253,23 +255,26 @@ const FinanceModule: React.FC<FinanceModuleProps> = ({ students, batches, paymen
   return (
     <div className="space-y-6">
       {/* Header & Tabs */}
-      <div className="flex flex-col md:flex-row justify-between items-center gap-4">
+      <div className="flex flex-col gap-4">
         <div>
           <h2 className="text-2xl font-bold text-slate-900">Finance Module</h2>
           <p className="text-slate-600">Track revenue, expenses, and profitability</p>
         </div>
-        <div className="flex bg-slate-100 p-1 rounded-lg">
-          {(['overview', 'expenses', 'budget'] as const).map(tab => (
-            <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              className={`px-4 py-2 rounded-md text-sm font-medium capitalize transition ${
-                activeTab === tab ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              {tab}
-            </button>
-          ))}
+        {/* Tab bar — horizontally scrollable on mobile */}
+        <div className="overflow-x-auto -mx-4 px-4 md:mx-0 md:px-0">
+          <div className="flex bg-slate-100 p-1 rounded-lg w-max min-w-full md:w-auto">
+            {(['overview', 'expenses', 'budget', 'payslips', 'fee-rates'] as const).map(tab => (
+              <button
+                key={tab}
+                onClick={() => setActiveTab(tab)}
+                className={`px-4 py-2 rounded-md text-sm font-medium whitespace-nowrap capitalize transition ${
+                  activeTab === tab ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                {tab === 'fee-rates' ? 'Fee Rates' : tab}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -313,6 +318,17 @@ const FinanceModule: React.FC<FinanceModuleProps> = ({ students, batches, paymen
           onSaveBudget={handleSaveBudget}
           formatCurrency={formatCurrency}
         />
+      )}
+
+      {activeTab === 'payslips' && (
+        <PayslipsTab
+          teachers={teachers}
+          selectedMonth={selectedMonth}
+        />
+      )}
+
+      {activeTab === 'fee-rates' && (
+        <FeeRatesTab />
       )}
     </div>
   );

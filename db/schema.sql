@@ -156,6 +156,7 @@ COMMENT ON COLUMN enrollments.classes_remaining IS 'Total classes remaining acro
 
 -- Enrollment batches join table (links enrollments to specific batches)
 -- Updated via migration 003 to add payment_frequency and classes_remaining
+-- Updated via migration 019 to add trinity_grade
 CREATE TABLE IF NOT EXISTS enrollment_batches (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   enrollment_id uuid NOT NULL REFERENCES enrollments(id) ON DELETE CASCADE,
@@ -164,12 +165,17 @@ CREATE TABLE IF NOT EXISTS enrollment_batches (
   -- Added via migration 003
   payment_frequency payment_frequency DEFAULT 'monthly',
   classes_remaining integer DEFAULT 0 CHECK (classes_remaining >= 0),
-  enrolled_on date DEFAULT CURRENT_DATE
+  enrolled_on date DEFAULT CURRENT_DATE,
+  -- Added via migration 019
+  trinity_grade TEXT NOT NULL DEFAULT 'Initial'
+    CHECK (trinity_grade IN ('Initial','Grade 1','Grade 2','Grade 3',
+                             'Grade 4','Grade 5','Grade 6','Grade 7','Grade 8','Fixed'))
 );
 
 COMMENT ON TABLE enrollment_batches IS 'Links enrollments to specific batches (instrument + teacher + schedule)';
 COMMENT ON COLUMN enrollment_batches.payment_frequency IS 'Payment frequency: monthly (8 classes) or quarterly (24 classes)';
 COMMENT ON COLUMN enrollment_batches.classes_remaining IS 'Classes remaining for this specific batch assignment';
+COMMENT ON COLUMN enrollment_batches.trinity_grade IS 'Trinity grade level of student in this batch. "Fixed" for vocal instruments.';
 
 -- Attendance records table (daily attendance tracking)
 CREATE TABLE IF NOT EXISTS attendance_records (
@@ -448,6 +454,39 @@ CREATE TABLE IF NOT EXISTS student_evaluations (
 COMMENT ON TABLE student_evaluations IS 'Monthly progress reports and milestones for students';
 
 
+-- Instrument × Trinity grade rate table (added via migration 020)
+CREATE TABLE IF NOT EXISTS instrument_grade_rates (
+  id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  instrument_id uuid NOT NULL REFERENCES instruments(id) ON DELETE CASCADE,
+  trinity_grade TEXT NOT NULL
+    CHECK (trinity_grade IN ('Initial','Grade 1','Grade 2','Grade 3',
+                             'Grade 4','Grade 5','Grade 6','Grade 7','Grade 8','Fixed')),
+  rate_per_student NUMERIC(10,2) NOT NULL DEFAULT 0 CHECK (rate_per_student >= 0),
+  created_at    timestamptz DEFAULT now(),
+  updated_at    timestamptz DEFAULT now(),
+  UNIQUE(instrument_id, trinity_grade)
+);
+
+COMMENT ON TABLE instrument_grade_rates IS
+  'School-wide per-student payout rates per instrument and Trinity grade. Vocal instruments use trinity_grade = ''Fixed''.';
+
+-- Teacher-level rate overrides (added via migration 021)
+CREATE TABLE IF NOT EXISTS teacher_grade_rate_overrides (
+  id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  teacher_id    uuid NOT NULL REFERENCES teachers(id) ON DELETE CASCADE,
+  instrument_id uuid NOT NULL REFERENCES instruments(id) ON DELETE CASCADE,
+  trinity_grade TEXT NOT NULL
+    CHECK (trinity_grade IN ('Initial','Grade 1','Grade 2','Grade 3',
+                             'Grade 4','Grade 5','Grade 6','Grade 7','Grade 8','Fixed')),
+  rate_per_student NUMERIC(10,2) NOT NULL CHECK (rate_per_student >= 0),
+  created_at    timestamptz DEFAULT now(),
+  updated_at    timestamptz DEFAULT now(),
+  UNIQUE(teacher_id, instrument_id, trinity_grade)
+);
+
+COMMENT ON TABLE teacher_grade_rate_overrides IS
+  'Teacher-specific overrides for per-student payout rates. Supersedes instrument_grade_rates when present.';
+
 -- ==================== INDEXES ====================
 
 CREATE INDEX IF NOT EXISTS idx_students_phone ON students (phone);
@@ -466,6 +505,9 @@ CREATE INDEX IF NOT EXISTS idx_evaluations_student ON student_evaluations(studen
 -- 3. migration 003: Added payment_frequency and classes_remaining to enrollment_batches
 -- 4. migration 004: Added authentication tables (users, roles, etc.)
 -- 4. migration 005: Added student_evaluations table
+-- 5. migration 019: Added trinity_grade to enrollment_batches
+-- 6. migration 020: Created instrument_grade_rates table
+-- 7. migration 021: Created teacher_grade_rate_overrides table
 --
 -- Key Design Decisions:
 -- - One enrollment per student (not per instrument)

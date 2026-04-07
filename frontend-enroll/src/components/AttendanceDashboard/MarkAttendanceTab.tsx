@@ -83,30 +83,39 @@ const MarkAttendanceTab: React.FC<MarkAttendanceTabProps> = ({
   const searchRef = useRef<HTMLDivElement>(null);
 
   const renderStatusButtons = (student: BatchStudent, isGuest: boolean) => (
-    <div className="flex items-center justify-center gap-2">
+    <div className="flex items-center justify-center gap-1 sm:gap-2">
       <button
         onClick={() => isGuest ? handleGuestStatusChange(student.student_id, 'present') : handleStatusChange(student.student_id, 'present')}
-        className={`px-4 py-2 rounded-lg font-medium transition ${
+        className={`flex items-center justify-center rounded-lg font-medium transition
+          w-11 h-11 text-lg sm:w-auto sm:h-auto sm:px-4 sm:py-2 sm:text-base ${
           student.status === 'present' ? 'bg-emerald-500 text-white shadow-md' : 'bg-slate-100 text-slate-600 hover:bg-emerald-100'
         }`}
+        title="Present"
       >
-        ✓ Present
+        <span>✓</span>
+        <span className="hidden sm:inline ml-1">Present</span>
       </button>
       <button
         onClick={() => isGuest ? handleGuestStatusChange(student.student_id, 'absent') : handleStatusChange(student.student_id, 'absent')}
-        className={`px-4 py-2 rounded-lg font-medium transition ${
+        className={`flex items-center justify-center rounded-lg font-medium transition
+          w-11 h-11 text-lg sm:w-auto sm:h-auto sm:px-4 sm:py-2 sm:text-base ${
           student.status === 'absent' ? 'bg-red-500 text-white shadow-md' : 'bg-slate-100 text-slate-600 hover:bg-red-100'
         }`}
+        title="Absent"
       >
-        ✗ Absent
+        <span>✗</span>
+        <span className="hidden sm:inline ml-1">Absent</span>
       </button>
       <button
         onClick={() => isGuest ? handleGuestStatusChange(student.student_id, 'excused') : handleStatusChange(student.student_id, 'excused')}
-        className={`px-4 py-2 rounded-lg font-medium transition ${
+        className={`flex items-center justify-center rounded-lg font-medium transition
+          w-11 h-11 text-lg sm:w-auto sm:h-auto sm:px-4 sm:py-2 sm:text-base ${
           student.status === 'excused' ? 'bg-amber-500 text-white shadow-md' : 'bg-slate-100 text-slate-600 hover:bg-amber-100'
         }`}
+        title="Excused"
       >
-        ~ Excused
+        <span>~</span>
+        <span className="hidden sm:inline ml-1">Excused</span>
       </button>
     </div>
   );
@@ -158,22 +167,22 @@ const MarkAttendanceTab: React.FC<MarkAttendanceTabProps> = ({
 
       {selectedBatchInfo && (
         <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-4">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div>
               <p className="font-bold text-slate-900">{(selectedBatchInfo as any).instrument_name || 'Selected Batch'}</p>
               <p className="text-sm text-slate-600">
                 {selectedBatchInfo.recurrence} • {selectedBatchInfo.start_time} - {selectedBatchInfo.end_time}
               </p>
             </div>
-            <div className="flex flex-wrap gap-2">
-              <button onClick={handleMarkAllPresent} className="px-3 py-2 text-sm bg-emerald-500 text-white rounded-lg font-medium hover:bg-emerald-600 transition">
-                ✓ All Present
+            <div className="flex gap-2">
+              <button onClick={handleMarkAllPresent} className="flex-1 sm:flex-none px-3 py-2 text-sm bg-emerald-500 text-white rounded-lg font-medium hover:bg-emerald-600 transition text-center">
+                ✓ <span className="hidden sm:inline">All </span>Present
               </button>
-              <button onClick={handleMarkAllAbsent} className="px-3 py-2 text-sm bg-red-500 text-white rounded-lg font-medium hover:bg-red-600 transition">
-                ✗ All Absent
+              <button onClick={handleMarkAllAbsent} className="flex-1 sm:flex-none px-3 py-2 text-sm bg-red-500 text-white rounded-lg font-medium hover:bg-red-600 transition text-center">
+                ✗ <span className="hidden sm:inline">All </span>Absent
               </button>
-              <button onClick={handleMarkAllExcused} className="px-3 py-2 text-sm bg-amber-500 text-white rounded-lg font-medium hover:bg-amber-600 transition">
-                ~ All Excused
+              <button onClick={handleMarkAllExcused} className="flex-1 sm:flex-none px-3 py-2 text-sm bg-amber-500 text-white rounded-lg font-medium hover:bg-amber-600 transition text-center">
+                ~ <span className="hidden sm:inline">All </span>Excused
               </button>
             </div>
           </div>
@@ -217,18 +226,18 @@ const MarkAttendanceTab: React.FC<MarkAttendanceTabProps> = ({
               <table className="w-full">
                 <thead className="bg-slate-50 border-b border-slate-200">
                   <tr>
-                    <th className="px-6 py-4 text-left text-sm font-bold text-slate-700">#</th>
-                    <th className="px-6 py-4 text-left text-sm font-bold text-slate-700">Student Name</th>
-                    <th className="px-6 py-4 text-left text-sm font-bold text-slate-700">Contact</th>
-                    <th className="px-6 py-4 text-center text-sm font-bold text-slate-700">Status</th>
-                    <th className="px-6 py-4 text-center text-sm font-bold text-slate-700">Extra</th>
+                    <th className="hidden sm:table-cell px-6 py-4 text-left text-sm font-bold text-slate-700">#</th>
+                    <th className="px-4 sm:px-6 py-4 text-left text-sm font-bold text-slate-700">Student Name</th>
+                    <th className="hidden sm:table-cell px-6 py-4 text-left text-sm font-bold text-slate-700">Contact</th>
+                    <th className="px-4 sm:px-6 py-4 text-center text-sm font-bold text-slate-700">Status</th>
+                    <th className="px-2 sm:px-6 py-4 text-center text-sm font-bold text-slate-700">Extra</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200">
                   {batchStudents.map((student, index) => (
                     <tr key={student.student_id} className="hover:bg-slate-50 transition">
-                      <td className="px-6 py-4 text-slate-600">{index + 1}</td>
-                      <td className="px-6 py-4">
+                      <td className="hidden sm:table-cell px-6 py-4 text-slate-600">{index + 1}</td>
+                      <td className="px-4 sm:px-6 py-4">
                         <div className="flex items-center gap-2">
                           <p className="font-semibold text-slate-900">{student.student_name}</p>
                           {extraSessions.has(student.student_id) && student.status === 'present' && (
@@ -236,26 +245,27 @@ const MarkAttendanceTab: React.FC<MarkAttendanceTabProps> = ({
                           )}
                         </div>
                       </td>
-                      <td className="px-6 py-4 text-sm text-slate-600">
+                      <td className="hidden sm:table-cell px-6 py-4 text-sm text-slate-600">
                         {student.phone ? (
                           <a href={`tel:${student.phone}`} className="hover:text-indigo-600 hover:underline">{student.phone}</a>
                         ) : student.guardian_phone ? (
                           <a href={`tel:${student.guardian_phone}`} className="hover:text-indigo-600 hover:underline">{student.guardian_phone}</a>
                         ) : (student.guardian_contact || 'N/A')}
                       </td>
-                      <td className="px-6 py-4">{renderStatusButtons(student, false)}</td>
-                      <td className="px-6 py-4 text-center">
+                      <td className="px-4 sm:px-6 py-4">{renderStatusButtons(student, false)}</td>
+                      <td className="px-2 sm:px-6 py-4 text-center">
                         {student.status === 'present' ? (
                           <button
                             onClick={() => toggleExtraSession(student.student_id)}
                             title="Mark an extra/makeup session — deducts one additional class credit"
-                            className={`px-3 py-2 rounded-lg text-sm font-medium transition ${
+                            className={`w-10 h-10 sm:w-auto sm:h-auto sm:px-3 sm:py-2 rounded-lg text-sm font-medium transition flex items-center justify-center mx-auto ${
                               extraSessions.has(student.student_id)
                                 ? 'bg-purple-500 text-white shadow-md'
                                 : 'bg-slate-100 text-slate-600 hover:bg-purple-100'
                             }`}
                           >
-                            + Extra
+                            <span className="sm:hidden">+</span>
+                            <span className="hidden sm:inline">+ Extra</span>
                           </button>
                         ) : (
                           <span className="text-slate-300 text-sm">—</span>
@@ -266,7 +276,7 @@ const MarkAttendanceTab: React.FC<MarkAttendanceTabProps> = ({
 
                   {guestStudents.length > 0 && (
                     <tr>
-                      <td colSpan={5} className="px-6 py-2 bg-orange-50 border-t-2 border-orange-200 text-xs font-bold text-orange-600 uppercase tracking-wide">
+                      <td colSpan={5} className="px-4 sm:px-6 py-2 bg-orange-50 border-t-2 border-orange-200 text-xs font-bold text-orange-600 uppercase tracking-wide">
                         Out-of-Turn Students
                       </td>
                     </tr>
@@ -274,9 +284,9 @@ const MarkAttendanceTab: React.FC<MarkAttendanceTabProps> = ({
 
                   {guestStudents.map((student, index) => (
                     <tr key={`guest-${student.student_id}`} className="hover:bg-orange-50 bg-orange-50/30 transition">
-                      <td className="px-6 py-4 text-slate-600">{batchStudents.length + index + 1}</td>
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-2">
+                      <td className="hidden sm:table-cell px-6 py-4 text-slate-600">{batchStudents.length + index + 1}</td>
+                      <td className="px-4 sm:px-6 py-4">
+                        <div className="flex items-center gap-2 flex-wrap">
                           <p className="font-semibold text-slate-900">{student.student_name}</p>
                           <span className="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full font-medium">Out of Turn</span>
                           {extraSessions.has(student.student_id) && student.status === 'present' && (
@@ -291,20 +301,21 @@ const MarkAttendanceTab: React.FC<MarkAttendanceTabProps> = ({
                           </button>
                         </div>
                       </td>
-                      <td className="px-6 py-4 text-sm text-slate-400">—</td>
-                      <td className="px-6 py-4">{renderStatusButtons(student, true)}</td>
-                      <td className="px-6 py-4 text-center">
+                      <td className="hidden sm:table-cell px-6 py-4 text-sm text-slate-400">—</td>
+                      <td className="px-4 sm:px-6 py-4">{renderStatusButtons(student, true)}</td>
+                      <td className="px-2 sm:px-6 py-4 text-center">
                         {student.status === 'present' ? (
                           <button
                             onClick={() => toggleExtraSession(student.student_id)}
                             title="Mark an extra/makeup session — deducts one additional class credit"
-                            className={`px-3 py-2 rounded-lg text-sm font-medium transition ${
+                            className={`w-10 h-10 sm:w-auto sm:h-auto sm:px-3 sm:py-2 rounded-lg text-sm font-medium transition flex items-center justify-center mx-auto ${
                               extraSessions.has(student.student_id)
                                 ? 'bg-purple-500 text-white shadow-md'
                                 : 'bg-slate-100 text-slate-600 hover:bg-purple-100'
                             }`}
                           >
-                            + Extra
+                            <span className="sm:hidden">+</span>
+                            <span className="hidden sm:inline">+ Extra</span>
                           </button>
                         ) : (
                           <span className="text-slate-300 text-sm">—</span>

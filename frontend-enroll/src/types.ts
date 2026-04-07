@@ -18,6 +18,7 @@ export interface Instrument {
   name: string;
   online_supported: boolean;
   max_batch_size: number;
+  is_deprecated?: boolean;
 }
 
 export interface Batch {
