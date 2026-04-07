@@ -210,23 +210,36 @@ const RateConfigPanel: React.FC<RateConfigPanelProps> = ({ instruments, teachers
   const [overrides, setOverrides] = useState<TeacherGradeRateOverride[]>([]);
   const [saving, setSaving] = useState(false);
   const [overrideSaving, setOverrideSaving] = useState(false);
+  const [localRates, setLocalRates] = useState<Record<string, string>>({});
+  const [localOverrideRates, setLocalOverrideRates] = useState<Record<string, string>>({});
 
   useEffect(() => {
     loadRates();
   }, []);
 
   useEffect(() => {
-    if (overrideTeacherId) loadOverrides(overrideTeacherId);
+    if (overrideTeacherId) {
+      setLocalOverrideRates({});
+      loadOverrides(overrideTeacherId);
+    }
   }, [overrideTeacherId]);
 
   const loadRates = async () => {
     const data = await apiGet('/api/finance/grade-rates').catch(() => ({ rates: [] }));
-    setRates(data.rates || []);
+    const r: InstrumentGradeRate[] = data.rates || [];
+    setRates(r);
+    const map: Record<string, string> = {};
+    r.forEach(rate => { map[`${rate.instrument_id}-${rate.trinity_grade}`] = String(rate.rate_per_student); });
+    setLocalRates(map);
   };
 
   const loadOverrides = async (teacherId: string) => {
     const data = await apiGet(`/api/finance/grade-rates/overrides/${teacherId}`).catch(() => ({ overrides: [] }));
-    setOverrides(data.overrides || []);
+    const o: TeacherGradeRateOverride[] = data.overrides || [];
+    setOverrides(o);
+    const map: Record<string, string> = {};
+    o.forEach(override => { map[`${override.instrument_id}-${override.trinity_grade}`] = String(override.rate_per_student); });
+    setLocalOverrideRates(map);
   };
 
   const getRateValue = (instrumentId: string, grade: TrinityGrade) => {
@@ -274,7 +287,7 @@ const RateConfigPanel: React.FC<RateConfigPanelProps> = ({ instruments, teachers
         <h3 className="text-base font-semibold text-slate-800 mb-4">School-Wide Rates per Grade</h3>
         <p className="text-xs text-slate-500 mb-4">
           Vocal instruments (Hindustani Vocals, Carnatic Vocals) have a single fixed rate.
-          All others use Trinity grade-based rates. Rates are saved on blur.
+          All others use Trinity grade-based rates.
         </p>
         <div className="space-y-6">
           {instruments.map(inst => {
@@ -291,29 +304,43 @@ const RateConfigPanel: React.FC<RateConfigPanelProps> = ({ instruments, teachers
                     <input
                       type="number"
                       min="0"
-                      defaultValue={getRateValue(inst.id, 'Fixed')}
-                      onBlur={e => handleSaveRate(inst.id, 'Fixed', e.target.value)}
+                      value={localRates[`${inst.id}-Fixed`] ?? ''}
+                      onChange={e => setLocalRates(prev => ({ ...prev, [`${inst.id}-Fixed`]: e.target.value }))}
                       className="w-32 border border-slate-300 rounded px-2 py-1 text-sm"
                     />
+                    <button
+                      onClick={() => handleSaveRate(inst.id, 'Fixed', localRates[`${inst.id}-Fixed`] ?? '')}
+                      disabled={saving}
+                      className="text-xs px-3 py-1 bg-indigo-600 text-white rounded hover:bg-indigo-700 disabled:opacity-50 transition"
+                    >Save</button>
                   </div>
                 ) : (
                   <div className="divide-y divide-slate-100">
-                    <div className="grid grid-cols-[160px_1fr] bg-slate-50 px-4 py-1.5 text-xs font-semibold text-slate-500">
+                    <div className="grid grid-cols-[160px_1fr_80px] bg-slate-50 px-4 py-1.5 text-xs font-semibold text-slate-500">
                       <span>Trinity Grade</span>
                       <span>Rate per Student (₹)</span>
+                      <span />
                     </div>
-                    {TRINITY_GRADES.map(grade => (
-                      <div key={grade} className="grid grid-cols-[160px_1fr] px-4 py-2 items-center">
-                        <span className="text-sm text-slate-700">{grade}</span>
-                        <input
-                          type="number"
-                          min="0"
-                          defaultValue={getRateValue(inst.id, grade)}
-                          onBlur={e => handleSaveRate(inst.id, grade, e.target.value)}
-                          className="w-32 border border-slate-300 rounded px-2 py-1 text-sm"
-                        />
-                      </div>
-                    ))}
+                    {TRINITY_GRADES.map(grade => {
+                      const rateKey = `${inst.id}-${grade}`;
+                      return (
+                        <div key={grade} className="grid grid-cols-[160px_1fr_80px] px-4 py-2 items-center">
+                          <span className="text-sm text-slate-700">{grade}</span>
+                          <input
+                            type="number"
+                            min="0"
+                            value={localRates[rateKey] ?? ''}
+                            onChange={e => setLocalRates(prev => ({ ...prev, [rateKey]: e.target.value }))}
+                            className="w-32 border border-slate-300 rounded px-2 py-1 text-sm"
+                          />
+                          <button
+                            onClick={() => handleSaveRate(inst.id, grade, localRates[rateKey] ?? '')}
+                            disabled={saving}
+                            className="text-xs px-3 py-1 bg-indigo-600 text-white rounded hover:bg-indigo-700 disabled:opacity-50 transition"
+                          >Save</button>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -356,32 +383,38 @@ const RateConfigPanel: React.FC<RateConfigPanelProps> = ({ instruments, teachers
                   </div>
                   <div className="divide-y divide-slate-100">
                     {!vocal && (
-                      <div className="grid grid-cols-[160px_180px_180px_40px] bg-slate-50 px-4 py-1.5 text-xs font-semibold text-slate-500">
+                      <div className="grid grid-cols-[160px_180px_180px_60px_40px] bg-slate-50 px-4 py-1.5 text-xs font-semibold text-slate-500">
                         <span>Grade</span>
                         <span>School Rate</span>
                         <span>Override Rate (₹)</span>
+                        <span />
                         <span />
                       </div>
                     )}
                     {gradesToShow.map(grade => {
                       const existing = overrides.find(o => o.instrument_id === inst.id && o.trinity_grade === grade);
+                      const overrideKey = `${inst.id}-${grade}`;
                       return (
-                        <div key={grade} className="grid grid-cols-[160px_180px_180px_40px] px-4 py-2 items-center">
+                        <div key={grade} className="grid grid-cols-[160px_180px_180px_60px_40px] px-4 py-2 items-center">
                           <span className="text-sm text-slate-700">{vocal ? 'Fixed Rate' : grade}</span>
                           <span className="text-sm text-slate-400">{fmt(getRateValue(inst.id, grade))}</span>
                           <input
                             type="number"
                             min="0"
                             placeholder="use school rate"
-                            defaultValue={existing ? existing.rate_per_student : ''}
-                            key={existing?.id ?? `${inst.id}-${grade}`}
-                            onBlur={e => {
-                              if (e.target.value.trim() !== '') {
-                                handleSaveOverride(inst.id, grade, e.target.value);
-                              }
-                            }}
+                            value={localOverrideRates[overrideKey] ?? ''}
+                            onChange={e => setLocalOverrideRates(prev => ({ ...prev, [overrideKey]: e.target.value }))}
                             className="w-36 border border-slate-300 rounded px-2 py-1 text-sm"
                           />
+                          <button
+                            onClick={() => {
+                              const val = localOverrideRates[overrideKey] ?? '';
+                              if (val.trim() !== '') handleSaveOverride(inst.id, grade, val);
+                            }}
+                            disabled={overrideSaving || !localOverrideRates[overrideKey]?.trim()}
+                            className="text-xs px-2 py-1 bg-indigo-600 text-white rounded hover:bg-indigo-700 disabled:opacity-50 transition"
+                            title="Save override"
+                          >Save</button>
                           {existing && (
                             <button
                               onClick={() => handleDeleteOverride(existing.id!)}
