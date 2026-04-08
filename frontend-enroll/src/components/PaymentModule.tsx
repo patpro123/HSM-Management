@@ -1,14 +1,18 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { apiPost, apiPut, apiGet } from '../api';
-import { Student, PaymentRecord, PaymentFrequency } from '../types';
+import { Student, PaymentRecord, PaymentFrequency, Batch, Instrument } from '../types';
+
+const PAGE_SIZE = 10;
 
 interface PaymentModuleProps {
   students: Student[];
   payments: PaymentRecord[];
+  batches: Batch[];
+  instruments: Instrument[];
   onRefresh: () => void;
 }
 
-const PaymentModule: React.FC<PaymentModuleProps> = ({ students, payments, onRefresh }) => {
+const PaymentModule: React.FC<PaymentModuleProps> = ({ students, payments, batches, instruments, onRefresh }) => {
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingPayment, setEditingPayment] = useState<PaymentRecord | null>(null);
   const [formData, setFormData] = useState({
@@ -22,11 +26,63 @@ const PaymentModule: React.FC<PaymentModuleProps> = ({ students, payments, onRef
   });
   const [paymentBatchId, setPaymentBatchId] = useState<string>('');
   const [studentBatches, setStudentBatches] = useState<Array<{ batch_id: string; instrument: string; recurrence: string }>>([]);
+
+  // Filters
+  const [searchName, setSearchName] = useState('');
+  const [filterInstrument, setFilterInstrument] = useState('all');
+  const [filterTeacher, setFilterTeacher] = useState('all');
   const [filterStudent, setFilterStudent] = useState<string>('all');
   const [startDate, setStartDate] = useState<string>('');
   const [endDate, setEndDate] = useState<string>('');
+
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(1);
+
   const [paymentStatus, setPaymentStatus] = useState<any>(null);
   const [loadingStatus, setLoadingStatus] = useState(false);
+
+  // Enrollments for cross-referencing student → instrument/teacher
+  const [enrollments, setEnrollments] = useState<any[]>([]);
+
+  useEffect(() => {
+    apiGet('/api/enrollments').then(d => setEnrollments(d.enrollments || [])).catch(() => {});
+  }, []);
+
+  // student_id → instrument names
+  const studentInstrumentMap = useMemo(() => {
+    const map: Record<string, string[]> = {};
+    enrollments.forEach(eb => {
+      const key = String(eb.student_id);
+      if (!map[key]) map[key] = [];
+      const name = eb.instrument_name || eb.instrument || '';
+      if (name && !map[key].includes(name)) map[key].push(name);
+    });
+    return map;
+  }, [enrollments]);
+
+  // student_id → teacher names (via batches lookup)
+  const studentTeacherMap = useMemo(() => {
+    const map: Record<string, string[]> = {};
+    enrollments.forEach(eb => {
+      const key = String(eb.student_id);
+      if (!map[key]) map[key] = [];
+      const batch = batches.find(b => String(b.id) === String(eb.batch_id));
+      const teacher = batch?.teacher_name || eb.teacher_name || '';
+      if (teacher && !map[key].includes(teacher)) map[key].push(teacher);
+    });
+    return map;
+  }, [enrollments, batches]);
+
+  // Unique teacher names across all batches (for filter dropdown)
+  const allTeachers = useMemo(() => {
+    const names = batches.map(b => b.teacher_name).filter((n): n is string => !!n);
+    return [...new Set(names)].sort();
+  }, [batches]);
+
+  // Unique instrument names (for filter dropdown)
+  const allInstruments = useMemo(() => {
+    return instruments.filter(i => !(i as any).is_deprecated).map(i => i.name).sort();
+  }, [instruments]);
 
   useEffect(() => {
     if (formData.student_id) {
@@ -86,7 +142,7 @@ const PaymentModule: React.FC<PaymentModuleProps> = ({ students, payments, onRef
     setEditingPayment(payment);
     const meta = (payment as any).metadata || {};
     setFormData({
-      student_id: payment.student_id,
+      student_id: String(payment.student_id),
       amount: String(payment.amount),
       payment_method: (payment as any).method || 'cash',
       payment_for: meta.payment_for || 'tuition',
@@ -145,17 +201,48 @@ const PaymentModule: React.FC<PaymentModuleProps> = ({ students, payments, onRef
     }
   };
 
-  const filteredPayments = payments.filter(p => {
-    const matchesStudent = filterStudent === 'all' || String(p.student_id) === String(filterStudent);
-    if (!matchesStudent) return false;
+  const getStudentName = (p: PaymentRecord): string => {
+    const student = students.find(s => String(s.id || (s as any).student_id) === String(p.student_id));
+    if (!student) return '';
+    return student.first_name && student.last_name
+      ? `${student.first_name} ${student.last_name}`
+      : (student as any).name || '';
+  };
 
-    if (startDate || endDate) {
-      const paymentDate = new Date(p.timestamp).toISOString().split('T')[0];
-      if (startDate && paymentDate < startDate) return false;
-      if (endDate && paymentDate > endDate) return false;
-    }
-    return true;
-  });
+  const filteredPayments = useMemo(() => {
+    const lowerSearch = searchName.toLowerCase().trim();
+    return payments.filter(p => {
+      const sid = String(p.student_id);
+
+      if (filterStudent !== 'all' && sid !== String(filterStudent)) return false;
+
+      if (lowerSearch && !getStudentName(p).toLowerCase().includes(lowerSearch)) return false;
+
+      if (filterInstrument !== 'all') {
+        const studentInstruments = studentInstrumentMap[sid] || [];
+        if (!studentInstruments.some(i => i === filterInstrument)) return false;
+      }
+
+      if (filterTeacher !== 'all') {
+        const studentTeachers = studentTeacherMap[sid] || [];
+        if (!studentTeachers.some(t => t === filterTeacher)) return false;
+      }
+
+      if (startDate || endDate) {
+        const paymentDate = new Date(p.timestamp).toISOString().split('T')[0];
+        if (startDate && paymentDate < startDate) return false;
+        if (endDate && paymentDate > endDate) return false;
+      }
+      return true;
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [payments, filterStudent, searchName, filterInstrument, filterTeacher, startDate, endDate, studentInstrumentMap, studentTeacherMap]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredPayments.length / PAGE_SIZE));
+  const paginatedPayments = filteredPayments.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+
+  // Reset to page 1 when any filter changes
+  useEffect(() => { setCurrentPage(1); }, [searchName, filterStudent, filterInstrument, filterTeacher, startDate, endDate]);
 
   const totalRevenue = payments.reduce((acc, p) => acc + parseFloat(String(p.amount || '0')), 0);
   const filteredRevenue = filteredPayments.reduce((acc, p) => acc + parseFloat(String(p.amount || '0')), 0);
@@ -184,48 +271,73 @@ const PaymentModule: React.FC<PaymentModuleProps> = ({ students, payments, onRef
         </div>
       </div>
 
-      <div className="flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
-        <div className="flex-1 w-full flex flex-col md:flex-row gap-4">
+      {/* Filters */}
+      <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-3">
+        <div className="flex flex-col md:flex-row gap-3">
+          {/* Student name search */}
+          <input
+            type="text"
+            value={searchName}
+            onChange={e => setSearchName(e.target.value)}
+            placeholder="Search by student name..."
+            className="flex-1 px-4 py-2.5 rounded-lg border border-slate-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none text-sm"
+          />
+          {/* Stream / Instrument filter */}
           <select
-            value={filterStudent}
-            onChange={(e) => setFilterStudent(e.target.value)}
-            className="w-full md:w-64 px-4 py-3 rounded-lg border border-slate-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none"
+            value={filterInstrument}
+            onChange={e => setFilterInstrument(e.target.value)}
+            className="md:w-48 px-3 py-2.5 rounded-lg border border-slate-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none text-sm"
           >
-            <option value="all">All Students</option>
-            {students.map(student => (
-              <option key={student.id || (student as any).student_id} value={student.id || (student as any).student_id}>
-                {student.first_name && student.last_name ? `${student.first_name} ${student.last_name}` : (student as any).name || 'Unknown'}
-              </option>
+            <option value="all">All Streams</option>
+            {allInstruments.map(name => (
+              <option key={name} value={name}>{name}</option>
             ))}
           </select>
-          
-          <div className="flex items-center gap-2 w-full md:w-auto">
+          {/* Teacher filter */}
+          <select
+            value={filterTeacher}
+            onChange={e => setFilterTeacher(e.target.value)}
+            className="md:w-48 px-3 py-2.5 rounded-lg border border-slate-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none text-sm"
+          >
+            <option value="all">All Teachers</option>
+            {allTeachers.map(name => (
+              <option key={name} value={name}>{name}</option>
+            ))}
+          </select>
+        </div>
+        <div className="flex flex-col md:flex-row gap-3 items-center">
+          {/* Date range */}
+          <div className="flex items-center gap-2 flex-1">
             <input
               type="date"
               value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-              className="flex-1 md:w-40 px-4 py-3 rounded-lg border border-slate-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none"
-              placeholder="Start Date"
+              onChange={e => setStartDate(e.target.value)}
+              className="flex-1 md:w-40 px-3 py-2.5 rounded-lg border border-slate-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none text-sm"
             />
-            <span className="text-slate-400 font-medium">to</span>
+            <span className="text-slate-400 font-medium text-sm">to</span>
             <input
               type="date"
               value={endDate}
-              onChange={(e) => setEndDate(e.target.value)}
-              className="flex-1 md:w-40 px-4 py-3 rounded-lg border border-slate-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none"
-              placeholder="End Date"
+              onChange={e => setEndDate(e.target.value)}
+              className="flex-1 md:w-40 px-3 py-2.5 rounded-lg border border-slate-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none text-sm"
             />
           </div>
+          {/* Clear filters */}
+          {(searchName || filterInstrument !== 'all' || filterTeacher !== 'all' || filterStudent !== 'all' || startDate || endDate) && (
+            <button
+              onClick={() => { setSearchName(''); setFilterInstrument('all'); setFilterTeacher('all'); setFilterStudent('all'); setStartDate(''); setEndDate(''); }}
+              className="text-sm text-slate-500 hover:text-slate-800 underline whitespace-nowrap"
+            >
+              Clear filters
+            </button>
+          )}
+          <button
+            onClick={() => { setEditingPayment(null); setShowAddModal(true); }}
+            className="w-full md:w-auto px-6 py-2.5 bg-indigo-600 text-white rounded-lg font-semibold hover:bg-indigo-700 transition shadow hover:shadow-md whitespace-nowrap text-sm"
+          >
+            + Record Payment
+          </button>
         </div>
-        <button
-          onClick={() => {
-            setEditingPayment(null);
-            setShowAddModal(true);
-          }}
-          className="w-full md:w-auto px-6 py-3 bg-indigo-600 text-white rounded-lg font-semibold hover:bg-indigo-700 transition shadow-lg hover:shadow-xl whitespace-nowrap"
-        >
-          + Record Payment
-        </button>
       </div>
 
       <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
@@ -235,29 +347,31 @@ const PaymentModule: React.FC<PaymentModuleProps> = ({ students, payments, onRef
               <tr>
                 <th className="px-6 py-4 text-left text-sm font-bold text-slate-700">Date</th>
                 <th className="px-6 py-4 text-left text-sm font-bold text-slate-700">Student</th>
+                <th className="px-6 py-4 text-left text-sm font-bold text-slate-700">Stream / Teacher</th>
                 <th className="px-6 py-4 text-left text-sm font-bold text-slate-700">Amount</th>
                 <th className="px-6 py-4 text-left text-sm font-bold text-slate-700">Classes / Due</th>
-                <th className="px-6 py-4 text-left text-sm font-bold text-slate-700">For</th>
                 <th className="px-6 py-4 text-left text-sm font-bold text-slate-700">Notes</th>
                 <th className="px-6 py-4 text-left text-sm font-bold text-slate-700">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200">
-              {filteredPayments.length === 0 ? (
+              {paginatedPayments.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-6 py-20 text-center text-slate-400">
-                    No payments recorded yet. Add a payment to get started.
+                  <td colSpan={7} className="px-6 py-20 text-center text-slate-400">
+                    {filteredPayments.length === 0 && payments.length > 0
+                      ? 'No payments match your filters.'
+                      : 'No payments recorded yet. Add a payment to get started.'}
                   </td>
                 </tr>
               ) : (
-                filteredPayments.map(payment => {
-                  const student = students.find(s => (s.id || (s as any).student_id) === payment.student_id);
+                paginatedPayments.map(payment => {
+                  const sid = String(payment.student_id);
                   const meta = (payment as any).metadata || {};
                   const frequency = meta.payment_frequency || meta.payment_type || '';
-                  const instrument = meta.instrument || '';
                   const classesCount = calculateClassCredits(frequency);
-                  
-                  // Calculate due date based on 2 classes per week
+                  const instrList = studentInstrumentMap[sid] || (meta.instrument ? [meta.instrument] : []);
+                  const teacherList = studentTeacherMap[sid] || [];
+
                   let dueDate = '-';
                   if (classesCount > 0) {
                     const weeks = classesCount / 2;
@@ -268,16 +382,25 @@ const PaymentModule: React.FC<PaymentModuleProps> = ({ students, payments, onRef
 
                   return (
                     <tr key={payment.id} className="hover:bg-slate-50 transition">
-                      <td className="px-6 py-4 text-slate-600">
+                      <td className="px-6 py-4 text-slate-600 text-sm">
                         {new Date(payment.timestamp).toLocaleDateString()}
                       </td>
                       <td className="px-6 py-4">
-                        <p className="font-semibold text-slate-900">
-                          {student ? (student.first_name && student.last_name ? `${student.first_name} ${student.last_name}` : (student as any).name || 'Unknown') : 'Unknown'}
-                        </p>
+                        <p className="font-semibold text-slate-900">{getStudentName(payment) || 'Unknown'}</p>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="space-y-0.5">
+                          {instrList.length > 0
+                            ? instrList.map(i => <span key={i} className="block text-sm font-medium text-slate-800">{i}</span>)
+                            : <span className="text-sm text-slate-400">—</span>}
+                          {teacherList.length > 0
+                            ? teacherList.map(t => <span key={t} className="block text-xs text-slate-500">{t}</span>)
+                            : null}
+                        </div>
                       </td>
                       <td className="px-6 py-4">
                         <p className="font-bold text-emerald-600">₹{parseFloat(String(payment.amount || '0')).toLocaleString()}</p>
+                        <p className="text-xs text-slate-400 capitalize">{meta.payment_for || 'tuition'}</p>
                       </td>
                       <td className="px-6 py-4">
                         <div className="text-sm">
@@ -285,11 +408,7 @@ const PaymentModule: React.FC<PaymentModuleProps> = ({ students, payments, onRef
                           <div className="text-xs text-slate-500">Due: {dueDate}</div>
                         </div>
                       </td>
-                      <td className="px-6 py-4 text-slate-600">
-                        {instrument && <span className="block font-medium text-slate-800">{instrument}</span>}
-                        <span className="capitalize">{frequency || meta.payment_for || 'N/A'}</span>
-                      </td>
-                      <td className="px-6 py-4 text-slate-500 text-sm">{meta.notes || payment.notes || '-'}</td>
+                      <td className="px-6 py-4 text-slate-500 text-sm max-w-[180px] truncate">{meta.notes || payment.notes || '-'}</td>
                       <td className="px-6 py-4">
                         <button
                           onClick={() => handleEdit(payment)}
@@ -305,6 +424,47 @@ const PaymentModule: React.FC<PaymentModuleProps> = ({ students, payments, onRef
             </tbody>
           </table>
         </div>
+
+        {/* Pagination */}
+        {filteredPayments.length > PAGE_SIZE && (
+          <div className="flex items-center justify-between px-6 py-4 border-t border-slate-200 bg-slate-50">
+            <p className="text-sm text-slate-500">
+              Showing {((currentPage - 1) * PAGE_SIZE) + 1}–{Math.min(currentPage * PAGE_SIZE, filteredPayments.length)} of {filteredPayments.length} payments
+            </p>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+                className="px-3 py-1.5 rounded-lg border border-slate-300 text-sm font-medium text-slate-600 hover:bg-white disabled:opacity-40 disabled:cursor-not-allowed transition"
+              >
+                ‹ Prev
+              </button>
+              {Array.from({ length: totalPages }, (_, i) => i + 1)
+                .filter(p => p === 1 || p === totalPages || Math.abs(p - currentPage) <= 1)
+                .reduce<(number | '...')[]>((acc, p, idx, arr) => {
+                  if (idx > 0 && (p as number) - (arr[idx - 1] as number) > 1) acc.push('...');
+                  acc.push(p);
+                  return acc;
+                }, [])
+                .map((p, idx) =>
+                  p === '...'
+                    ? <span key={`ellipsis-${idx}`} className="px-2 text-slate-400 text-sm">…</span>
+                    : <button
+                        key={p}
+                        onClick={() => setCurrentPage(p as number)}
+                        className={`w-9 h-9 rounded-lg text-sm font-medium transition ${currentPage === p ? 'bg-indigo-600 text-white' : 'border border-slate-300 text-slate-600 hover:bg-white'}`}
+                      >{p}</button>
+                )}
+              <button
+                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages}
+                className="px-3 py-1.5 rounded-lg border border-slate-300 text-sm font-medium text-slate-600 hover:bg-white disabled:opacity-40 disabled:cursor-not-allowed transition"
+              >
+                Next ›
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Add Payment Modal */}

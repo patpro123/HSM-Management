@@ -372,6 +372,8 @@ const App: React.FC = () => {
                 <PaymentModule
                   students={students}
                   payments={payments}
+                  batches={batches}
+                  instruments={instruments}
                   onRefresh={fetchData}
                 />
               )}
