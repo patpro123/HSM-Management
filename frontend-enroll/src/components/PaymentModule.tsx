@@ -12,7 +12,7 @@ interface PaymentModuleProps {
   onRefresh: () => void;
 }
 
-const PaymentModule: React.FC<PaymentModuleProps> = ({ students, payments, batches, instruments, onRefresh }) => {
+const PaymentModule: React.FC<PaymentModuleProps> = ({ students, payments, onRefresh }) => {
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingPayment, setEditingPayment] = useState<PaymentRecord | null>(null);
   const [formData, setFormData] = useState({
@@ -48,41 +48,56 @@ const PaymentModule: React.FC<PaymentModuleProps> = ({ students, payments, batch
     apiGet('/api/enrollments').then(d => setEnrollments(d.enrollments || [])).catch(() => {});
   }, []);
 
-  // student_id → instrument names
+  // enrollments API returns one row per student with a nested `batches` array:
+  // { student_id, name, batches: [{ batch_id, instrument, instrument_id, teacher, teacher_id, ... }] }
+
+  // student_id → instrument names (from actual batch enrollments)
   const studentInstrumentMap = useMemo(() => {
     const map: Record<string, string[]> = {};
-    enrollments.forEach(eb => {
-      const key = String(eb.student_id);
-      if (!map[key]) map[key] = [];
-      const name = eb.instrument_name || eb.instrument || '';
-      if (name && !map[key].includes(name)) map[key].push(name);
+    enrollments.forEach(enrollment => {
+      const key = String(enrollment.student_id);
+      const instrNames = (enrollment.batches || [])
+        .map((b: any) => b.instrument as string)
+        .filter(Boolean);
+      map[key] = [...new Set<string>(instrNames)];
     });
     return map;
   }, [enrollments]);
 
-  // student_id → teacher names (via batches lookup)
+  // student_id → teacher names (from actual batch enrollments)
   const studentTeacherMap = useMemo(() => {
     const map: Record<string, string[]> = {};
-    enrollments.forEach(eb => {
-      const key = String(eb.student_id);
-      if (!map[key]) map[key] = [];
-      const batch = batches.find(b => String(b.id) === String(eb.batch_id));
-      const teacher = batch?.teacher_name || eb.teacher_name || '';
-      if (teacher && !map[key].includes(teacher)) map[key].push(teacher);
+    enrollments.forEach(enrollment => {
+      const key = String(enrollment.student_id);
+      const teacherNames = (enrollment.batches || [])
+        .map((b: any) => b.teacher as string)
+        .filter(Boolean);
+      map[key] = [...new Set<string>(teacherNames)];
     });
     return map;
-  }, [enrollments, batches]);
+  }, [enrollments]);
 
-  // Unique teacher names across all batches (for filter dropdown)
+  // Unique teacher names from actual student enrollments (only teachers with students)
   const allTeachers = useMemo(() => {
-    const names = batches.map(b => b.teacher_name).filter((n): n is string => !!n);
-    return [...new Set(names)].sort();
-  }, [batches]);
+    const names: string[] = [];
+    enrollments.forEach(enrollment => {
+      (enrollment.batches || []).forEach((b: any) => {
+        if (b.teacher && !names.includes(b.teacher)) names.push(b.teacher);
+      });
+    });
+    return names.sort();
+  }, [enrollments]);
 
-  // Unique instrument names (for filter dropdown)
+  // Unique instrument names from actual student enrollments (only instruments with students)
   const allInstruments = useMemo(() => {
-    return instruments.filter(i => !(i as any).is_deprecated).map(i => i.name).sort();
-  }, [instruments]);
+    const names: string[] = [];
+    enrollments.forEach(enrollment => {
+      (enrollment.batches || []).forEach((b: any) => {
+        if (b.instrument && !names.includes(b.instrument)) names.push(b.instrument);
+      });
+    });
+    return names.sort();
+  }, [enrollments]);
 
   useEffect(() => {
     if (formData.student_id) {
@@ -96,13 +111,14 @@ const PaymentModule: React.FC<PaymentModuleProps> = ({ students, payments, batch
           setPaymentStatus(statusData);
 
           // Build per-instrument batch list for this student
-          const studentEnrollmentBatches = (enrollmentsData.enrollments || [])
-            .filter((eb: any) => eb.student_id === formData.student_id)
-            .map((eb: any) => ({
-              batch_id: eb.batch_id,
-              instrument: eb.instrument_name || eb.instrument || 'Unknown',
-              recurrence: eb.recurrence || ''
-            }));
+          // enrollments API: one row per student, with nested batches array
+          const studentEnrollment = (enrollmentsData.enrollments || [])
+            .find((e: any) => String(e.student_id) === String(formData.student_id));
+          const studentEnrollmentBatches = (studentEnrollment?.batches || []).map((b: any) => ({
+            batch_id: b.batch_id,
+            instrument: b.instrument || 'Unknown',
+            recurrence: b.batch_recurrence || ''
+          }));
           setStudentBatches(studentEnrollmentBatches);
 
           // Auto-select batch if only one
