@@ -32,6 +32,7 @@ interface Batch {
   start_time: string;
   end_time: string;
   capacity: number;
+  whatsapp_group_link?: string;
 }
 
 interface TeacherManagementProps {
@@ -87,7 +88,8 @@ export default function TeacherManagement({ instruments, onRefresh }: TeacherMan
     dayTimings: [
       { day: '', start_time: '', end_time: '' }
     ],
-    capacity: 8
+    capacity: 8,
+    whatsapp_group_link: ''
   });
 
   useEffect(() => {
@@ -259,7 +261,8 @@ export default function TeacherManagement({ instruments, onRefresh }: TeacherMan
       dayTimings: [
         { day: '', start_time: '', end_time: '' }
       ],
-      capacity: 8
+      capacity: 8,
+      whatsapp_group_link: ''
     });
     setShowBatchModal(true);
   }
@@ -271,7 +274,8 @@ export default function TeacherManagement({ instruments, onRefresh }: TeacherMan
       instrument_id: batch.instrument_id,
       teacher_id: batch.teacher_id || '',
       dayTimings: dayTimings.length > 0 ? dayTimings : [{ day: '', start_time: '', end_time: '' }],
-      capacity: batch.capacity
+      capacity: batch.capacity,
+      whatsapp_group_link: batch.whatsapp_group_link || ''
     });
     setShowEditBatchModal(true);
   }
@@ -373,7 +377,8 @@ export default function TeacherManagement({ instruments, onRefresh }: TeacherMan
         recurrence,
         start_time: validTimings[0].start_time,
         end_time: validTimings[0].end_time,
-        capacity: batchForm.capacity
+        capacity: batchForm.capacity,
+        whatsapp_group_link: batchForm.whatsapp_group_link || null
       };
       await apiPost('/api/batches', batchData);
       setSuccess('Batch created successfully!');
@@ -404,7 +409,8 @@ export default function TeacherManagement({ instruments, onRefresh }: TeacherMan
         recurrence,
         start_time: validTimings[0].start_time,
         end_time: validTimings[0].end_time,
-        capacity: batchForm.capacity
+        capacity: batchForm.capacity,
+        whatsapp_group_link: batchForm.whatsapp_group_link || null
       };
       await apiPut(`/api/batches/${selectedBatch.id}`, batchData);
       setSuccess('Batch updated successfully!');

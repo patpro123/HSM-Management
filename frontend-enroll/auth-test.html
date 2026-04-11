@@ -219,9 +219,13 @@
             status.className = `status ${type}`;
         }
         
+        const API_BASE = window.location.hostname === 'localhost'
+            ? 'http://localhost:3000'
+            : `http://${window.location.hostname}:3000`;
+
         function login() {
             showStatus('Redirecting to Google...', 'loading');
-            window.location.href = 'http://localhost:3000/api/auth/google';
+            window.location.href = `${API_BASE}/api/auth/google`;
         }
         
         function logout() {
@@ -250,7 +254,7 @@
             showStatus('Testing API...', 'loading');
             
             try {
-                const response = await fetch('http://localhost:3000/api/auth/profile', {
+                const response = await fetch(`${API_BASE}/api/auth/profile`, {
                     headers: {
                         'Authorization': `Bearer ${currentToken}`
                     }

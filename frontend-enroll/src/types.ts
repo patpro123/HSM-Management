@@ -34,6 +34,7 @@ export interface Batch {
   instrument_name?: string;
   teacher_name?: string;
   student_count?: number;
+  whatsapp_group_link?: string;
 }
 
 export interface Student {
@@ -104,6 +105,33 @@ export interface CreditReport {
   credits_remaining: number;
   next_payment_date: string | null;
   is_overdue: boolean;
+}
+
+export interface BatchBoardStudent {
+  student_id: string;
+  student_name: string;
+  phone: string | null;
+  guardian_contact: string | null;
+  enrollment_batch_id: string;
+  classes_remaining: number;
+}
+
+export interface BatchBoardColumn {
+  id: string;
+  recurrence: string;
+  start_time: string;
+  end_time: string;
+  capacity: number;
+  teacher_name: string | null;
+  whatsapp_group_link: string | null;
+  students: BatchBoardStudent[];
+}
+
+export interface MoveStudentResult {
+  success: boolean;
+  student: { id: string; name: string; phone: string | null; guardian_contact: string | null };
+  from_batch: { id: string; recurrence: string; whatsapp_group_link: string | null };
+  to_batch: { id: string; recurrence: string; whatsapp_group_link: string | null };
 }
 
 export interface Teacher360Data {

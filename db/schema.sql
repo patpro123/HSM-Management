@@ -129,6 +129,7 @@ CREATE TABLE IF NOT EXISTS batches (
   end_time time,
   capacity integer NOT NULL DEFAULT 8,
   is_makeup boolean DEFAULT false,
+  whatsapp_group_link text,
   created_at timestamptz DEFAULT now(),
   updated_at timestamptz DEFAULT now()
 );

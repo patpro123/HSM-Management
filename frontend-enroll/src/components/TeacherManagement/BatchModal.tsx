@@ -15,6 +15,7 @@ interface BatchForm {
   teacher_id: string;
   dayTimings: { day: string; start_time: string; end_time: string }[];
   capacity: number;
+  whatsapp_group_link: string;
 }
 
 interface BatchModalProps {
@@ -192,6 +193,20 @@ export default function BatchModal({
               placeholder="8"
               min="1"
             />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">WhatsApp Group Link</label>
+            <input
+              type="url"
+              value={form.whatsapp_group_link}
+              onChange={e => setForm({ ...form, whatsapp_group_link: e.target.value })}
+              className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+              placeholder="https://chat.whatsapp.com/..."
+            />
+            <p className="text-xs text-slate-500 mt-1">
+              Paste the group invite link (WhatsApp group &gt; Info &gt; Invite via Link). Used for one-tap notifications in Today's Classes.
+            </p>
           </div>
 
           {!isEdit && (
