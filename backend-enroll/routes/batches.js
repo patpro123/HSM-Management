@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../db');
 const rbac = require('../auth/rbacMiddleware');
+const { authenticateJWT } = require('../auth/jwtMiddleware');
 
 // GET /api/batches - fetch all batches with instrument and teacher details
 router.get('/', rbac.filterTeacherData, async (req, res) => {
@@ -92,7 +93,7 @@ router.get('/:batchId/students', async (req, res) => {
 });
 
 // GET /api/batches/instrument/:instrumentId/board - fetch all batches with students for instrument (admin only)
-router.get('/instrument/:instrumentId/board', rbac.authorizeRole(['admin']), async (req, res) => {
+router.get('/instrument/:instrumentId/board', authenticateJWT, rbac.authorizeRole(['admin']), async (req, res) => {
   const { instrumentId } = req.params;
   const uuidRegex = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
   if (!uuidRegex.test(instrumentId)) {
@@ -157,7 +158,7 @@ router.get('/instrument/:instrumentId/board', rbac.authorizeRole(['admin']), asy
 });
 
 // POST /api/batches/move-student - move a student from one batch to another (admin only)
-router.post('/move-student', rbac.authorizeRole(['admin']), async (req, res) => {
+router.post('/move-student', authenticateJWT, rbac.authorizeRole(['admin']), async (req, res) => {
   const { enrollment_batch_id, from_batch_id, to_batch_id } = req.body;
   if (!enrollment_batch_id || !from_batch_id || !to_batch_id) {
     return res.status(400).json({ error: 'Missing required fields' });
