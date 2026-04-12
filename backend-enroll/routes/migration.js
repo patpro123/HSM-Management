@@ -4,26 +4,41 @@ const db = require('../db');
 const { authenticateJWT } = require('../auth/jwtMiddleware');
 const { authorizeRole } = require('../auth/rbacMiddleware');
 
-// GET /api/migration/data?search=<name>
-// Returns matching students (all, not just backfilled) with per-instrument enrollment data.
-// Each record includes the most recent payment for that student+instrument and whether it is backfilled.
+// GET /api/migration/data?teacher_id=<uuid>  — all students for a teacher
+// GET /api/migration/data?search=<name>       — students matching name (legacy)
+// Returns per-student, per-instrument enrollment data with payment and attendance info.
 router.get('/data', authenticateJWT, authorizeRole(['admin']), async (req, res) => {
-  const { search } = req.query;
+  const { search, teacher_id } = req.query;
 
-  if (!search || search.trim().length < 2) {
+  if (!teacher_id && (!search || search.trim().length < 2)) {
     return res.json([]);
   }
 
   try {
-    // Find matching students who have enrollments
-    const studentsResult = await db.query(`
-      SELECT DISTINCT s.id AS student_id, s.name AS student_name, e.id AS enrollment_id
-      FROM students s
-      JOIN enrollments e ON e.student_id = s.id
-      WHERE s.name ILIKE $1
-      ORDER BY s.name
-      LIMIT 50
-    `, [`%${search.trim()}%`]);
+    let studentsResult;
+    if (teacher_id) {
+      // All students enrolled in any batch taught by this teacher
+      studentsResult = await db.query(`
+        SELECT DISTINCT s.id AS student_id, s.name AS student_name, e.id AS enrollment_id
+        FROM students s
+        JOIN enrollments e ON e.student_id = s.id
+        JOIN enrollment_batches eb ON eb.enrollment_id = e.id
+        JOIN batches b ON b.id = eb.batch_id
+        WHERE b.teacher_id = $1
+          AND (s.is_active IS NULL OR s.is_active = true)
+        ORDER BY s.name
+      `, [teacher_id]);
+    } else {
+      // Legacy: search by student name
+      studentsResult = await db.query(`
+        SELECT DISTINCT s.id AS student_id, s.name AS student_name, e.id AS enrollment_id
+        FROM students s
+        JOIN enrollments e ON e.student_id = s.id
+        WHERE s.name ILIKE $1
+        ORDER BY s.name
+        LIMIT 50
+      `, [`%${search.trim()}%`]);
+    }
 
     const records = [];
 
@@ -73,7 +88,7 @@ router.get('/data', authenticateJWT, authorizeRole(['admin']), async (req, res) 
         });
       }
 
-      // For each instrument, find the most recent payment
+      // For each instrument, find the most recent payment + attendance since that payment
       for (const instrData of Object.values(instrumentMap)) {
         const paymentResult = await db.query(`
           SELECT
@@ -81,6 +96,7 @@ router.get('/data', authenticateJWT, authorizeRole(['admin']), async (req, res) 
             p.timestamp AS payment_date,
             p.amount,
             p.metadata,
+            pkg.classes_count AS package_classes_count,
             COALESCE((p.metadata->>'backfill')::boolean, false) AS is_backfill
           FROM payments p
           JOIN packages pkg ON pkg.id = p.package_id
@@ -91,12 +107,30 @@ router.get('/data', authenticateJWT, authorizeRole(['admin']), async (req, res) 
 
         const payment = paymentResult.rows[0] || null;
 
+        // Count present attendance for this student+instrument since payment date
+        let attended_since_payment = 0;
+        if (payment) {
+          const attendanceResult = await db.query(`
+            SELECT COUNT(*) AS cnt
+            FROM attendance_records ar
+            JOIN batches b ON b.id = ar.batch_id
+            WHERE ar.student_id = $1
+              AND b.instrument_id = $2
+              AND ar.status = 'present'
+              AND ar.is_extra = false
+              AND ar.session_date >= $3::date
+          `, [student.student_id, instrData.instrument_id, payment.payment_date]);
+          attended_since_payment = parseInt(attendanceResult.rows[0].cnt) || 0;
+        }
+
         records.push({
           student_id: student.student_id,
           student_name: student.student_name,
           instrument_id: instrData.instrument_id,
           instrument_name: instrData.instrument_name,
           classes_remaining: instrData.classes_remaining,
+          package_classes_count: payment ? parseInt(payment.package_classes_count) || null : null,
+          attended_since_payment,
           batches: instrData.batches,
           payment: payment ? {
             id: payment.id,

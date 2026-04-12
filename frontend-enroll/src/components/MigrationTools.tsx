@@ -1,5 +1,10 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { apiGet, apiPut } from '../api';
+
+interface Teacher {
+  id: string;
+  name: string;
+}
 
 interface BatchSlot {
   id: string;
@@ -31,23 +36,36 @@ interface MigrationRecord {
   instrument_id: string;
   instrument_name: string;
   classes_remaining: number;
+  package_classes_count: number | null;
+  attended_since_payment: number;
   batches: BatchSlot[];
   payment: PaymentInfo | null;
 }
 
 export default function MigrationTools() {
-  const [search, setSearch] = useState('');
+  const [teachers, setTeachers] = useState<Teacher[]>([]);
+  const [selectedTeacherId, setSelectedTeacherId] = useState('');
   const [records, setRecords] = useState<MigrationRecord[]>([]);
   const [loading, setLoading] = useState(false);
-  const [hasSearched, setHasSearched] = useState(false);
+  const [hasLoaded, setHasLoaded] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  useEffect(() => {
+    apiGet('/api/teachers')
+      .then((data: { teachers: Teacher[] }) =>
+        setTeachers((data.teachers || []).sort((a, b) => a.name.localeCompare(b.name)))
+      )
+      .catch(() => {/* sidebar still usable without teacher list */});
+  }, []);
 
   // edit key: `${student_id}:${instrument_id}`
   const [editingPayment, setEditingPayment] = useState<string | null>(null);
   const [paymentDateVal, setPaymentDateVal] = useState('');
 
   const [editingClasses, setEditingClasses] = useState<string | null>(null);
-  const [classesVal, setClassesVal] = useState('');
+  // carry-forward formula fields
+  const [carryForward, setCarryForward] = useState('');
+  const [newClassesBought, setNewClassesBought] = useState('');
 
   // Set when non-backfill record needs overwrite confirmation
   const [confirmingOverwrite, setConfirmingOverwrite] = useState<string | null>(null);
@@ -57,21 +75,27 @@ export default function MigrationTools() {
     setTimeout(() => setMessage(null), 4000);
   };
 
-  const fetchData = async () => {
-    if (search.trim().length < 2) {
-      showMessage('error', 'Enter at least 2 characters to search.');
-      return;
-    }
+  const fetchData = async (teacherId = selectedTeacherId) => {
+    if (!teacherId) return;
     setLoading(true);
-    setHasSearched(true);
+    setHasLoaded(true);
     try {
-      const data = await apiGet(`/api/migration/data?search=${encodeURIComponent(search.trim())}`);
+      const data = await apiGet(`/api/migration/data?teacher_id=${encodeURIComponent(teacherId)}`);
       setRecords(data);
     } catch (err: unknown) {
       showMessage('error', err instanceof Error ? err.message : 'Failed to load data');
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleTeacherChange = (teacherId: string) => {
+    setSelectedTeacherId(teacherId);
+    setRecords([]);
+    setHasLoaded(false);
+    setEditingClasses(null);
+    setEditingPayment(null);
+    if (teacherId) fetchData(teacherId);
   };
 
   const editKey = (rec: MigrationRecord) => `${rec.student_id}:${rec.instrument_id}`;
@@ -105,19 +129,28 @@ export default function MigrationTools() {
     setEditingClasses(editKey(rec));
     setEditingPayment(null);
     setConfirmingOverwrite(null);
-    setClassesVal(String(rec.classes_remaining));
+    setCarryForward('0');
+    setNewClassesBought(rec.package_classes_count !== null ? String(rec.package_classes_count) : '');
   };
 
   const cancelEditClasses = () => {
     setEditingClasses(null);
-    setClassesVal('');
+    setCarryForward('');
+    setNewClassesBought('');
     setConfirmingOverwrite(null);
   };
 
+  const computedCredits = (rec: MigrationRecord): number | null => {
+    const cf = parseInt(carryForward, 10);
+    const nb = parseInt(newClassesBought, 10);
+    if (isNaN(cf) || isNaN(nb)) return null;
+    return Math.max(0, cf + nb - rec.attended_since_payment);
+  };
+
   const saveClasses = async (rec: MigrationRecord, force = false) => {
-    const val = parseInt(classesVal, 10);
-    if (isNaN(val) || val < 0) {
-      showMessage('error', 'Classes remaining must be a non-negative number');
+    const val = computedCredits(rec);
+    if (val === null || val < 0) {
+      showMessage('error', 'Enter valid carry-forward and new classes values');
       return;
     }
     // If not backfill and not yet force-confirmed, show inline warning
@@ -150,23 +183,19 @@ export default function MigrationTools() {
         </p>
       </div>
 
-      {/* Search */}
+      {/* Teacher filter */}
       <div className="mb-4 flex items-center gap-3">
-        <input
-          type="text"
-          placeholder="Search student name..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && fetchData()}
+        <select
+          value={selectedTeacherId}
+          onChange={(e) => handleTeacherChange(e.target.value)}
           className="border border-gray-300 rounded px-3 py-2 text-sm w-64 focus:outline-none focus:ring-2 focus:ring-blue-400"
-        />
-        <button
-          onClick={fetchData}
-          disabled={loading}
-          className="bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700 disabled:opacity-50"
         >
-          {loading ? 'Searching...' : 'Search'}
-        </button>
+          <option value="">Select a teacher...</option>
+          {teachers.map((t) => (
+            <option key={t.id} value={t.id}>{t.name}</option>
+          ))}
+        </select>
+        {loading && <span className="text-sm text-gray-500">Loading...</span>}
       </div>
 
       {message && (
@@ -182,11 +211,11 @@ export default function MigrationTools() {
       )}
 
       {loading ? (
-        <p className="text-gray-500">Searching...</p>
-      ) : !hasSearched ? (
-        <p className="text-gray-400 text-sm">Enter a student name to search.</p>
+        <p className="text-gray-500">Loading students...</p>
+      ) : !hasLoaded ? (
+        <p className="text-gray-400 text-sm">Select a teacher to load their students.</p>
       ) : records.length === 0 ? (
-        <p className="text-gray-500">No matching students found.</p>
+        <p className="text-gray-500">No enrolled students found for this teacher.</p>
       ) : (
         <div className="overflow-x-auto">
           <table className="min-w-full bg-white border border-gray-200 rounded-lg">
@@ -282,18 +311,48 @@ export default function MigrationTools() {
                     {/* Classes Remaining */}
                     <td className="px-4 py-3">
                       {editingClasses === key ? (
-                        <div className="space-y-2">
-                          <div className="flex items-center gap-2">
-                            <input
-                              type="number"
-                              min={0}
-                              value={classesVal}
-                              onChange={(e) => setClassesVal(e.target.value)}
-                              className="border border-gray-300 rounded px-2 py-1 text-sm w-20"
-                            />
+                        <div className="space-y-2 min-w-[260px]">
+                          {/* Formula inputs */}
+                          <div className="bg-gray-50 border border-gray-200 rounded p-3 space-y-2 text-xs">
+                            <div className="flex items-center gap-2">
+                              <span className="text-gray-500 w-36">Carry-forward (prev. quarter)</span>
+                              <input
+                                type="number"
+                                min={0}
+                                value={carryForward}
+                                onChange={(e) => setCarryForward(e.target.value)}
+                                className="border border-gray-300 rounded px-2 py-1 w-16 text-sm"
+                              />
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-gray-500 w-36">New classes bought</span>
+                              <input
+                                type="number"
+                                min={0}
+                                value={newClassesBought}
+                                onChange={(e) => setNewClassesBought(e.target.value)}
+                                className="border border-gray-300 rounded px-2 py-1 w-16 text-sm"
+                              />
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-gray-500 w-36">Attended since payment</span>
+                              <span className="font-medium text-gray-700">{rec.attended_since_payment}</span>
+                            </div>
+                            <div className="border-t border-gray-200 pt-2 flex items-center gap-2">
+                              <span className="text-gray-700 font-semibold w-36">= Credits remaining</span>
+                              <span className={`text-base font-bold ${
+                                computedCredits(rec) === null ? 'text-gray-400' :
+                                computedCredits(rec)! < 4 ? 'text-red-600' : 'text-green-700'
+                              }`}>
+                                {computedCredits(rec) === null ? '—' : computedCredits(rec)}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="flex gap-2">
                             <button
                               onClick={() => saveClasses(rec)}
-                              className="text-xs bg-blue-600 text-white px-2 py-1 rounded hover:bg-blue-700"
+                              disabled={computedCredits(rec) === null}
+                              className="text-xs bg-blue-600 text-white px-3 py-1.5 rounded hover:bg-blue-700 disabled:opacity-40"
                             >
                               Save
                             </button>
