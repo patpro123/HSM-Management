@@ -13,8 +13,6 @@ export interface EnrollmentSelection {
 
 const VOCAL_INSTRUMENTS = ['Hindustani Vocals', 'Carnatic Vocals'];
 const TRINITY_GRADES = ['Initial', 'Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5', 'Grade 6', 'Grade 7', 'Grade 8'];
-const DAYS_ORDER = ['TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
-const DAY_LABELS: Record<string, string> = { TUE: 'Tuesday', WED: 'Wednesday', THU: 'Thursday', FRI: 'Friday', SAT: 'Saturday', SUN: 'Sunday' };
 
 interface StudentDetailsProps {
   student?: Student | null;
@@ -24,28 +22,6 @@ interface StudentDetailsProps {
   onCancel: () => void;
 }
 
-/** Parse a batch's recurrence text (e.g. "TUE 17:00-18:00, THU 17:00-18:00") into day codes */
-function getBatchDays(batch: Batch): string[] {
-  const rec = (batch.recurrence || '').trim();
-  const fromRec = rec.split(',').map(s => {
-    const m = s.trim().match(/^([A-Z]{2,3})\s/i);
-    return m ? m[1].toUpperCase() : null;
-  }).filter(Boolean) as string[];
-  if (fromRec.length > 0) return fromRec;
-  // Fallback: day_of_week field
-  return (batch.day_of_week || '').split(',').map(d => d.trim().toUpperCase()).filter(Boolean);
-}
-
-/** Count how many weekly day-slots the currently selected batches occupy for an instrument */
-function calcSelectedSlots(instrumentId: string, selectedBatches: EnrollmentSelection[], allBatches: Batch[]): number {
-  const instrBatchIds = new Set(allBatches.filter(b => String(b.instrument_id) === instrumentId).map(b => String(b.id)));
-  return selectedBatches
-    .filter(sel => instrBatchIds.has(String(sel.batch_id)))
-    .reduce((sum, sel) => {
-      const b = allBatches.find(bb => String(bb.id) === String(sel.batch_id));
-      return sum + (b ? Math.max(getBatchDays(b).length, 1) : 1);
-    }, 0);
-}
 
 const StudentDetails: React.FC<StudentDetailsProps> = ({ student, batches, instruments, onSave, onCancel }) => {
   const [formData, setFormData] = useState({
@@ -184,29 +160,32 @@ const StudentDetails: React.FC<StudentDetailsProps> = ({ student, batches, instr
     });
   };
 
-  const handleBatchSlotToggle = (batchId: number | string, instrumentId: string) => {
-    const batchIdStr = String(batchId);
-    const exists = selectedBatches.find(e => String(e.batch_id) === batchIdStr);
-    if (exists) {
-      setSelectedBatches(prev => prev.filter(e => String(e.batch_id) !== batchIdStr));
-      return;
-    }
-    const batch = batches.find(b => String(b.id) === batchIdStr);
-    if (!batch) return;
-    const slotsNeeded = Math.max(getBatchDays(batch).length, 1);
-    const slotsUsed = calcSelectedSlots(instrumentId, selectedBatches, batches);
-    if (slotsUsed + slotsNeeded > 2) return; // max 2 slots/week per instrument
+  const handleDay1Change = (instrKey: string, batchId: string) => {
+    const instrBatchIds = new Set(batches.filter(b => String(b.instrument_id) === instrKey).map(b => String(b.id)));
+    const others = selectedBatches.filter(s => !instrBatchIds.has(String(s.batch_id)));
+    const day2 = selectedBatches.filter(s => instrBatchIds.has(String(s.batch_id)))[1];
+    if (!batchId) { setSelectedBatches(others); return; }
+    const settings = instrumentSettings[instrKey] || { payment_frequency: 'quarterly' as PaymentType, enrollment_date: new Date().toISOString().split('T')[0] };
+    const isVocal = VOCAL_INSTRUMENTS.includes(instruments.find(i => String(i.id) === instrKey)?.name || '');
+    const grade = isVocal ? 'Fixed' : (instrGrades[instrKey] || 'Initial');
+    if (!instrFees[instrKey]) resolveFee(instrKey, grade, settings.payment_frequency);
+    const newDay1: EnrollmentSelection = { batch_id: batchId, payment_frequency: settings.payment_frequency, enrollment_date: settings.enrollment_date, trinity_grade: grade };
+    const newInstrBatches: EnrollmentSelection[] = [newDay1];
+    if (day2 && String(day2.batch_id) !== batchId) newInstrBatches.push(day2);
+    setSelectedBatches([...others, ...newInstrBatches]);
+  };
 
-    const settings = instrumentSettings[instrumentId] || { payment_frequency: 'quarterly' as PaymentType, enrollment_date: new Date().toISOString().split('T')[0] };
-    const isVocal = VOCAL_INSTRUMENTS.includes(instruments.find(i => String(i.id) === instrumentId)?.name || '');
-    const grade = isVocal ? 'Fixed' : (instrGrades[instrumentId] || 'Initial');
-    if (!instrFees[instrumentId]) resolveFee(instrumentId, grade, settings.payment_frequency);
-    setSelectedBatches(prev => [...prev, {
-      batch_id: batchId,
-      payment_frequency: settings.payment_frequency,
-      enrollment_date: settings.enrollment_date,
-      trinity_grade: grade,
-    }]);
+  const handleDay2Change = (instrKey: string, batchId: string) => {
+    const instrBatchIds = new Set(batches.filter(b => String(b.instrument_id) === instrKey).map(b => String(b.id)));
+    const others = selectedBatches.filter(s => !instrBatchIds.has(String(s.batch_id)));
+    const day1 = selectedBatches.filter(s => instrBatchIds.has(String(s.batch_id)))[0];
+    if (!day1) return;
+    if (!batchId) { setSelectedBatches([...others, day1]); return; }
+    const settings = instrumentSettings[instrKey] || { payment_frequency: 'quarterly' as PaymentType, enrollment_date: new Date().toISOString().split('T')[0] };
+    const isVocal = VOCAL_INSTRUMENTS.includes(instruments.find(i => String(i.id) === instrKey)?.name || '');
+    const grade = isVocal ? 'Fixed' : (instrGrades[instrKey] || 'Initial');
+    const newDay2: EnrollmentSelection = { batch_id: batchId, payment_frequency: settings.payment_frequency, enrollment_date: settings.enrollment_date, trinity_grade: grade };
+    setSelectedBatches([...others, day1, newDay2]);
   };
 
   const handleInstrumentSettingChange = (instrumentId: string, field: 'payment_frequency' | 'enrollment_date', value: any) => {
@@ -432,10 +411,10 @@ const StudentDetails: React.FC<StudentDetailsProps> = ({ student, batches, instr
         </form>
       )}
 
-      {/* Step 3: Schedule Selection — per instrument, day-based slots, max 2/week */}
+      {/* Step 3: Schedule — Day 1 + Day 2 batch dropdowns per instrument */}
       {activeTab === 'batches' && (
-        <form onSubmit={handleSubmit} className="p-6 space-y-6">
-          <p className="text-sm text-slate-500">For each instrument, choose your level, package, and select up to 2 time slots per week.</p>
+        <form onSubmit={handleSubmit} className="p-4 space-y-4">
+          <p className="text-xs text-slate-500">For each instrument, select a Day 1 batch (required) and optionally a Day 2 batch. Max 2 batches per instrument.</p>
 
           {selectedInstrumentIds.map(instrId => {
             const instrument = instruments.find(i => String(i.id) === instrId);
@@ -446,140 +425,111 @@ const StudentDetails: React.FC<StudentDetailsProps> = ({ student, batches, instr
             const currentGrade = instrGrades[instrKey] || 'Initial';
             const feeInfo = instrFees[instrKey];
             const instrBatches = batches.filter(b => String(b.instrument_id) === instrKey);
-            const slotsUsed = calcSelectedSlots(instrKey, selectedBatches, batches);
-
-            // Build day → batches map
-            const dayMap: Record<string, Batch[]> = {};
-            instrBatches.forEach(b => {
-              getBatchDays(b).forEach(day => {
-                if (!dayMap[day]) dayMap[day] = [];
-                if (!dayMap[day].find(existing => existing.id === b.id)) dayMap[day].push(b);
-              });
-            });
-            const activeDays = DAYS_ORDER.filter(d => dayMap[d]?.length > 0);
+            const instrBatchIds = new Set(instrBatches.map(b => String(b.id)));
+            const currentInstrSelections = selectedBatches.filter(s => instrBatchIds.has(String(s.batch_id)));
+            const day1BatchId = currentInstrSelections[0] ? String(currentInstrSelections[0].batch_id) : '';
+            const day2BatchId = currentInstrSelections[1] ? String(currentInstrSelections[1].batch_id) : '';
 
             return (
               <div key={instrId} className="rounded-xl border-2 border-slate-200 overflow-hidden">
                 {/* Instrument header */}
-                <div className={`px-5 py-3 flex items-center justify-between ${instrument.is_deprecated ? 'bg-amber-700' : 'bg-slate-800'} text-white`}>
+                <div className={`px-4 py-2.5 flex items-center justify-between ${instrument.is_deprecated ? 'bg-amber-700' : 'bg-slate-800'} text-white`}>
                   <div className="flex items-center gap-2">
-                    <span className="font-bold">{instrument.name}</span>
+                    <span className="font-bold text-sm">{instrument.name}</span>
                     {instrument.is_deprecated && (
                       <span className="text-[10px] font-semibold bg-amber-900 border border-amber-500 rounded px-1.5 py-0.5">Legacy</span>
                     )}
                   </div>
-                  <span className="text-xs text-slate-300">{slotsUsed}/2 weekly slots selected</span>
+                  <span className="text-xs text-slate-300">{currentInstrSelections.length}/2 batches</span>
                 </div>
 
-                <div className="p-4 space-y-4">
+                <div className="p-3 space-y-3">
                   {/* Level + Package row */}
-                  <div className="flex flex-wrap gap-4">
+                  <div className="flex flex-wrap gap-2 items-end">
                     {!isVocal && (
-                      <div>
-                        <label className="block text-xs font-semibold text-slate-600 mb-1">
-                          Student's Level
-                          <span className="ml-1.5 text-[10px] font-normal text-amber-700 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5">Confirm with teacher</span>
-                        </label>
+                      <div className="flex-1 min-w-[110px]">
+                        <label className="block text-xs font-semibold text-slate-600 mb-1">Level</label>
                         <select
                           value={currentGrade}
                           onChange={e => handleGradeChange(instrKey, e.target.value)}
-                          className="text-sm px-3 py-1.5 rounded-lg border border-slate-300 focus:border-orange-500 outline-none bg-white"
+                          className="w-full text-sm px-2 py-1.5 rounded-lg border border-slate-300 focus:border-orange-500 outline-none bg-white"
                         >
                           {TRINITY_GRADES.map(g => <option key={g} value={g}>{g}</option>)}
                         </select>
                       </div>
                     )}
-                    <div>
+                    <div className="flex-1 min-w-[110px]">
                       <label className="block text-xs font-semibold text-slate-600 mb-1">Package</label>
-                      <div className="flex gap-2">
+                      <div className="flex gap-1.5">
                         {(['trial', 'quarterly'] as PaymentType[]).map(pt => (
                           <button
                             key={pt}
                             type="button"
                             onClick={() => handleInstrumentSettingChange(instrKey, 'payment_frequency', pt)}
-                            className={`px-3 py-1.5 rounded-lg border-2 text-xs font-semibold transition flex flex-col items-start ${settings.payment_frequency === pt ? 'border-orange-500 bg-orange-500 text-white' : 'border-slate-300 bg-white text-slate-700 hover:border-orange-400'}`}
+                            className={`flex-1 px-2 py-1.5 rounded-lg border-2 text-xs font-semibold transition text-center ${settings.payment_frequency === pt ? 'border-orange-500 bg-orange-500 text-white' : 'border-slate-300 bg-white text-slate-700 hover:border-orange-400'}`}
                           >
-                            <span>{pt === 'trial' ? 'Trial' : 'Quarterly'}</span>
-                            <span className={`font-normal ${settings.payment_frequency === pt ? 'text-orange-100' : 'text-slate-400'}`}>{pt === 'trial' ? '4 cls' : '24 cls'}</span>
+                            {pt === 'trial' ? 'Trial' : 'Quarterly'}
                           </button>
                         ))}
                       </div>
                     </div>
-                    {feeInfo ? (
-                      <div className="flex items-end">
-                        <span className="inline-flex items-center gap-1 text-sm bg-green-50 border border-green-200 rounded-lg px-3 py-1.5">
-                          <span className="text-green-600 font-medium">Fee:</span>
-                          <span className="text-green-800 font-bold">₹{feeInfo.fee_amount.toLocaleString()}</span>
-                        </span>
-                      </div>
-                    ) : feeInfo === null ? (
-                      <div className="flex items-end">
-                        <span className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1.5">No fee configured</span>
-                      </div>
-                    ) : null}
+                    {feeInfo && (
+                      <span className="inline-flex items-center gap-1 text-xs bg-green-50 border border-green-200 rounded-lg px-2.5 py-1.5">
+                        <span className="text-green-600 font-medium">Fee:</span>
+                        <span className="text-green-800 font-bold">₹{feeInfo.fee_amount.toLocaleString()}</span>
+                      </span>
+                    )}
+                    {feeInfo === null && (
+                      <span className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1.5">No fee configured</span>
+                    )}
                   </div>
 
-                  {/* Day-based slot grid */}
-                  {activeDays.length === 0 ? (
+                  {instrBatches.length === 0 ? (
                     <p className="text-sm text-slate-400 italic">No batches available for this instrument.</p>
                   ) : (
-                    <div className="space-y-3">
-                      {activeDays.map(day => (
-                        <div key={day}>
-                          <div className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-1.5">{DAY_LABELS[day] || day}</div>
-                          <div className="space-y-1.5">
-                            {dayMap[day].map(batch => {
-                              const batchIdStr = String(batch.id);
-                              const isSelected = selectedBatches.some(s => String(s.batch_id) === batchIdStr);
-                              const batchDays = getBatchDays(batch);
-                              const slotsNeeded = Math.max(batchDays.length, 1);
-                              const canSelect = isSelected || slotsUsed + slotsNeeded <= 2;
-                              const allDaysLabel = batchDays.length > 1
-                                ? batchDays.map(d => DAY_LABELS[d] || d).join(' + ')
-                                : null;
+                    <>
+                      {/* Day 1 batch */}
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-600 mb-1">
+                          Day 1 Batch <span className="text-red-500">*</span>
+                        </label>
+                        <select
+                          value={day1BatchId}
+                          onChange={e => handleDay1Change(instrKey, e.target.value)}
+                          className="w-full text-sm px-3 py-2 rounded-lg border border-slate-300 focus:border-orange-500 outline-none bg-white"
+                        >
+                          <option value="">— Select Day 1 batch —</option>
+                          {instrBatches.map(b => (
+                            <option key={b.id} value={String(b.id)}>
+                              {b.recurrence}{(b as any).teacher_name ? ` · ${(b as any).teacher_name}` : ''}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
 
-                              return (
-                                <button
-                                  key={batch.id}
-                                  type="button"
-                                  onClick={() => canSelect ? handleBatchSlotToggle(batch.id, instrKey) : undefined}
-                                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl border-2 text-left transition ${
-                                    isSelected
-                                      ? 'border-orange-500 bg-orange-50'
-                                      : canSelect
-                                        ? 'border-slate-200 bg-white hover:border-orange-300 hover:bg-orange-50 cursor-pointer'
-                                        : 'border-slate-100 bg-slate-50 opacity-50 cursor-not-allowed'
-                                  }`}
-                                >
-                                  <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${isSelected ? 'border-orange-500 bg-orange-500' : 'border-slate-300'}`}>
-                                    {isSelected && <span className="text-white text-xs font-bold">✓</span>}
-                                  </div>
-                                  <div className="flex-1 min-w-0">
-                                    <div className="flex items-center gap-2 flex-wrap">
-                                      <span className="font-semibold text-slate-900 text-sm">{batch.start_time.slice(0,5)}–{batch.end_time.slice(0,5)}</span>
-                                      {(batch as any).teacher_name && (
-                                        <span className="text-xs text-slate-500">· {(batch as any).teacher_name}</span>
-                                      )}
-                                      {allDaysLabel && (
-                                        <span className="text-[10px] font-semibold text-indigo-600 bg-indigo-50 border border-indigo-200 rounded px-1.5 py-0.5">
-                                          Also {allDaysLabel}
-                                        </span>
-                                      )}
-                                    </div>
-                                    {(batch as any).student_count !== undefined && (
-                                      <div className="text-[10px] text-slate-400 mt-0.5">
-                                        {batch.capacity - ((batch as any).student_count || 0)} seat{batch.capacity - ((batch as any).student_count || 0) !== 1 ? 's' : ''} available
-                                      </div>
-                                    )}
-                                  </div>
-                                  {!canSelect && !isSelected && <span className="text-[10px] text-slate-400 flex-shrink-0">Week full</span>}
-                                </button>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
+                      {/* Day 2 batch */}
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-600 mb-1">
+                          Day 2 Batch <span className="text-slate-400 font-normal">(optional)</span>
+                        </label>
+                        <select
+                          value={day2BatchId}
+                          onChange={e => handleDay2Change(instrKey, e.target.value)}
+                          disabled={!day1BatchId}
+                          className="w-full text-sm px-3 py-2 rounded-lg border border-slate-300 focus:border-orange-500 outline-none bg-white disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
+                        >
+                          <option value="">— None —</option>
+                          {instrBatches
+                            .filter(b => String(b.id) !== day1BatchId)
+                            .map(b => (
+                              <option key={b.id} value={String(b.id)}>
+                                {b.recurrence}{(b as any).teacher_name ? ` · ${(b as any).teacher_name}` : ''}
+                              </option>
+                            ))}
+                        </select>
+                        {!day1BatchId && <p className="text-xs text-slate-400 mt-1">Select Day 1 batch first</p>}
+                      </div>
+                    </>
                   )}
 
                   {/* Enrollment date */}
@@ -597,20 +547,22 @@ const StudentDetails: React.FC<StudentDetailsProps> = ({ student, batches, instr
             );
           })}
 
-          {/* Summary of selections */}
+          {/* Summary */}
           {selectedBatches.length > 0 && (
-            <div className="bg-orange-50 border border-orange-200 rounded-xl p-4">
-              <p className="text-sm font-semibold text-orange-800 mb-2">Your Weekly Schedule</p>
-              {selectedBatches.map(sel => {
+            <div className="bg-orange-50 border border-orange-200 rounded-xl p-3">
+              <p className="text-xs font-semibold text-orange-800 mb-2">Weekly Schedule</p>
+              {selectedBatches.map((sel, _idx) => {
                 const b = batches.find(bb => String(bb.id) === String(sel.batch_id));
                 const inst = b ? instruments.find(i => String(i.id) === String(b.instrument_id)) : null;
-                const days = b ? getBatchDays(b) : [];
+                const instrBatchIds2 = new Set(batches.filter(bb => String(bb.instrument_id) === String(b?.instrument_id)).map(bb => String(bb.id)));
+                const instrSelections = selectedBatches.filter(s => instrBatchIds2.has(String(s.batch_id)));
+                const dayLabel = instrSelections.indexOf(sel) === 0 ? 'Day 1' : 'Day 2';
                 return (
-                  <div key={String(sel.batch_id)} className="text-sm text-orange-700 flex items-center gap-2">
+                  <div key={String(sel.batch_id)} className="text-xs text-orange-700 flex items-center gap-2 mb-1">
+                    <span className="font-semibold bg-orange-200 text-orange-800 rounded px-1.5 py-0.5">{dayLabel}</span>
                     <span className="font-medium">{inst?.name}</span>
                     <span>·</span>
-                    <span>{days.map(d => DAY_LABELS[d] || d).join(' + ')}</span>
-                    {b && <span className="text-orange-500">{b.start_time.slice(0,5)}–{b.end_time.slice(0,5)}</span>}
+                    <span>{b?.recurrence}</span>
                   </div>
                 );
               })}

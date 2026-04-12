@@ -75,6 +75,26 @@ router.post('/', authenticateJWT, authorizeRole(['admin']), async (req, res) => 
     );
     const enrollment = enrollmentResult.rows[0];
 
+    // Validate: max 2 batches per instrument
+    if (Array.isArray(batches) && batches.length > 0) {
+      const batchIdList = batches.map(b => String(b.batch_id));
+      const batchInstrRes = await client.query(
+        'SELECT id, instrument_id FROM batches WHERE id = ANY($1)',
+        [batchIdList]
+      );
+      const instrCount = new Map();
+      for (const row of batchInstrRes.rows) {
+        const iid = String(row.instrument_id);
+        instrCount.set(iid, (instrCount.get(iid) || 0) + 1);
+      }
+      for (const [iid, count] of instrCount) {
+        if (count > 2) {
+          await client.query('ROLLBACK');
+          return res.status(400).json({ error: 'A student can be assigned to at most 2 batches per instrument' });
+        }
+      }
+    }
+
     // Insert enrollment_batches
     let enrollmentBatchRows = [];
     if (Array.isArray(batches)) {
@@ -309,6 +329,25 @@ router.put('/:id', authenticateJWT, authorizeRole(['admin']), async (req, res) =
       const toAdd = batches.filter(b => !currentBatchIds.includes(String(b.batch_id)));
       const toRemove = currentBatches.filter(b => !newBatchIds.includes(String(b.batch_id)));
       const toUpdate = batches.filter(b => currentBatchIds.includes(String(b.batch_id)));
+
+      // Validate: max 2 batches per instrument
+      if (newBatchIds.length > 0) {
+        const batchInstrRes = await client.query(
+          'SELECT id, instrument_id FROM batches WHERE id = ANY($1)',
+          [newBatchIds]
+        );
+        const instrCount = new Map();
+        for (const row of batchInstrRes.rows) {
+          const iid = String(row.instrument_id);
+          instrCount.set(iid, (instrCount.get(iid) || 0) + 1);
+        }
+        for (const [iid, count] of instrCount) {
+          if (count > 2) {
+            await client.query('ROLLBACK');
+            return res.status(400).json({ error: 'A student can be assigned to at most 2 batches per instrument' });
+          }
+        }
+      }
 
       // Remove unselected batches
       for (const b of toRemove) {

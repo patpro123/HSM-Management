@@ -110,34 +110,49 @@ const EnrollmentForm: React.FC<EnrollmentFormProps> = ({ students, batches, inst
     setStep(2);
   };
 
-  const handleBatchToggle = (batchId: number, instrumentId: string | number) => {
+  const makeEnrollmentItem = (batchId: number, instrumentId: string | number): EnrollmentItem => {
     const instrKey = String(instrumentId);
-    const exists = enrollmentData.enrollments.find(e => e.batch_id === batchId);
+    const grade = instrGrades[instrKey] || 'Initial';
+    const payType = instrPayTypes[instrKey] || 'quarterly';
+    const feeResolved = instrFees[instrKey];
+    return {
+      batch_id: batchId,
+      instrument_id: instrumentId,
+      payment_type: payType,
+      trinity_grade: isVocalInstrument(instrumentId) ? 'Fixed' : grade,
+      fee_structure_id: feeResolved?.fee_structure_id,
+    };
+  };
 
-    if (exists) {
-      const remaining = enrollmentData.enrollments.filter(e => e.batch_id !== batchId);
-      setEnrollmentData({ ...enrollmentData, enrollments: remaining });
-      // Clear fee if no more batches for this instrument
-      if (!remaining.some(e => String(e.instrument_id) === instrKey)) {
-        setInstrFees(prev => { const { [instrKey]: _, ...rest } = prev; return rest; });
-      }
-    } else {
-      const grade = instrGrades[instrKey] || 'Initial';
-      const payType = instrPayTypes[instrKey] || 'quarterly';
-      const feeResolved = instrFees[instrKey];
-      const newItem: EnrollmentItem = {
-        batch_id: batchId,
-        instrument_id: instrumentId,
-        payment_type: payType,
-        trinity_grade: isVocalInstrument(instrumentId) ? 'Fixed' : grade,
-        fee_structure_id: feeResolved?.fee_structure_id,
-      };
-      setEnrollmentData({ ...enrollmentData, enrollments: [...enrollmentData.enrollments, newItem] });
-      // Resolve fee if not already done
-      if (!instrFees[instrKey]) {
-        resolveFee(instrumentId, grade, payType);
-      }
+  const handleDay1Change = (instrumentId: string | number, batchId: string) => {
+    const instrKey = String(instrumentId);
+    const others = enrollmentData.enrollments.filter(e => String(e.instrument_id) !== instrKey);
+    const day2 = enrollmentData.enrollments.filter(e => String(e.instrument_id) === instrKey)[1];
+    if (!batchId) {
+      setEnrollmentData({ ...enrollmentData, enrollments: others });
+      setInstrFees(prev => { const { [instrKey]: _, ...rest } = prev; return rest; });
+      return;
     }
+    const batchIdNum = Number(batchId);
+    if (!instrFees[instrKey]) resolveFee(instrumentId, instrGrades[instrKey] || 'Initial', instrPayTypes[instrKey] || 'quarterly');
+    const day1 = makeEnrollmentItem(batchIdNum, instrumentId);
+    const newEnrollments = [day1];
+    if (day2 && day2.batch_id !== batchIdNum) newEnrollments.push(day2);
+    setEnrollmentData({ ...enrollmentData, enrollments: [...others, ...newEnrollments] });
+  };
+
+  const handleDay2Change = (instrumentId: string | number, batchId: string) => {
+    const instrKey = String(instrumentId);
+    const others = enrollmentData.enrollments.filter(e => String(e.instrument_id) !== instrKey);
+    const day1 = enrollmentData.enrollments.filter(e => String(e.instrument_id) === instrKey)[0];
+    if (!day1) return;
+    if (!batchId) {
+      setEnrollmentData({ ...enrollmentData, enrollments: [...others, day1] });
+      return;
+    }
+    const batchIdNum = Number(batchId);
+    const day2 = makeEnrollmentItem(batchIdNum, instrumentId);
+    setEnrollmentData({ ...enrollmentData, enrollments: [...others, day1, day2] });
   };
 
   const handleGradeChange = (instrumentId: string | number, grade: string) => {
@@ -414,39 +429,62 @@ const EnrollmentForm: React.FC<EnrollmentFormProps> = ({ students, batches, inst
                     )}
                   </div>
 
-                  {/* Batch Time Slots */}
-                  <div>
-                    <label className="block text-sm font-semibold text-slate-700 mb-2">Select Batch Time</label>
-                    <div className="space-y-2">
-                      {instrBatches.map(batch => {
-                        const batchId = Number(batch.id);
-                        const isSelected = enrollmentData.enrollments.some(e => e.batch_id === batchId);
-                        return (
-                          <label
-                            key={batch.id}
-                            className={`flex items-center gap-3 p-3 rounded-lg border-2 cursor-pointer transition ${
-                              isSelected ? 'border-indigo-400 bg-white' : 'border-slate-200 bg-white hover:border-indigo-300'
-                            }`}
-                          >
-                            <input
-                              type="checkbox"
-                              checked={isSelected}
-                              onChange={() => handleBatchToggle(batchId, instrument.id)}
-                              className="w-4 h-4 text-indigo-600 rounded"
-                            />
-                            <div className="flex-1">
-                              <span className="font-medium text-slate-900 text-sm">
-                                {batch.day_of_week} {batch.start_time}–{batch.end_time}
-                              </span>
-                              {(batch as any).teacher_name && (
-                                <span className="ml-2 text-xs text-slate-500">· {(batch as any).teacher_name}</span>
-                              )}
-                            </div>
-                          </label>
-                        );
-                      })}
+                  {/* Day 1 + Day 2 batch dropdowns */}
+                  {instrBatches.length === 0 ? (
+                    <p className="text-sm text-slate-400 italic">No batches available for this instrument.</p>
+                  ) : (
+                    <div className="space-y-3">
+                      <div>
+                        <label className="block text-sm font-semibold text-slate-700 mb-1">
+                          Day 1 Batch <span className="text-red-500">*</span>
+                        </label>
+                        <select
+                          value={enrollmentData.enrollments.filter(e => String(e.instrument_id) === instrKey)[0]?.batch_id?.toString() || ''}
+                          onChange={e => handleDay1Change(instrument.id, e.target.value)}
+                          className="w-full px-3 py-2 rounded-lg border border-slate-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none bg-white text-sm"
+                        >
+                          <option value="">— Select Day 1 batch —</option>
+                          {instrBatches.map(batch => (
+                            <option key={batch.id} value={String(batch.id)}>
+                              {(batch as any).recurrence || `${batch.day_of_week} ${batch.start_time}–${batch.end_time}`}
+                              {(batch as any).teacher_name ? ` · ${(batch as any).teacher_name}` : ''}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-semibold text-slate-700 mb-1">
+                          Day 2 Batch <span className="text-slate-400 font-normal text-xs">(optional)</span>
+                        </label>
+                        {(() => {
+                          const day1Id = enrollmentData.enrollments.filter(e => String(e.instrument_id) === instrKey)[0]?.batch_id?.toString() || '';
+                          const day2Id = enrollmentData.enrollments.filter(e => String(e.instrument_id) === instrKey)[1]?.batch_id?.toString() || '';
+                          return (
+                            <select
+                              value={day2Id}
+                              onChange={e => handleDay2Change(instrument.id, e.target.value)}
+                              disabled={!day1Id}
+                              className="w-full px-3 py-2 rounded-lg border border-slate-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none bg-white text-sm disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
+                            >
+                              <option value="">— None —</option>
+                              {instrBatches
+                                .filter(b => String(b.id) !== day1Id)
+                                .map(batch => (
+                                  <option key={batch.id} value={String(batch.id)}>
+                                    {(batch as any).recurrence || `${batch.day_of_week} ${batch.start_time}–${batch.end_time}`}
+                                    {(batch as any).teacher_name ? ` · ${(batch as any).teacher_name}` : ''}
+                                  </option>
+                                ))}
+                            </select>
+                          );
+                        })()}
+                        {!enrollmentData.enrollments.some(e => String(e.instrument_id) === instrKey) && (
+                          <p className="text-xs text-slate-400 mt-1">Select Day 1 batch first</p>
+                        )}
+                      </div>
                     </div>
-                  </div>
+                  )}
                 </div>
               );
             })}
