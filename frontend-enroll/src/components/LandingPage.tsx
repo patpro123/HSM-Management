@@ -12,7 +12,6 @@ import ScheduleSection from './LandingPage/ScheduleSection';
 import FaqSection from './LandingPage/FaqSection';
 import LocationSection from './LandingPage/LocationSection';
 import FooterCTA from './LandingPage/FooterCTA';
-import BookingModal from './LandingPage/BookingModal';
 
 interface LandingPageProps {
     onLogin: () => void;
@@ -22,8 +21,6 @@ interface LandingPageProps {
 const LandingPage: React.FC<LandingPageProps> = ({ onLogin, authError }) => {
     const [isScrolled, setIsScrolled] = useState(false);
     const [isDark, setIsDark] = useState(false);
-    const [bookingStatus, setBookingStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
-    const [bookingError, setBookingError] = useState('');
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [prefilledInstrument, setPrefilledInstrument] = useState('');
     const [prefilledSource, setPrefilledSource] = useState('');
@@ -135,44 +132,19 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLogin, authError }) => {
     const handleCloseModal = () => {
         setIsModalOpen(false);
         document.body.style.overflow = '';
-        setTimeout(() => setBookingStatus('idle'), 300);
     };
 
-    const handleFormSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setBookingStatus('loading');
-        setBookingError('');
-
-        const form = e.target as HTMLFormElement;
-
-        try {
-            const payload = {
-                name: (form.elements.namedItem('name') as HTMLInputElement).value,
-                phone: (form.elements.namedItem('phone') as HTMLInputElement).value,
-                email: (form.elements.namedItem('email') as HTMLInputElement)?.value || '',
-                instrument: (form.elements.namedItem('instrument') as HTMLSelectElement).value,
-                source: (form.elements.namedItem('source') as HTMLSelectElement)?.value || ''
-            };
-
-            const res = await fetch(`${API_BASE_URL}/api/prospects`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            });
-
-            if (res.ok) {
-                setBookingStatus('success');
-                setTimeout(() => { handleCloseModal(); }, 2000);
-            } else {
-                const data = await res.json();
-                setBookingStatus('error');
-                setBookingError(data.error || 'Failed to book trial.');
+    // Listen for success/close messages from the intake iframe
+    useEffect(() => {
+        const handler = (event: MessageEvent) => {
+            if (event.data?.type === 'hsm-intake-success' || event.data?.type === 'hsm-intake-close') {
+                handleCloseModal();
             }
-        } catch (err) {
-            setBookingStatus('error');
-            setBookingError('Network error occurred.');
-        }
-    };
+        };
+        window.addEventListener('message', handler);
+        return () => window.removeEventListener('message', handler);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     return (
         <div className={`landing-wrapper ${isDark ? 'dark-theme' : ''}`}>
@@ -220,15 +192,30 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLogin, authError }) => {
                 <FooterCTA onOpenModal={handleOpenModal} />
             </main>
 
-            <BookingModal
-                isOpen={isModalOpen}
-                bookingStatus={bookingStatus}
-                bookingError={bookingError}
-                prefilledInstrument={prefilledInstrument}
-                prefilledSource={prefilledSource}
-                onClose={handleCloseModal}
-                onSubmit={handleFormSubmit}
-            />
+            {/* Intake form — rendered in an iframe so the landing page stays mounted */}
+            {isModalOpen && (
+                <div
+                    className="modal-overlay active"
+                    onClick={e => { if ((e.target as HTMLElement).classList.contains('modal-overlay')) handleCloseModal(); }}
+                    style={{ alignItems: 'center', justifyContent: 'center', display: 'flex' }}
+                >
+                    <div style={{ position: 'relative', width: '92%', maxWidth: 680, height: '92vh', borderRadius: 24, overflow: 'hidden', boxShadow: '0 32px 80px rgba(0,0,0,0.25)' }}>
+                        <button
+                            onClick={handleCloseModal}
+                            className="modal-close"
+                            style={{ zIndex: 10 }}
+                            aria-label="Close"
+                        >
+                            &times;
+                        </button>
+                        <iframe
+                            src={`/intake?embed=1${prefilledInstrument ? `&instrument=${encodeURIComponent(prefilledInstrument)}` : ''}`}
+                            style={{ width: '100%', height: '100%', border: 'none', display: 'block' }}
+                            title="Book a Free Demo"
+                        />
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

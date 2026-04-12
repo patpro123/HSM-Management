@@ -41,7 +41,7 @@ const FooterCTA: React.FC<FooterCTAProps> = ({ onOpenModal }) => {
           <div className="footer-links">
             <h4>Connect</h4>
             <a href="#contact">Contact Us</a>
-            <button onClick={onOpenModal} style={{ background: 'none', border: 'none', color: 'inherit', padding: 0, textAlign: 'left', cursor: 'pointer', fontFamily: 'inherit', fontSize: 'inherit', display: 'block', marginBottom: '0.75rem' }} className="hover:text-white transition-colors">Enrollment</button>
+            <a href="/intake" style={{ display: 'block', marginBottom: '0.75rem' }}>Enrollment</a>
             <a href="#careers">Careers</a>
           </div>
         </div>

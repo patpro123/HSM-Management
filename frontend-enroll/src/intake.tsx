@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
+import './components/LandingPage.css';
 
 const PRODUCTION_API_URL = 'https://hsm-management.onrender.com';
 const API_BASE =
@@ -9,7 +10,7 @@ const API_BASE =
     : PRODUCTION_API_URL);
 
 const LOCATIONS = [
-  { value: 'hsm_main', label: 'HSM Main Branch', sub: 'Hyderabad School of Music — Main Campus' },
+  { value: 'hsm_main', label: 'HSM Main Branch', sub: 'Kismatpur, Hyderabad' },
   { value: 'pbel_city', label: 'PBEL City', sub: 'PBEL City Campus' },
 ];
 
@@ -22,7 +23,6 @@ const SOURCES = [
   'Other',
 ];
 
-// Days shown in the schedule grid (HSM is closed on Mondays)
 const SCHEDULE_DAYS = [
   { key: 'TUE', label: 'Tue' },
   { key: 'WED', label: 'Wed' },
@@ -31,8 +31,6 @@ const SCHEDULE_DAYS = [
   { key: 'SAT', label: 'Sat' },
   { key: 'SUN', label: 'Sun' },
 ];
-
-// ── Schedule helpers ────────────────────────────────────────────────────────
 
 type Period = 'morning' | 'evening';
 
@@ -56,17 +54,10 @@ interface RawBatch {
   is_makeup: boolean;
 }
 
-interface ScheduleCell {
-  morning: boolean;
-  evening: boolean;
-}
+interface ScheduleCell { morning: boolean; evening: boolean; }
 
-// Returns: { [instrument_name]: { TUE: { morning, evening }, WED: ... } }
-function buildScheduleGrid(
-  batches: RawBatch[]
-): Record<string, Record<string, ScheduleCell>> {
+function buildScheduleGrid(batches: RawBatch[]): Record<string, Record<string, ScheduleCell>> {
   const grid: Record<string, Record<string, ScheduleCell>> = {};
-
   for (const batch of batches) {
     if (batch.is_makeup) continue;
     const name = batch.instrument_name;
@@ -80,19 +71,10 @@ function buildScheduleGrid(
       if (grid[name][day]) grid[name][day][period] = true;
     }
   }
-
   return grid;
 }
 
-// ── Form state ──────────────────────────────────────────────────────────────
-
-interface Instrument {
-  id: number | string;
-  name: string;
-  is_deprecated?: boolean;
-}
-
-type FormStep = 'form' | 'success';
+interface Instrument { id: number | string; name: string; is_deprecated?: boolean; }
 
 interface FormData {
   first_name: string;
@@ -110,38 +92,27 @@ interface FormData {
 }
 
 const EMPTY_FORM: FormData = {
-  first_name: '',
-  last_name: '',
-  phone: '',
-  email: '',
-  dob: '',
-  address: '',
-  guardian_name: '',
-  guardian_phone: '',
-  instrument_id: '',
-  location: '',
-  source: '',
-  notes: '',
+  first_name: '', last_name: '', phone: '', email: '', dob: '', address: '',
+  guardian_name: '', guardian_phone: '', instrument_id: '', location: '', source: '', notes: '',
 };
 
-// ── Schedule chart component ────────────────────────────────────────────────
+// ── Schedule Chart ──────────────────────────────────────────────────────────
 
 function ScheduleChart({ batches }: { batches: RawBatch[] }) {
   const grid = buildScheduleGrid(batches);
   const instruments = Object.keys(grid).sort();
-
   if (instruments.length === 0) return null;
 
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-sm border-collapse">
+    <div style={{ overflowX: 'auto' }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
         <thead>
           <tr>
-            <th className="text-left py-2 pr-4 font-semibold text-slate-600 text-xs uppercase tracking-wide w-32">
+            <th style={{ textAlign: 'left', padding: '6px 12px 6px 0', color: 'var(--text-muted)', fontWeight: 600, fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em', minWidth: 120 }}>
               Instrument
             </th>
             {SCHEDULE_DAYS.map(d => (
-              <th key={d.key} className="text-center py-2 px-2 font-semibold text-slate-500 text-xs uppercase tracking-wide">
+              <th key={d.key} style={{ textAlign: 'center', padding: '6px 8px', color: 'var(--text-muted)', fontWeight: 600, fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                 {d.label}
               </th>
             ))}
@@ -149,29 +120,27 @@ function ScheduleChart({ batches }: { batches: RawBatch[] }) {
         </thead>
         <tbody>
           {instruments.map((name, idx) => (
-            <tr key={name} className={idx % 2 === 0 ? 'bg-slate-50' : 'bg-white'}>
-              <td className="py-2.5 pr-4 font-medium text-slate-800 text-sm">{name}</td>
+            <tr key={name} style={{ background: idx % 2 === 0 ? 'rgba(242,107,56,0.03)' : 'transparent' }}>
+              <td style={{ padding: '8px 12px 8px 0', fontWeight: 600, color: 'var(--text-heading)', fontSize: '0.85rem' }}>{name}</td>
               {SCHEDULE_DAYS.map(d => {
                 const cell = grid[name][d.key];
-                const hasMorning = cell?.morning;
-                const hasEvening = cell?.evening;
                 return (
-                  <td key={d.key} className="text-center py-2.5 px-2">
-                    {hasMorning || hasEvening ? (
-                      <div className="flex flex-col items-center gap-1">
-                        {hasMorning && (
-                          <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-700 whitespace-nowrap">
+                  <td key={d.key} style={{ textAlign: 'center', padding: '8px' }}>
+                    {(cell?.morning || cell?.evening) ? (
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
+                        {cell.morning && (
+                          <span style={{ background: '#fef3c7', color: '#92400e', borderRadius: 20, padding: '2px 8px', fontSize: '0.7rem', fontWeight: 700, whiteSpace: 'nowrap' }}>
                             Morn
                           </span>
                         )}
-                        {hasEvening && (
-                          <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-indigo-100 text-indigo-700 whitespace-nowrap">
+                        {cell.evening && (
+                          <span style={{ background: 'rgba(242,107,56,0.12)', color: 'var(--brand-orange)', borderRadius: 20, padding: '2px 8px', fontSize: '0.7rem', fontWeight: 700, whiteSpace: 'nowrap' }}>
                             Eve
                           </span>
                         )}
                       </div>
                     ) : (
-                      <span className="text-slate-200 text-xs">—</span>
+                      <span style={{ color: '#cbd5e1', fontSize: '0.75rem' }}>—</span>
                     )}
                   </td>
                 );
@@ -180,40 +149,86 @@ function ScheduleChart({ batches }: { batches: RawBatch[] }) {
           ))}
         </tbody>
       </table>
-      <div className="flex items-center gap-4 mt-3 text-xs text-slate-500">
-        <span className="flex items-center gap-1.5">
-          <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 font-semibold">Morn</span>
-          Morning (before 1pm)
+      <div style={{ display: 'flex', gap: '1.5rem', marginTop: 10, fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ background: '#fef3c7', color: '#92400e', borderRadius: 20, padding: '2px 8px', fontWeight: 700 }}>Morn</span>
+          Before 1pm
         </span>
-        <span className="flex items-center gap-1.5">
-          <span className="px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 font-semibold">Eve</span>
-          Afternoon / Evening (1pm onwards)
+        <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ background: 'rgba(242,107,56,0.12)', color: 'var(--brand-orange)', borderRadius: 20, padding: '2px 8px', fontWeight: 700 }}>Eve</span>
+          Afternoon / Evening
         </span>
       </div>
     </div>
   );
 }
 
+// ── Pill selector ───────────────────────────────────────────────────────────
+
+function Pill({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        padding: '0.5rem 1.1rem',
+        borderRadius: 999,
+        border: `2px solid ${active ? 'var(--brand-orange)' : 'rgba(150,150,150,0.25)'}`,
+        background: active ? 'var(--brand-orange)' : 'transparent',
+        color: active ? '#fff' : 'var(--text-body)',
+        fontWeight: 600,
+        fontSize: '0.875rem',
+        cursor: 'pointer',
+        transition: 'all 0.18s',
+      }}
+    >
+      {label}
+    </button>
+  );
+}
+
+// ── Section heading ─────────────────────────────────────────────────────────
+
+function SectionHeading({ children }: { children: React.ReactNode }) {
+  return (
+    <p style={{
+      fontFamily: 'var(--font-sans)',
+      fontWeight: 700,
+      fontSize: '0.8rem',
+      textTransform: 'uppercase',
+      letterSpacing: '0.08em',
+      color: 'var(--brand-orange)',
+      marginBottom: '0.75rem',
+    }}>
+      {children}
+    </p>
+  );
+}
+
 // ── Main form ───────────────────────────────────────────────────────────────
 
 function IntakeForm() {
+  const params = new URLSearchParams(window.location.search);
+  const isEmbed = params.get('embed') === '1';
+
   const [instruments, setInstruments] = useState<Instrument[]>([]);
   const [batches, setBatches] = useState<RawBatch[]>([]);
   const [form, setForm] = useState<FormData>(EMPTY_FORM);
   const [errors, setErrors] = useState<Partial<Record<keyof FormData, string>>>({});
   const [submitting, setSubmitting] = useState(false);
-  const [step, setStep] = useState<FormStep>('form');
+  const [done, setDone] = useState(false);
   const [serverError, setServerError] = useState('');
+
+  // Pre-fill instrument from ?instrument= query param
+  useEffect(() => {
+    const param = params.get('instrument');
+    if (param) setForm(prev => ({ ...prev, instrument_id: param }));
+  }, []);
 
   useEffect(() => {
     fetch(`${API_BASE}/api/instruments`)
       .then(r => r.json())
-      .then(data => {
-        const list: Instrument[] = (data.instruments || data || []).filter(
-          (i: Instrument) => !i.is_deprecated
-        );
-        setInstruments(list);
-      })
+      .then(data => setInstruments((data.instruments || data || []).filter((i: Instrument) => !i.is_deprecated)))
       .catch(() => {});
 
     fetch(`${API_BASE}/api/batches`)
@@ -229,8 +244,7 @@ function IntakeForm() {
     const errs: Partial<Record<keyof FormData, string>> = {};
     if (!form.first_name.trim()) errs.first_name = 'First name is required.';
     if (!form.phone.trim()) errs.phone = 'Phone number is required.';
-    else if (!/^\+?[\d\s\-()]{7,15}$/.test(form.phone.trim()))
-      errs.phone = 'Enter a valid phone number.';
+    else if (!/^\+?[\d\s\-()]{7,15}$/.test(form.phone.trim())) errs.phone = 'Enter a valid phone number.';
     if (!form.instrument_id) errs.instrument_id = 'Please choose an instrument / stream.';
     if (!form.location) errs.location = 'Please select a branch location.';
     setErrors(errs);
@@ -243,12 +257,11 @@ function IntakeForm() {
     if (!validate()) return;
 
     const instrument = instruments.find(i => String(i.id) === form.instrument_id);
-
     const payload = {
       name: `${form.first_name.trim()} ${form.last_name.trim()}`.trim(),
       phone: form.phone.trim(),
       email: form.email.trim() || undefined,
-      instrument: instrument?.name || '',
+      instrument: instrument?.name || form.instrument_id,
       location: form.location,
       source: form.source || undefined,
       dob: form.dob || undefined,
@@ -269,7 +282,10 @@ function IntakeForm() {
         const body = await res.json().catch(() => ({}));
         throw new Error(body.error || 'Submission failed. Please try again.');
       }
-      setStep('success');
+      if (isEmbed) {
+        window.parent.postMessage({ type: 'hsm-intake-success' }, '*');
+      }
+      setDone(true);
     } catch (err: unknown) {
       setServerError(err instanceof Error ? err.message : 'Something went wrong. Please try again.');
     } finally {
@@ -277,303 +293,275 @@ function IntakeForm() {
     }
   };
 
-  if (step === 'success') {
+  // ── Success screen ──
+  if (done) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-purple-50 flex items-center justify-center px-4 py-16">
-        <div className="max-w-lg w-full text-center">
-          <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
-            <svg className="w-10 h-10 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+      <div className="landing-wrapper" style={{ minHeight: isEmbed ? '100%' : '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '2rem' }}>
+        <div className="modal-content pop-shadow" style={{ textAlign: 'center', padding: '3rem 2.5rem', maxWidth: 480 }}>
+          <div style={{ width: 64, height: 64, borderRadius: '50%', background: '#dcfce7', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1.5rem' }}>
+            <svg width="32" height="32" fill="none" viewBox="0 0 24 24" stroke="#16a34a" strokeWidth={2.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
             </svg>
           </div>
-          <h2 className="text-3xl font-bold text-slate-900 mb-3">Thank you!</h2>
-          <p className="text-slate-600 text-lg mb-2">
-            We've received your details and our team will reach out to you shortly.
+          <span className="section-label" style={{ display: 'block', textAlign: 'center', marginBottom: 4 }}>You're all set!</span>
+          <h2 className="serif-heading" style={{ fontSize: '1.8rem', marginBottom: '1rem', textAlign: 'center' }}>
+            We'll be in touch soon
+          </h2>
+          <p style={{ color: 'var(--text-body)', marginBottom: '0.5rem' }}>
+            Thank you for your interest in Hyderabad School of Music.
           </p>
-          <p className="text-slate-500 text-sm">
-            Hyderabad School of Music — we look forward to welcoming you!
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>
+            Our team will reach out to you within 24 hours to schedule your free demo class.
           </p>
         </div>
       </div>
     );
   }
 
+  const inputStyle: React.CSSProperties = {
+    width: '100%',
+    padding: '0.75rem 1rem',
+    borderRadius: 8,
+    border: '1px solid rgba(150,150,150,0.3)',
+    background: 'var(--bg-primary)',
+    fontSize: '1rem',
+    color: 'var(--text-heading)',
+    outline: 'none',
+    transition: 'border-color 0.2s, box-shadow 0.2s',
+    fontFamily: 'var(--font-sans)',
+    boxSizing: 'border-box',
+  };
+
+  const labelStyle: React.CSSProperties = {
+    fontSize: '0.9rem',
+    fontWeight: 600,
+    marginBottom: '0.5rem',
+    color: 'var(--text-heading)',
+    display: 'block',
+  };
+
+  const errorStyle: React.CSSProperties = {
+    color: '#ef4444',
+    fontSize: '0.8rem',
+    marginTop: '0.35rem',
+  };
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-purple-50">
-      {/* Header */}
-      <div className="bg-white border-b border-slate-200 shadow-sm">
-        <div className="max-w-2xl mx-auto px-4 py-5 flex items-center gap-4">
-          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-600 to-purple-600 flex items-center justify-center text-white font-bold text-xl">
-            H
-          </div>
-          <div>
-            <h1 className="text-xl font-bold text-slate-900">Hyderabad School of Music</h1>
-            <p className="text-sm text-slate-500">Student Enquiry Form</p>
-          </div>
+    <div className="landing-wrapper" style={{ minHeight: '100vh', paddingBottom: isEmbed ? '1rem' : '4rem' }}>
+
+      {/* Header — shown only in full-page mode */}
+      {!isEmbed && (
+        <div style={{ background: 'var(--bg-tertiary)', borderBottom: '1px solid rgba(150,150,150,0.12)', padding: '1rem 1.5rem', display: 'flex', alignItems: 'center', gap: '1rem', position: 'sticky', top: 0, zIndex: 100 }}>
+          <img src="/HSM_Logo_Horizontal.png" alt="HSM" style={{ height: 40 }} onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+          <span style={{ flex: 1 }} />
+          <a href="/" style={{ fontSize: '0.875rem', color: 'var(--text-muted)', fontWeight: 500 }}>← Back to website</a>
         </div>
-      </div>
+      )}
 
-      <div className="max-w-2xl mx-auto px-4 py-10">
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-          {/* Hero banner */}
-          <div className="bg-gradient-to-r from-indigo-600 to-purple-600 px-8 py-8 text-white">
-            <h2 className="text-2xl font-bold mb-1">Begin your musical journey</h2>
-            <p className="text-indigo-100 text-sm">
-              Fill in the details below and we'll get in touch to set up your first class.
-            </p>
-          </div>
+      {/* Close button — shown only in embed/modal mode */}
+      {isEmbed && (
+        <button
+          onClick={() => window.parent.postMessage({ type: 'hsm-intake-close' }, '*')}
+          style={{ position: 'fixed', top: '1rem', right: '1rem', zIndex: 200, background: 'var(--bg-secondary)', border: 'none', borderRadius: '50%', width: 36, height: 36, fontSize: '1.25rem', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1 }}
+          aria-label="Close"
+        >
+          &times;
+        </button>
+      )}
 
-          <form onSubmit={handleSubmit} className="px-6 sm:px-8 py-8 space-y-8" noValidate>
+      <div style={{ maxWidth: 660, margin: '0 auto', padding: '2.5rem 1rem 0' }}>
 
-            {/* ── Section 1: Basic Info ── */}
-            <section>
-              <h3 className="text-sm font-semibold text-indigo-600 uppercase tracking-wider mb-4">About you</h3>
-              <div className="space-y-4">
+        {/* Page heading */}
+        <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
+          <span className="section-label" style={{ fontSize: '1.5rem' }}>Let's get started</span>
+          <h1 className="serif-heading" style={{ fontSize: 'clamp(2rem, 5vw, 2.8rem)', marginBottom: '0.75rem' }}>
+            Book a Free Demo Class
+          </h1>
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.925rem', maxWidth: 480, margin: '0 auto' }}>
+            This form is for <strong>enquiry purposes only</strong>. Our team will review your details and reach out within 24 hours to confirm your slot.
+          </p>
+        </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">
-                      First Name <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={form.first_name}
-                      onChange={e => set('first_name', e.target.value)}
-                      placeholder="e.g. Arjun"
-                      className={`w-full px-4 py-2.5 rounded-lg border ${errors.first_name ? 'border-red-400 bg-red-50' : 'border-slate-300'} focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none`}
-                    />
-                    {errors.first_name && <p className="text-xs text-red-600 mt-1">{errors.first_name}</p>}
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Last Name</label>
-                    <input
-                      type="text"
-                      value={form.last_name}
-                      onChange={e => set('last_name', e.target.value)}
-                      placeholder="e.g. Sharma"
-                      className="w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none"
-                    />
-                  </div>
+        {/* Card */}
+        <div className="modal-content pop-shadow" style={{ borderRadius: 24, padding: '2.5rem', marginBottom: '2rem' }}>
+          <form className="trial-form" onSubmit={handleSubmit} noValidate style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+
+            {/* ── About you ── */}
+            <div>
+              <SectionHeading>About you</SectionHeading>
+              <div className="form-grid" style={{ marginBottom: '1.25rem' }}>
+                <div className="form-group mb-0">
+                  <label style={labelStyle}>First Name <span style={{ color: '#ef4444' }}>*</span></label>
+                  <input style={{ ...inputStyle, borderColor: errors.first_name ? '#ef4444' : undefined }} type="text" value={form.first_name} onChange={e => set('first_name', e.target.value)} placeholder="e.g. Arjun" />
+                  {errors.first_name && <p style={errorStyle}>{errors.first_name}</p>}
                 </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">
-                      Phone Number <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="tel"
-                      value={form.phone}
-                      onChange={e => set('phone', e.target.value)}
-                      placeholder="+91 98765 43210"
-                      className={`w-full px-4 py-2.5 rounded-lg border ${errors.phone ? 'border-red-400 bg-red-50' : 'border-slate-300'} focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none`}
-                    />
-                    {errors.phone && <p className="text-xs text-red-600 mt-1">{errors.phone}</p>}
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Email Address</label>
-                    <input
-                      type="email"
-                      value={form.email}
-                      onChange={e => set('email', e.target.value)}
-                      placeholder="you@example.com"
-                      className="w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Date of Birth</label>
-                    <input
-                      type="date"
-                      value={form.dob}
-                      onChange={e => set('dob', e.target.value)}
-                      className="w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Address</label>
-                  <input
-                    type="text"
-                    value={form.address}
-                    onChange={e => set('address', e.target.value)}
-                    placeholder="e.g. Banjara Hills, Hyderabad"
-                    className="w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none"
-                  />
+                <div className="form-group mb-0">
+                  <label style={labelStyle}>Last Name</label>
+                  <input style={inputStyle} type="text" value={form.last_name} onChange={e => set('last_name', e.target.value)} placeholder="e.g. Sharma" />
                 </div>
               </div>
-            </section>
-
-            {/* ── Section 2: Guardian ── */}
-            <section>
-              <h3 className="text-sm font-semibold text-indigo-600 uppercase tracking-wider mb-1">
-                Parent / Guardian <span className="text-slate-400 font-normal normal-case">(if applicable)</span>
-              </h3>
-              <p className="text-xs text-slate-500 mb-4">For students under 18 years of age.</p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Guardian Name</label>
-                  <input
-                    type="text"
-                    value={form.guardian_name}
-                    onChange={e => set('guardian_name', e.target.value)}
-                    placeholder="Parent / guardian name"
-                    className="w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none"
-                  />
+              <div className="form-grid" style={{ marginBottom: '1.25rem' }}>
+                <div className="form-group mb-0">
+                  <label style={labelStyle}>Phone Number <span style={{ color: '#ef4444' }}>*</span></label>
+                  <input style={{ ...inputStyle, borderColor: errors.phone ? '#ef4444' : undefined }} type="tel" value={form.phone} onChange={e => set('phone', e.target.value)} placeholder="+91 98765 43210" />
+                  {errors.phone && <p style={errorStyle}>{errors.phone}</p>}
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Guardian Phone</label>
-                  <input
-                    type="tel"
-                    value={form.guardian_phone}
-                    onChange={e => set('guardian_phone', e.target.value)}
-                    placeholder="+91 98765 43210"
-                    className="w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none"
-                  />
+                <div className="form-group mb-0">
+                  <label style={labelStyle}>Email <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>(optional)</span></label>
+                  <input style={inputStyle} type="email" value={form.email} onChange={e => set('email', e.target.value)} placeholder="you@example.com" />
                 </div>
               </div>
-            </section>
+              <div className="form-grid" style={{ marginBottom: 0 }}>
+                <div className="form-group mb-0">
+                  <label style={labelStyle}>Date of Birth <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>(optional)</span></label>
+                  <input style={inputStyle} type="date" value={form.dob} onChange={e => set('dob', e.target.value)} />
+                </div>
+                <div className="form-group mb-0">
+                  <label style={labelStyle}>Address <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>(optional)</span></label>
+                  <input style={inputStyle} type="text" value={form.address} onChange={e => set('address', e.target.value)} placeholder="e.g. Banjara Hills" />
+                </div>
+              </div>
+            </div>
 
-            {/* ── Section 3: Stream ── */}
-            <section>
-              <h3 className="text-sm font-semibold text-indigo-600 uppercase tracking-wider mb-4">
-                Stream / Instrument <span className="text-red-500">*</span>
-              </h3>
+            {/* ── Parent / Guardian ── */}
+            <div>
+              <SectionHeading>Parent / Guardian <span style={{ fontWeight: 400, textTransform: 'none', fontSize: '0.75rem', color: 'var(--text-muted)' }}>(if applicable)</span></SectionHeading>
+              <p style={{ color: 'var(--text-muted)', fontSize: '0.825rem', marginBottom: '0.75rem' }}>For students under 18 years of age.</p>
+              <div className="form-grid">
+                <div className="form-group mb-0">
+                  <label style={labelStyle}>Guardian Name</label>
+                  <input style={inputStyle} type="text" value={form.guardian_name} onChange={e => set('guardian_name', e.target.value)} placeholder="Parent / guardian name" />
+                </div>
+                <div className="form-group mb-0">
+                  <label style={labelStyle}>Guardian Phone</label>
+                  <input style={inputStyle} type="tel" value={form.guardian_phone} onChange={e => set('guardian_phone', e.target.value)} placeholder="+91 98765 43210" />
+                </div>
+              </div>
+            </div>
+
+            {/* ── Instrument ── */}
+            <div>
+              <SectionHeading>Stream / Instrument <span style={{ color: '#ef4444' }}>*</span></SectionHeading>
               {instruments.length > 0 ? (
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                  {instruments.map(instr => {
-                    const selected = form.instrument_id === String(instr.id);
-                    return (
-                      <button
-                        key={instr.id}
-                        type="button"
-                        onClick={() => set('instrument_id', String(instr.id))}
-                        className={`py-3 px-4 rounded-xl border-2 text-sm font-semibold transition text-center ${
-                          selected
-                            ? 'border-indigo-500 bg-indigo-600 text-white shadow-md'
-                            : 'border-slate-200 bg-slate-50 text-slate-700 hover:border-indigo-400'
-                        }`}
-                      >
-                        {instr.name}
-                      </button>
-                    );
-                  })}
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.6rem' }}>
+                  {instruments.map(instr => (
+                    <Pill
+                      key={instr.id}
+                      label={instr.name}
+                      active={form.instrument_id === String(instr.id)}
+                      onClick={() => set('instrument_id', String(instr.id))}
+                    />
+                  ))}
                 </div>
               ) : (
-                <select
-                  value={form.instrument_id}
-                  onChange={e => set('instrument_id', e.target.value)}
-                  className={`w-full px-4 py-2.5 rounded-lg border ${errors.instrument_id ? 'border-red-400 bg-red-50' : 'border-slate-300'} focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none`}
-                >
+                <select value={form.instrument_id} onChange={e => set('instrument_id', e.target.value)} style={inputStyle}>
                   <option value="">Select an instrument...</option>
                   {['Keyboard','Guitar','Piano','Drums','Tabla','Violin','Hindustani Vocals','Carnatic Vocals'].map(n => (
                     <option key={n} value={n}>{n}</option>
                   ))}
                 </select>
               )}
-              {errors.instrument_id && <p className="text-xs text-red-600 mt-2">{errors.instrument_id}</p>}
-            </section>
+              {errors.instrument_id && <p style={errorStyle}>{errors.instrument_id}</p>}
+            </div>
 
-            {/* ── Section 4: Class Schedule ── */}
+            {/* ── Class Schedule ── */}
             {batches.length > 0 && (
-              <section>
-                <h3 className="text-sm font-semibold text-indigo-600 uppercase tracking-wider mb-1">
-                  Class Schedule
-                </h3>
-                <p className="text-xs text-slate-500 mb-4">
-                  Here's when each instrument's classes are currently available. We're closed on Mondays.
+              <div>
+                <SectionHeading>When do classes run?</SectionHeading>
+                <p style={{ color: 'var(--text-muted)', fontSize: '0.825rem', marginBottom: '0.75rem' }}>
+                  We're closed on Mondays. Here's the current schedule across all instruments.
                 </p>
-                <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                <div style={{ background: 'var(--bg-secondary)', borderRadius: 12, padding: '1rem 1.25rem' }}>
                   <ScheduleChart batches={batches} />
                 </div>
-              </section>
+              </div>
             )}
 
-            {/* ── Section 5: Location ── */}
-            <section>
-              <h3 className="text-sm font-semibold text-indigo-600 uppercase tracking-wider mb-4">
-                Which branch are you interested in? <span className="text-red-500">*</span>
-              </h3>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {/* ── Branch ── */}
+            <div>
+              <SectionHeading>Which branch? <span style={{ color: '#ef4444' }}>*</span></SectionHeading>
+              <div className="form-grid">
                 {LOCATIONS.map(loc => {
-                  const selected = form.location === loc.value;
+                  const active = form.location === loc.value;
                   return (
                     <button
                       key={loc.value}
                       type="button"
                       onClick={() => set('location', loc.value)}
-                      className={`py-4 px-5 rounded-xl border-2 text-left transition ${
-                        selected
-                          ? 'border-indigo-500 bg-indigo-600 text-white shadow-md'
-                          : 'border-slate-200 bg-slate-50 text-slate-700 hover:border-indigo-400'
-                      }`}
+                      style={{
+                        padding: '1rem 1.25rem',
+                        borderRadius: 12,
+                        border: `2px solid ${active ? 'var(--brand-orange)' : 'rgba(150,150,150,0.25)'}`,
+                        background: active ? 'var(--brand-orange)' : 'var(--bg-secondary)',
+                        color: active ? '#fff' : 'var(--text-heading)',
+                        textAlign: 'left',
+                        cursor: 'pointer',
+                        transition: 'all 0.18s',
+                      }}
                     >
-                      <p className="font-bold text-sm">{loc.label}</p>
-                      <p className={`text-xs mt-0.5 ${selected ? 'text-indigo-200' : 'text-slate-400'}`}>{loc.sub}</p>
+                      <p style={{ fontWeight: 700, fontSize: '0.9rem', margin: 0 }}>{loc.label}</p>
+                      <p style={{ fontSize: '0.775rem', margin: '3px 0 0', opacity: 0.75 }}>{loc.sub}</p>
                     </button>
                   );
                 })}
               </div>
-              {errors.location && <p className="text-xs text-red-600 mt-2">{errors.location}</p>}
-            </section>
+              {errors.location && <p style={errorStyle}>{errors.location}</p>}
+            </div>
 
-            {/* ── Section 6: How you found us ── */}
-            <section>
-              <h3 className="text-sm font-semibold text-indigo-600 uppercase tracking-wider mb-4">How did you hear about us?</h3>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                {SOURCES.map(src => {
-                  const active = form.source === src;
-                  return (
-                    <button
-                      key={src}
-                      type="button"
-                      onClick={() => set('source', active ? '' : src)}
-                      className={`py-2 px-3 rounded-lg border text-sm font-medium text-center transition ${
-                        active
-                          ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
-                          : 'border-slate-200 bg-white text-slate-600 hover:border-slate-400'
-                      }`}
-                    >
-                      {src}
-                    </button>
-                  );
-                })}
+            {/* ── How did you hear ── */}
+            <div>
+              <SectionHeading>How did you hear about us?</SectionHeading>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.6rem' }}>
+                {SOURCES.map(src => (
+                  <Pill
+                    key={src}
+                    label={src}
+                    active={form.source === src}
+                    onClick={() => set('source', form.source === src ? '' : src)}
+                  />
+                ))}
               </div>
-            </section>
+            </div>
 
-            {/* ── Section 7: Anything else ── */}
-            <section>
-              <h3 className="text-sm font-semibold text-indigo-600 uppercase tracking-wider mb-4">Anything else you'd like us to know?</h3>
-              <textarea
-                value={form.notes}
-                onChange={e => set('notes', e.target.value)}
-                rows={3}
-                placeholder="Prior music experience, specific goals, any questions..."
-                className="w-full px-4 py-3 rounded-lg border border-slate-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none resize-none"
-              />
-            </section>
+            {/* ── Notes ── */}
+            <div>
+              <SectionHeading>Anything else?</SectionHeading>
+              <div className="form-group mb-0">
+                <textarea
+                  value={form.notes}
+                  onChange={e => set('notes', e.target.value)}
+                  rows={3}
+                  placeholder="Prior music experience, goals, questions for us..."
+                  style={{ ...inputStyle, resize: 'none', lineHeight: 1.6 }}
+                />
+              </div>
+            </div>
+
+            {/* WhatsApp opt-in */}
+            <div className="form-group" style={{ flexDirection: 'row', alignItems: 'center', gap: '0.75rem', marginBottom: 0 }}>
+              <input type="checkbox" id="whatsapp_optin" defaultChecked style={{ width: 'auto', marginBottom: 0, accentColor: 'var(--brand-orange)' }} />
+              <label htmlFor="whatsapp_optin" style={{ marginBottom: 0, fontWeight: 'normal', fontSize: '0.9rem', color: 'var(--text-body)' }}>
+                ✓ It's ok to contact me on WhatsApp
+              </label>
+            </div>
 
             {/* Server error */}
             {serverError && (
-              <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm text-red-700">
-                {serverError}
-              </div>
+              <p style={{ color: '#ef4444', fontSize: '0.875rem', textAlign: 'center' }}>{serverError}</p>
             )}
 
             {/* Submit */}
             <button
               type="submit"
               disabled={submitting}
-              className="w-full py-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-base transition shadow-lg disabled:bg-slate-400 disabled:cursor-not-allowed"
+              className="btn btn-cta"
+              style={{ width: '100%', fontSize: '1.05rem', padding: '0.9rem', opacity: submitting ? 0.7 : 1 }}
             >
-              {submitting ? 'Submitting...' : 'Submit Enquiry'}
+              {submitting ? 'Submitting...' : 'Book My Free Demo →'}
             </button>
 
-            <p className="text-xs text-slate-400 text-center">
-              Your information is used only to contact you about classes at HSM. We do not share it with third parties.
+            <p style={{ textAlign: 'center', fontSize: '0.775rem', color: 'var(--text-muted)', marginTop: '-0.5rem' }}>
+              This form is for enquiry purposes only. No payment required. Our team will reach out to confirm.
             </p>
           </form>
         </div>
@@ -582,7 +570,6 @@ function IntakeForm() {
   );
 }
 
-// Mount
 const container = document.getElementById('intake-root');
 if (container) {
   createRoot(container).render(
