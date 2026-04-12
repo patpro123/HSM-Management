@@ -351,8 +351,8 @@ function IntakeForm() {
 
       {/* Header — shown only in full-page mode */}
       {!isEmbed && (
-        <div style={{ background: 'var(--bg-tertiary)', borderBottom: '1px solid rgba(150,150,150,0.12)', padding: '1rem 1.5rem', display: 'flex', alignItems: 'center', gap: '1rem', position: 'sticky', top: 0, zIndex: 100 }}>
-          <img src="/HSM_Logo_Horizontal.png" alt="HSM" style={{ height: 40 }} onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+        <div style={{ background: 'var(--bg-tertiary)', borderBottom: '1px solid rgba(150,150,150,0.12)', padding: '0.6rem 1.5rem', display: 'flex', alignItems: 'center', gap: '1rem', position: 'sticky', top: 0, zIndex: 100 }}>
+          <img src="/HSM_Logo_Horizontal.png" alt="HSM" style={{ height: 56 }} onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
           <span style={{ flex: 1 }} />
           <a href="/" style={{ fontSize: '0.875rem', color: 'var(--text-muted)', fontWeight: 500 }}>← Back to website</a>
         </div>
@@ -369,10 +369,10 @@ function IntakeForm() {
         </button>
       )}
 
-      <div style={{ maxWidth: 660, margin: '0 auto', padding: '2.5rem 1rem 0' }}>
+      <div style={{ maxWidth: 660, margin: '0 auto', padding: '1rem 1rem 0' }}>
 
         {/* Page heading */}
-        <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
+        <div style={{ textAlign: 'center', marginBottom: '1rem' }}>
           <span className="section-label" style={{ fontSize: '1.5rem' }}>Let's get started</span>
           <h1 className="serif-heading" style={{ fontSize: 'clamp(2rem, 5vw, 2.8rem)', marginBottom: '0.75rem' }}>
             Book a Free Demo Class
@@ -383,13 +383,14 @@ function IntakeForm() {
         </div>
 
         {/* Card */}
-        <div className="modal-content pop-shadow" style={{ borderRadius: 24, padding: '2.5rem', marginBottom: '2rem' }}>
-          <form className="trial-form" onSubmit={handleSubmit} noValidate style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+        {/* maxHeight/overflow override: prevents .modal-content CSS from creating a second scrollbar */}
+        <div className="modal-content pop-shadow" style={{ borderRadius: 24, padding: '1.5rem 2rem', marginBottom: '1.5rem', maxHeight: 'none', overflow: 'visible' }}>
+          <form className="trial-form" onSubmit={handleSubmit} noValidate style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
 
             {/* ── About you ── */}
             <div>
               <SectionHeading>About you</SectionHeading>
-              <div className="form-grid" style={{ marginBottom: '1.25rem' }}>
+              <div className="form-grid" style={{ marginBottom: '0.75rem' }}>
                 <div className="form-group mb-0">
                   <label style={labelStyle}>First Name <span style={{ color: '#ef4444' }}>*</span></label>
                   <input style={{ ...inputStyle, borderColor: errors.first_name ? '#ef4444' : undefined }} type="text" value={form.first_name} onChange={e => set('first_name', e.target.value)} placeholder="e.g. Arjun" />
@@ -400,7 +401,7 @@ function IntakeForm() {
                   <input style={inputStyle} type="text" value={form.last_name} onChange={e => set('last_name', e.target.value)} placeholder="e.g. Sharma" />
                 </div>
               </div>
-              <div className="form-grid" style={{ marginBottom: '1.25rem' }}>
+              <div className="form-grid" style={{ marginBottom: '0.75rem' }}>
                 <div className="form-group mb-0">
                   <label style={labelStyle}>Phone Number <span style={{ color: '#ef4444' }}>*</span></label>
                   <input style={{ ...inputStyle, borderColor: errors.phone ? '#ef4444' : undefined }} type="tel" value={form.phone} onChange={e => set('phone', e.target.value)} placeholder="+91 98765 43210" />
