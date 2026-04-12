@@ -9,6 +9,12 @@ interface AgeBucket {
   maxDays: number;
 }
 
+const LOCATION_TABS = [
+  { value: 'all', label: 'All Branches' },
+  { value: 'hsm_main', label: 'HSM Main Branch' },
+  { value: 'pbel_city', label: 'PBEL City' },
+];
+
 interface ProspectListProps {
   prospectList: any[];
   displayedProspects: any[];
@@ -18,6 +24,8 @@ interface ProspectListProps {
   getAgeBucket: (days: number) => AgeBucket;
   onAgeFilterChange: (key: string | null) => void;
   onSelectProspect: (prospect: any) => void;
+  locationFilter: string;
+  onLocationFilterChange: (loc: string) => void;
 }
 
 const ProspectList: React.FC<ProspectListProps> = ({
@@ -29,9 +37,37 @@ const ProspectList: React.FC<ProspectListProps> = ({
   getAgeBucket,
   onAgeFilterChange,
   onSelectProspect,
+  locationFilter,
+  onLocationFilterChange,
 }) => {
   return (
     <>
+      {/* Location tabs */}
+      <div className="flex gap-2 mb-4 border-b border-slate-200 pb-3">
+        {LOCATION_TABS.map(tab => {
+          const count = tab.value === 'all'
+            ? prospectList.length
+            : prospectList.filter(p => (p.metadata?.location || '') === tab.value).length;
+          const active = locationFilter === tab.value;
+          return (
+            <button
+              key={tab.value}
+              onClick={() => onLocationFilterChange(tab.value)}
+              className={`px-4 py-2 rounded-lg text-sm font-semibold transition flex items-center gap-2 ${
+                active
+                  ? 'bg-indigo-600 text-white shadow'
+                  : 'bg-white border border-slate-200 text-slate-600 hover:border-indigo-400'
+              }`}
+            >
+              {tab.label}
+              <span className={`text-xs px-1.5 py-0.5 rounded-full font-bold ${active ? 'bg-white text-indigo-600' : 'bg-slate-100 text-slate-500'}`}>
+                {count}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
       {/* Ageing heatmap */}
       {prospectList.length > 0 && (
         <div className="flex flex-wrap gap-3 mb-2">
@@ -88,10 +124,15 @@ const ProspectList: React.FC<ProspectListProps> = ({
                   </div>
                   <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${age.color}`}>{age.dot} {ageDays}d</span>
                 </div>
-                <div className="flex items-center justify-between text-xs text-slate-500">
+                <div className="flex items-center justify-between text-xs text-slate-500 mb-1">
                   <span>{p.metadata?.interested_instrument ? `🎵 ${p.metadata.interested_instrument}` : '🎵 Any'}</span>
                   <span className={`px-2 py-0.5 rounded-full font-semibold ${age.color}`}>{age.label}</span>
                 </div>
+                {p.metadata?.location && (
+                  <div className="text-xs text-slate-400">
+                    📍 {p.metadata.location === 'hsm_main' ? 'HSM Main Branch' : p.metadata.location === 'pbel_city' ? 'PBEL City' : p.metadata.location}
+                  </div>
+                )}
                 {p.is_active === false && <p className="text-xs text-red-500 mt-2 font-semibold">Inactive</p>}
               </div>
             );

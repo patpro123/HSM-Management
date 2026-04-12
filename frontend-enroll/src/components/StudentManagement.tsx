@@ -45,6 +45,7 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students: propStu
   const [prospectList, setProspectList] = useState<any[]>([]);
   const [selectedProspect, setSelectedProspect] = useState<any | null>(null);
   const [ageFilter, setAgeFilter] = useState<string | null>(null);
+  const [locationFilter, setLocationFilter] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingStudent, setEditingStudent] = useState<Student | null>(null);
@@ -151,6 +152,10 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students: propStu
     .filter(p => {
       if (!ageFilter) return true;
       return getAgeBucket(getAgeDays(p.created_at)).key === ageFilter;
+    })
+    .filter(p => {
+      if (locationFilter === 'all') return true;
+      return (p.metadata?.location || '') === locationFilter;
     });
 
   const relevantBatches = batches.filter(b => filterInstruments.includes(b.instrument_id));
@@ -394,8 +399,10 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students: propStu
           ageBuckets={AGE_BUCKETS}
           getAgeDays={getAgeDays}
           getAgeBucket={getAgeBucket}
-          onAgeFilterChange={setAgeFilter}
+          onAgeFilterChange={(key) => { setAgeFilter(key); }}
           onSelectProspect={setSelectedProspect}
+          locationFilter={locationFilter}
+          onLocationFilterChange={setLocationFilter}
         />
       )}
 

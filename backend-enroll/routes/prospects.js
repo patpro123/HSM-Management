@@ -19,8 +19,8 @@ async function sendProspectNotification(prospect) {
     const instrument = metadata?.interested_instrument || 'Not specified';
     const email = metadata?.email || 'Not provided';
     const source = metadata?.lead_source || 'Not specified';
-    const availableDays = (metadata?.available_days || []).join(', ') || 'Not specified';
-    const preferredTimes = (metadata?.preferred_times || []).join(', ') || 'Not specified';
+    const locationLabels = { hsm_main: 'HSM Main Branch', pbel_city: 'PBEL City' };
+    const location = locationLabels[metadata?.location] || metadata?.location || 'Not specified';
     const guardianName = metadata?.guardian_name || '';
     const guardianPhone = metadata?.guardian_phone || '';
     const notes = metadata?.notes || '';
@@ -36,9 +36,8 @@ async function sendProspectNotification(prospect) {
                 <tr><td style="padding:8px;border:1px solid #e2e8f0;font-weight:600;background:#f8fafc;">Name</td><td style="padding:8px;border:1px solid #e2e8f0;">${name}</td></tr>
                 <tr><td style="padding:8px;border:1px solid #e2e8f0;font-weight:600;background:#f8fafc;">Phone</td><td style="padding:8px;border:1px solid #e2e8f0;">${phone}</td></tr>
                 <tr><td style="padding:8px;border:1px solid #e2e8f0;font-weight:600;background:#f8fafc;">Email</td><td style="padding:8px;border:1px solid #e2e8f0;">${email}</td></tr>
+                <tr><td style="padding:8px;border:1px solid #e2e8f0;font-weight:600;background:#f8fafc;">Branch</td><td style="padding:8px;border:1px solid #e2e8f0;">${location}</td></tr>
                 <tr><td style="padding:8px;border:1px solid #e2e8f0;font-weight:600;background:#f8fafc;">Instrument / Stream</td><td style="padding:8px;border:1px solid #e2e8f0;">${instrument}</td></tr>
-                <tr><td style="padding:8px;border:1px solid #e2e8f0;font-weight:600;background:#f8fafc;">Available Days</td><td style="padding:8px;border:1px solid #e2e8f0;">${availableDays}</td></tr>
-                <tr><td style="padding:8px;border:1px solid #e2e8f0;font-weight:600;background:#f8fafc;">Preferred Time</td><td style="padding:8px;border:1px solid #e2e8f0;">${preferredTimes}</td></tr>
                 ${guardianName ? `<tr><td style="padding:8px;border:1px solid #e2e8f0;font-weight:600;background:#f8fafc;">Guardian Name</td><td style="padding:8px;border:1px solid #e2e8f0;">${guardianName}</td></tr>` : ''}
                 ${guardianPhone ? `<tr><td style="padding:8px;border:1px solid #e2e8f0;font-weight:600;background:#f8fafc;">Guardian Phone</td><td style="padding:8px;border:1px solid #e2e8f0;">${guardianPhone}</td></tr>` : ''}
                 <tr><td style="padding:8px;border:1px solid #e2e8f0;font-weight:600;background:#f8fafc;">How they found us</td><td style="padding:8px;border:1px solid #e2e8f0;">${source}</td></tr>
@@ -144,9 +143,8 @@ router.post('/:id/notes', async (req, res) => {
 router.post('/', async (req, res) => {
     console.log('[POST /api/prospects] Incoming prospect form:', req.body);
     const {
-        name, address, phone, email, instrument, source,
-        dob, guardian_name, guardian_phone,
-        available_days, preferred_times, notes
+        name, address, phone, email, instrument, location, source,
+        dob, guardian_name, guardian_phone, notes
     } = req.body;
 
     if (!name || !phone) {
@@ -162,12 +160,11 @@ router.post('/', async (req, res) => {
             email,
             address,
             interested_instrument: instrument,
+            location: location || undefined,
             lead_source: source,
             dob: dob || undefined,
             guardian_name: guardian_name || undefined,
             guardian_phone: guardian_phone || undefined,
-            available_days: available_days || [],
-            preferred_times: preferred_times || [],
             notes: notes || undefined,
             status: 'new'
         };

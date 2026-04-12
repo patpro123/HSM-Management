@@ -8,12 +8,11 @@ const API_BASE =
     ? `${window.location.protocol}//${window.location.hostname}:3000`
     : PRODUCTION_API_URL);
 
-const DAYS = ['Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-const TIME_SLOTS = [
-  { label: 'Morning (10am–1pm)', value: 'morning' },
-  { label: 'Afternoon (3pm–5pm)', value: 'afternoon' },
-  { label: 'Evening (5pm–9pm)', value: 'evening' },
+const LOCATIONS = [
+  { value: 'hsm_main', label: 'HSM Main Branch', sub: 'Hyderabad School of Music — Main Campus' },
+  { value: 'pbel_city', label: 'PBEL City', sub: 'PBEL City Campus' },
 ];
+
 const SOURCES = [
   'Word of mouth / Friend',
   'Instagram',
@@ -22,6 +21,70 @@ const SOURCES = [
   'Walk-in / Noticed the school',
   'Other',
 ];
+
+// Days shown in the schedule grid (HSM is closed on Mondays)
+const SCHEDULE_DAYS = [
+  { key: 'TUE', label: 'Tue' },
+  { key: 'WED', label: 'Wed' },
+  { key: 'THU', label: 'Thu' },
+  { key: 'FRI', label: 'Fri' },
+  { key: 'SAT', label: 'Sat' },
+  { key: 'SUN', label: 'Sun' },
+];
+
+// ── Schedule helpers ────────────────────────────────────────────────────────
+
+type Period = 'morning' | 'evening';
+
+function parseBatchDays(recurrence: string): string[] {
+  const text = recurrence.toUpperCase();
+  return SCHEDULE_DAYS.map(d => d.key).filter(d => text.includes(d));
+}
+
+function classifyPeriod(startTime: string): Period {
+  const hour = parseInt(startTime.split(':')[0], 10);
+  return hour < 13 ? 'morning' : 'evening';
+}
+
+interface RawBatch {
+  id: string;
+  instrument_id: string;
+  instrument_name: string;
+  recurrence: string;
+  start_time: string;
+  end_time: string;
+  is_makeup: boolean;
+}
+
+interface ScheduleCell {
+  morning: boolean;
+  evening: boolean;
+}
+
+// Returns: { [instrument_name]: { TUE: { morning, evening }, WED: ... } }
+function buildScheduleGrid(
+  batches: RawBatch[]
+): Record<string, Record<string, ScheduleCell>> {
+  const grid: Record<string, Record<string, ScheduleCell>> = {};
+
+  for (const batch of batches) {
+    if (batch.is_makeup) continue;
+    const name = batch.instrument_name;
+    if (!grid[name]) {
+      grid[name] = {};
+      for (const d of SCHEDULE_DAYS) grid[name][d.key] = { morning: false, evening: false };
+    }
+    const days = parseBatchDays(batch.recurrence);
+    const period = batch.start_time ? classifyPeriod(batch.start_time) : 'evening';
+    for (const day of days) {
+      if (grid[name][day]) grid[name][day][period] = true;
+    }
+  }
+
+  return grid;
+}
+
+// ── Form state ──────────────────────────────────────────────────────────────
 
 interface Instrument {
   id: number | string;
@@ -41,8 +104,7 @@ interface FormData {
   guardian_name: string;
   guardian_phone: string;
   instrument_id: string;
-  available_days: string[];
-  preferred_times: string[];
+  location: string;
   source: string;
   notes: string;
 }
@@ -57,18 +119,86 @@ const EMPTY_FORM: FormData = {
   guardian_name: '',
   guardian_phone: '',
   instrument_id: '',
-  available_days: [],
-  preferred_times: [],
+  location: '',
   source: '',
   notes: '',
 };
 
-function toggleItem(arr: string[], item: string): string[] {
-  return arr.includes(item) ? arr.filter(x => x !== item) : [...arr, item];
+// ── Schedule chart component ────────────────────────────────────────────────
+
+function ScheduleChart({ batches }: { batches: RawBatch[] }) {
+  const grid = buildScheduleGrid(batches);
+  const instruments = Object.keys(grid).sort();
+
+  if (instruments.length === 0) return null;
+
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-sm border-collapse">
+        <thead>
+          <tr>
+            <th className="text-left py-2 pr-4 font-semibold text-slate-600 text-xs uppercase tracking-wide w-32">
+              Instrument
+            </th>
+            {SCHEDULE_DAYS.map(d => (
+              <th key={d.key} className="text-center py-2 px-2 font-semibold text-slate-500 text-xs uppercase tracking-wide">
+                {d.label}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {instruments.map((name, idx) => (
+            <tr key={name} className={idx % 2 === 0 ? 'bg-slate-50' : 'bg-white'}>
+              <td className="py-2.5 pr-4 font-medium text-slate-800 text-sm">{name}</td>
+              {SCHEDULE_DAYS.map(d => {
+                const cell = grid[name][d.key];
+                const hasMorning = cell?.morning;
+                const hasEvening = cell?.evening;
+                return (
+                  <td key={d.key} className="text-center py-2.5 px-2">
+                    {hasMorning || hasEvening ? (
+                      <div className="flex flex-col items-center gap-1">
+                        {hasMorning && (
+                          <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-700 whitespace-nowrap">
+                            Morn
+                          </span>
+                        )}
+                        {hasEvening && (
+                          <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-indigo-100 text-indigo-700 whitespace-nowrap">
+                            Eve
+                          </span>
+                        )}
+                      </div>
+                    ) : (
+                      <span className="text-slate-200 text-xs">—</span>
+                    )}
+                  </td>
+                );
+              })}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <div className="flex items-center gap-4 mt-3 text-xs text-slate-500">
+        <span className="flex items-center gap-1.5">
+          <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 font-semibold">Morn</span>
+          Morning (before 1pm)
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 font-semibold">Eve</span>
+          Afternoon / Evening (1pm onwards)
+        </span>
+      </div>
+    </div>
+  );
 }
+
+// ── Main form ───────────────────────────────────────────────────────────────
 
 function IntakeForm() {
   const [instruments, setInstruments] = useState<Instrument[]>([]);
+  const [batches, setBatches] = useState<RawBatch[]>([]);
   const [form, setForm] = useState<FormData>(EMPTY_FORM);
   const [errors, setErrors] = useState<Partial<Record<keyof FormData, string>>>({});
   const [submitting, setSubmitting] = useState(false);
@@ -84,10 +214,15 @@ function IntakeForm() {
         );
         setInstruments(list);
       })
-      .catch(() => {/* instruments load silently if offline */});
+      .catch(() => {});
+
+    fetch(`${API_BASE}/api/batches`)
+      .then(r => r.json())
+      .then(data => setBatches(data.batches || []))
+      .catch(() => {});
   }, []);
 
-  const set = (field: keyof FormData, value: string | string[]) =>
+  const set = (field: keyof FormData, value: string) =>
     setForm(prev => ({ ...prev, [field]: value }));
 
   const validate = (): boolean => {
@@ -97,6 +232,7 @@ function IntakeForm() {
     else if (!/^\+?[\d\s\-()]{7,15}$/.test(form.phone.trim()))
       errs.phone = 'Enter a valid phone number.';
     if (!form.instrument_id) errs.instrument_id = 'Please choose an instrument / stream.';
+    if (!form.location) errs.location = 'Please select a branch location.';
     setErrors(errs);
     return Object.keys(errs).length === 0;
   };
@@ -113,14 +249,12 @@ function IntakeForm() {
       phone: form.phone.trim(),
       email: form.email.trim() || undefined,
       instrument: instrument?.name || '',
+      location: form.location,
       source: form.source || undefined,
-      // rich metadata stored server-side
       dob: form.dob || undefined,
       address: form.address.trim() || undefined,
       guardian_name: form.guardian_name.trim() || undefined,
       guardian_phone: form.guardian_phone.trim() || undefined,
-      available_days: form.available_days,
-      preferred_times: form.preferred_times,
       notes: form.notes.trim() || undefined,
     };
 
@@ -196,7 +330,6 @@ function IntakeForm() {
               <h3 className="text-sm font-semibold text-indigo-600 uppercase tracking-wider mb-4">About you</h3>
               <div className="space-y-4">
 
-                {/* Name row */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-slate-700 mb-1">
@@ -223,7 +356,6 @@ function IntakeForm() {
                   </div>
                 </div>
 
-                {/* Phone + Email */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-slate-700 mb-1">
@@ -250,7 +382,6 @@ function IntakeForm() {
                   </div>
                 </div>
 
-                {/* DOB */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-slate-700 mb-1">Date of Birth</label>
@@ -263,7 +394,6 @@ function IntakeForm() {
                   </div>
                 </div>
 
-                {/* Address */}
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">Address</label>
                   <input
@@ -339,7 +469,6 @@ function IntakeForm() {
                   className={`w-full px-4 py-2.5 rounded-lg border ${errors.instrument_id ? 'border-red-400 bg-red-50' : 'border-slate-300'} focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none`}
                 >
                   <option value="">Select an instrument...</option>
-                  {/* Static fallback */}
                   {['Keyboard','Guitar','Piano','Drums','Tabla','Violin','Hindustani Vocals','Carnatic Vocals'].map(n => (
                     <option key={n} value={n}>{n}</option>
                   ))}
@@ -348,65 +477,50 @@ function IntakeForm() {
               {errors.instrument_id && <p className="text-xs text-red-600 mt-2">{errors.instrument_id}</p>}
             </section>
 
-            {/* ── Section 4: Availability ── */}
+            {/* ── Section 4: Class Schedule ── */}
+            {batches.length > 0 && (
+              <section>
+                <h3 className="text-sm font-semibold text-indigo-600 uppercase tracking-wider mb-1">
+                  Class Schedule
+                </h3>
+                <p className="text-xs text-slate-500 mb-4">
+                  Here's when each instrument's classes are currently available. We're closed on Mondays.
+                </p>
+                <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                  <ScheduleChart batches={batches} />
+                </div>
+              </section>
+            )}
+
+            {/* ── Section 5: Location ── */}
             <section>
-              <h3 className="text-sm font-semibold text-indigo-600 uppercase tracking-wider mb-1">Class Availability</h3>
-              <p className="text-xs text-slate-500 mb-4">
-                HSM is open Tue–Fri (5pm–9pm), Saturday (3pm–9pm) and Sunday (10am–1pm & 5pm–9pm). Let us know when you're free — we'll try our best to match.
-              </p>
-
-              <div className="space-y-4">
-                {/* Days */}
-                <div>
-                  <p className="text-sm font-medium text-slate-700 mb-2">Days available (select all that apply)</p>
-                  <div className="flex flex-wrap gap-2">
-                    {DAYS.map(day => {
-                      const active = form.available_days.includes(day);
-                      return (
-                        <button
-                          key={day}
-                          type="button"
-                          onClick={() => set('available_days', toggleItem(form.available_days, day))}
-                          className={`px-4 py-2 rounded-full border text-sm font-medium transition ${
-                            active
-                              ? 'border-indigo-500 bg-indigo-600 text-white'
-                              : 'border-slate-300 bg-white text-slate-600 hover:border-indigo-400'
-                          }`}
-                        >
-                          {day}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Time preference */}
-                <div>
-                  <p className="text-sm font-medium text-slate-700 mb-2">Preferred time of day</p>
-                  <div className="flex flex-wrap gap-2">
-                    {TIME_SLOTS.map(ts => {
-                      const active = form.preferred_times.includes(ts.value);
-                      return (
-                        <button
-                          key={ts.value}
-                          type="button"
-                          onClick={() => set('preferred_times', toggleItem(form.preferred_times, ts.value))}
-                          className={`px-4 py-2 rounded-full border text-sm font-medium transition ${
-                            active
-                              ? 'border-indigo-500 bg-indigo-600 text-white'
-                              : 'border-slate-300 bg-white text-slate-600 hover:border-indigo-400'
-                          }`}
-                        >
-                          {ts.label}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
+              <h3 className="text-sm font-semibold text-indigo-600 uppercase tracking-wider mb-4">
+                Which branch are you interested in? <span className="text-red-500">*</span>
+              </h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {LOCATIONS.map(loc => {
+                  const selected = form.location === loc.value;
+                  return (
+                    <button
+                      key={loc.value}
+                      type="button"
+                      onClick={() => set('location', loc.value)}
+                      className={`py-4 px-5 rounded-xl border-2 text-left transition ${
+                        selected
+                          ? 'border-indigo-500 bg-indigo-600 text-white shadow-md'
+                          : 'border-slate-200 bg-slate-50 text-slate-700 hover:border-indigo-400'
+                      }`}
+                    >
+                      <p className="font-bold text-sm">{loc.label}</p>
+                      <p className={`text-xs mt-0.5 ${selected ? 'text-indigo-200' : 'text-slate-400'}`}>{loc.sub}</p>
+                    </button>
+                  );
+                })}
               </div>
+              {errors.location && <p className="text-xs text-red-600 mt-2">{errors.location}</p>}
             </section>
 
-            {/* ── Section 5: How you found us ── */}
+            {/* ── Section 6: How you found us ── */}
             <section>
               <h3 className="text-sm font-semibold text-indigo-600 uppercase tracking-wider mb-4">How did you hear about us?</h3>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
@@ -430,7 +544,7 @@ function IntakeForm() {
               </div>
             </section>
 
-            {/* ── Section 6: Anything else ── */}
+            {/* ── Section 7: Anything else ── */}
             <section>
               <h3 className="text-sm font-semibold text-indigo-600 uppercase tracking-wider mb-4">Anything else you'd like us to know?</h3>
               <textarea
