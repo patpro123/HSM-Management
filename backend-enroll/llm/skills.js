@@ -145,14 +145,13 @@ const skills = {
 
   'student.list': async () => {
     const rows = (await pool.query(
-      `SELECT s.name, s.phone, i.name AS instrument
+      `SELECT DISTINCT s.name, s.phone, i.name AS instrument
        FROM students s
-       JOIN enrollments e ON e.student_id = s.id AND e.status = 'active'
-       JOIN enrollment_batches eb ON eb.enrollment_id = e.id
+       JOIN enrollments e ON s.id = e.student_id
+       JOIN enrollment_batches eb ON e.id = eb.enrollment_id
        JOIN batches b ON eb.batch_id = b.id
        JOIN instruments i ON b.instrument_id = i.id
-       WHERE s.is_active = true
-       GROUP BY s.id, s.name, s.phone, i.name
+       WHERE (s.student_type = 'permanent' OR s.student_type IS NULL)
        ORDER BY s.name
        LIMIT 50`
     )).rows;
@@ -405,15 +404,15 @@ const skills = {
   'stats.students': async () => {
     const row = (await pool.query(
       `SELECT
-         COUNT(DISTINCT s.id)                                       AS total_active,
-         COUNT(DISTINCT CASE WHEN e.status = 'active' THEN s.id END) AS enrolled,
+         COUNT(DISTINCT s.id)                                             AS total_active,
+         COUNT(DISTINCT CASE WHEN e.status = 'active' THEN s.id END)     AS enrolled,
          COUNT(DISTINCT CASE WHEN eb.classes_remaining <= 0 THEN s.id END) AS zero_credits,
          COUNT(DISTINCT CASE WHEN eb.classes_remaining <= 2
                               AND eb.classes_remaining > 0 THEN s.id END) AS low_credits
        FROM students s
-       LEFT JOIN enrollments e ON e.student_id = s.id AND e.status = 'active'
-       LEFT JOIN enrollment_batches eb ON eb.enrollment_id = e.id
-       WHERE s.is_active = true`
+       LEFT JOIN enrollments e ON s.id = e.student_id
+       LEFT JOIN enrollment_batches eb ON e.id = eb.enrollment_id
+       WHERE (s.student_type = 'permanent' OR s.student_type IS NULL)`
     )).rows[0];
     const text = `Active students: ${row.total_active} | Enrolled: ${row.enrolled} | Zero credits: ${row.zero_credits} | Low credits (≤2): ${row.low_credits}`;
     return makeResponse('card', text, ['View unpaid list', 'View low credits'], {
@@ -492,9 +491,10 @@ const skills = {
        FROM batches b
        JOIN enrollment_batches eb ON eb.batch_id = b.id
        JOIN enrollments e ON eb.enrollment_id = e.id AND e.status = 'active'
-       JOIN students s ON e.student_id = s.id AND s.is_active = true
+       JOIN students s ON e.student_id = s.id
        JOIN instruments i ON b.instrument_id = i.id
        WHERE b.teacher_id = $1
+         AND (s.student_type = 'permanent' OR s.student_type IS NULL)
        ORDER BY s.id, s.name`,
       [teacher_id]
     )).rows;
@@ -542,14 +542,14 @@ const skills = {
     const rows = (await pool.query(
       `SELECT i.name AS label, COUNT(DISTINCT s.id) AS value
        FROM students s
-       JOIN enrollments e ON e.student_id = s.id AND e.status = 'active'
-       JOIN enrollment_batches eb ON eb.enrollment_id = e.id
+       JOIN enrollments e ON s.id = e.student_id
+       JOIN enrollment_batches eb ON e.id = eb.enrollment_id
        JOIN batches b ON eb.batch_id = b.id
        JOIN instruments i ON b.instrument_id = i.id
-       WHERE s.is_active = true
+       WHERE (s.student_type = 'permanent' OR s.student_type IS NULL)
        GROUP BY i.name ORDER BY value DESC`
     )).rows;
-    return makeResponse('chart', 'Active students by instrument', ['View list', 'Check attendance'], {
+    return makeResponse('chart', 'Students by instrument', ['View list', 'Check attendance'], {
       chart: {
         type: 'bar',
         data: rows,
@@ -592,8 +592,9 @@ const skills = {
        FROM teachers t
        LEFT JOIN batches b ON b.teacher_id = t.id AND b.is_makeup = false
        LEFT JOIN enrollment_batches eb ON eb.batch_id = b.id
-       LEFT JOIN enrollments e ON eb.enrollment_id = e.id AND e.status = 'active'
-       LEFT JOIN students s ON e.student_id = s.id AND s.is_active = true
+       LEFT JOIN enrollments e ON eb.enrollment_id = e.id
+       LEFT JOIN students s ON e.student_id = s.id
+         AND (s.student_type = 'permanent' OR s.student_type IS NULL)
        WHERE t.id = $1
        GROUP BY t.id, t.name, t.payout_type, t.rate`,
       [teacher_id]
