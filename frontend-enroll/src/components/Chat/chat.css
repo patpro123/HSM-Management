@@ -1,0 +1,91 @@
+/* HSM Chat Widget — scoped animations and base classes */
+
+@keyframes chat-bounce {
+  0%, 60%, 100% { transform: translateY(0); }
+  30%            { transform: translateY(-5px); }
+}
+
+@keyframes chat-fab-pulse {
+  0%   { box-shadow: 0 0 0 0 rgba(255, 144, 78, 0.6); }
+  70%  { box-shadow: 0 0 0 12px rgba(255, 144, 78, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(255, 144, 78, 0); }
+}
+
+.chat-panel {
+  transform: translateY(20px) scale(0.96);
+  opacity: 0;
+  pointer-events: none;
+  transition: transform 220ms cubic-bezier(0.34, 1.56, 0.64, 1),
+              opacity 180ms ease;
+}
+
+.chat-panel--open {
+  transform: translateY(0) scale(1);
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.chat-msg--enter {
+  opacity: 0;
+  transform: translateY(8px);
+}
+
+.chat-msg--visible {
+  opacity: 1;
+  transform: translateY(0);
+  transition: opacity 180ms ease, transform 180ms ease;
+}
+
+.chat-chip {
+  border: 1.5px solid var(--accent, #f3c13a);
+  border-radius: 20px;
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text, #1b1307);
+  background: #fffbf0;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 120ms ease, transform 120ms ease;
+  flex-shrink: 0;
+}
+
+.chat-chip:hover {
+  background: rgba(243, 193, 58, 0.2);
+}
+
+.chat-chip:active {
+  transform: scale(0.94);
+}
+
+.chat-chip--used {
+  opacity: 0;
+  transform: scale(0.85);
+  transition: opacity 150ms ease, transform 150ms ease;
+  pointer-events: none;
+}
+
+.chat-chip--disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.chat-typing-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #999;
+  display: inline-block;
+}
+
+.chat-typing-dot:nth-child(1) { animation: chat-bounce 1.2s infinite 0ms; }
+.chat-typing-dot:nth-child(2) { animation: chat-bounce 1.2s infinite 160ms; }
+.chat-typing-dot:nth-child(3) { animation: chat-bounce 1.2s infinite 320ms; }
+
+.chat-fab--nudge {
+  animation: chat-fab-pulse 2s ease-out infinite;
+}
+
+/* Hide scrollbar on chip row */
+.chat-chips-row::-webkit-scrollbar { display: none; }
+.chat-chips-row { -ms-overflow-style: none; scrollbar-width: none; }

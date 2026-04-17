@@ -28,8 +28,10 @@ import hsmLogo from './images/hsmLogo.jpg';
 import LandingPage from './components/LandingPage';
 import NotificationsPanel from './components/NotificationsPanel';
 import MigrationTools from './components/MigrationTools';
+import { ChatFAB, ChatPanel, ChatUserRole } from './components/Chat';
 
 const App: React.FC = () => {
+  const [chatOpen, setChatOpen] = useState(false);
   // Add new profile page states
   const [activeTab, setActiveTab] = useState<'stats' | 'students' | 'attendance' | 'payments' | 'finance' | 'teachers' | 'batch-manager' | 'users' | 'migration' | 'student-profile' | 'teacher-profile' | 'enrollment'>(
     getCurrentUser()?.roles?.includes('admin') ? 'stats' : getCurrentUser()?.roles?.includes('teacher') ? 'teacher-profile' : 'student-profile'
@@ -516,6 +518,22 @@ const App: React.FC = () => {
               </button>
             </div>
           </div>
+        </>
+      )}
+      {user && (
+        <>
+          <ChatFAB
+            isOpen={chatOpen}
+            unreadNudgeCount={0}
+            onClick={() => setChatOpen(prev => !prev)}
+          />
+          {chatOpen && (
+            <ChatPanel
+              isOpen={chatOpen}
+              userRole={((user.roles?.[0] ?? 'student') as ChatUserRole)}
+              onClose={() => setChatOpen(false)}
+            />
+          )}
         </>
       )}
     </div>

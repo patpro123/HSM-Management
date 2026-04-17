@@ -1,6 +1,6 @@
 # Hyderabad School of Music — Management System
 
-**Version 1.1** — Production-Ready
+**Version 1.3** — Production-Ready
 
 Full-stack school management platform for music education. Covers the entire student lifecycle: inquiry → enrollment → attendance → payments → teacher payouts → analytics.
 
@@ -36,23 +36,31 @@ Full-stack school management platform for music education. Covers the entire stu
 - Student self-service portal (JWT-gated student/parent login)
 
 ### Prospect & CRM
+- Standalone intake form (`/intake`) — personal info, guardian details, instrument selection, branch location, lead source, free-text notes
+- Live schedule chart on intake page showing available slots per instrument per day
+- Intake form embedded as an iframe in the landing page trial booking modal
 - Prospect capture from landing page booking form
-- Prospect list in admin panel with notes
-- Email notification to admins on every new trial booking
+- Prospect list in admin panel with branch filter tabs (All / HSM Main / PBEL City) with per-tab counts and location badge per card
+- Email notification to admins on every new inquiry, enriched with guardian details, availability, notes, and branch
 - Lead source tracking (landing page, referral, etc.)
 
 ### Enrollment
 - Multi-step enrollment wizard: student info → instrument selection → batch assignment → payment package
+- Day 1 (required) / Day 2 (optional) dropdown selectors per instrument — Day 2 unlocks after Day 1 is chosen and filters out the selected batch
+- Backend enforces max 2 batches per instrument
 - Multi-instrument support in a single enrollment flow
 - Batch capacity enforcement
 - Conversational AI enrollment agent (LLM-assisted, experimental)
 
 ### Batch Management
-- Create and configure batches (instrument + teacher + schedule + capacity)
+- Create and configure batches (instrument + teacher + schedule + capacity + WhatsApp group link)
 - Recurrence patterns (e.g., `TUE 17:00-18:00, THU 17:00-18:00`)
 - Makeup batch support (deduct credits only when student attends)
 - Batch schedule grid view
 - Per-batch student lists
+- **BatchManager board** — Kanban-style board to move students between batches; drag-and-drop on desktop, tap-to-select on mobile; optimistic UI with revert on failure
+- Post-move WhatsApp sync modal to notify affected group chats
+- Today's Classes: per-student WhatsApp deep links and group notification modal (editable message, copy-to-clipboard, one-tap group open)
 
 ### Attendance Tracking
 - Daily attendance marking, batch-centric workflow
@@ -67,7 +75,8 @@ Full-stack school management platform for music education. Covers the entire stu
 ### Payment Processing
 - Record payments against monthly or quarterly packages
 - Auto-calculate classes added based on package type (monthly = 8, quarterly = 24)
-- Payment history per student
+- Payment history per student with student name search, instrument filter, and teacher filter
+- Paginated payment list (10 records/page)
 - Per-instrument class balance tracking
 - Next payment date inference from payment period
 
@@ -105,6 +114,10 @@ Full-stack school management platform for music education. Covers the entire stu
 ### Student Evaluations
 - CRUD for student evaluations/reviews attached to the student 360 view
 
+### Data Migration Tools
+- Filter students by teacher (teacher dropdown auto-loads enrolled students) for bulk credit migrations
+- Carry-forward credits formula UI: `carry_forward + new_classes_bought − attended_since_payment = credits`
+
 ### Document Management
 - Upload and retrieve student documents (certificates, ID proofs, etc.)
 
@@ -134,7 +147,7 @@ HSM-Management/
 ├── db/
 │   ├── schema.sql           # Full DDL — source of truth
 │   ├── seed.sql             # Sample data
-│   └── migrations/          # Sequential SQL migrations (001–021)
+│   └── migrations/          # Sequential SQL migrations (001–026)
 ├── enrollment-agent-frontend/ # Experimental AI enrollment agent
 └── docker-compose.yml       # Local dev DB + pgAdmin
 ```
@@ -199,6 +212,8 @@ SMTP_PASS=...                        # Gmail App Password
 VITE_API_BASE_URL=http://localhost:3000
 ```
 
+> **LAN / mobile testing:** Vite binds to all interfaces (`host: true`) and Express binds to `0.0.0.0`. The auth client resolves the backend URL from the current browser hostname, so devices on the same network can connect using the machine's local IP (e.g. `http://192.168.x.x:5173`).
+
 ---
 
 ## Database Migrations
@@ -226,6 +241,11 @@ VITE_API_BASE_URL=http://localhost:3000
 | 019 | Trinity grade on enrollment_batches |
 | 020 | Instrument × grade rate table |
 | 021 | Teacher-level grade rate overrides |
+| 022 | Branches and instrument split |
+| 023 | Fee structures table |
+| 024 | Seed 2026 fee data |
+| 025 | Migrate Keyboard/Piano instruments to unified Keyboard |
+| 026 | WhatsApp group link column on batches |
 
 ---
 
@@ -251,4 +271,4 @@ Proprietary — Hyderabad School of Music
 
 ---
 
-**Last Updated:** 2026-04-05
+**Last Updated:** 2026-04-13
