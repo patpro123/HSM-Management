@@ -5,14 +5,15 @@ interface InstrumentShowcaseProps {
 }
 
 const INSTRUMENTS = [
+  { id: 'guitar', name: 'Guitar', icon: '🎸', desc: 'Most popular worldwide — acoustic to electric' },
   { id: 'keyboard', name: 'Keyboard', icon: '🎹', desc: 'Build musical foundations fast — ideal first instrument' },
   { id: 'piano', name: 'Piano', icon: '🎹', desc: 'Classical elegance; read music, compose, perform' },
-  { id: 'guitar', name: 'Guitar', icon: '🎸', desc: 'Most popular worldwide — acoustic to electric' },
-  { id: 'drums', name: 'Drums', icon: '🥁', desc: 'Rhythm, coordination, and confidence on stage' },
   { id: 'tabla', name: 'Tabla', icon: '🪘', desc: "India's heartbeat — rhythm, tradition, discipline" },
+  { id: 'drums', name: 'Drums', icon: '🥁', desc: 'Rhythm, coordination, and confidence on stage' },
+  { id: 'octopad', name: 'Octopad', icon: '🎛️', desc: 'Electronic percussion — versatile, modern, exciting' },
   { id: 'violin', name: 'Violin', icon: '🎻', desc: 'Versatile across classical, folk, and film music' },
-  { id: 'hindustani', name: 'Hindustani Vocals', icon: '🎤', desc: 'North Indian classical — raga, taal, expression' },
-  { id: 'carnatic', name: 'Carnatic Vocals', icon: '🎤', desc: 'South Indian classical — precise, devotional, powerful' },
+  { id: 'hindustani', name: 'Hindustani Classical', icon: '🎤', desc: 'North Indian classical — raga, taal, expression' },
+  { id: 'carnatic', name: 'Carnatic Classical', icon: '🎤', desc: 'South Indian classical — precise, devotional, powerful' },
 ];
 
 const InstrumentShowcase: React.FC<InstrumentShowcaseProps> = ({ onOpenModal }) => {
@@ -52,16 +53,18 @@ const InstrumentShowcase: React.FC<InstrumentShowcaseProps> = ({ onOpenModal }) 
 
         <div className="instrument-grid" ref={instrumentGridRef}>
           {INSTRUMENTS.map(inst => (
-            <div className="instrument-card pop-shadow transition-transform hover:-translate-y-2" key={inst.id}>
+            <div
+              className="instrument-card pop-shadow"
+              key={inst.id}
+              onClick={(e) => onOpenModal(e, inst.id)}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => e.key === 'Enter' && onOpenModal(e as any, inst.id)}
+            >
               <div className="instrument-icon">{inst.icon}</div>
               <h3 className="instrument-name">{inst.name}</h3>
               <p className="instrument-desc">{inst.desc}</p>
-              <button
-                className="btn btn-secondary btn-sm mt-auto"
-                onClick={(e) => onOpenModal(e, inst.id)}
-              >
-                Enquire
-              </button>
+              <span style={{ fontSize: '0.75rem', color: 'var(--brand-orange)', fontWeight: 600, marginTop: '0.5rem' }}>Enquire →</span>
             </div>
           ))}
         </div>

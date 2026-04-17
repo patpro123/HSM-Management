@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { API_BASE_URL } from '../config';
 import './LandingPage.css';
+import { PublicCleffChat } from './Chat/PublicCleffChat';
 import Navbar from './LandingPage/Navbar';
 import HeroSection from './LandingPage/HeroSection';
 import InstrumentShowcase from './LandingPage/InstrumentShowcase';
@@ -32,18 +33,18 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLogin, authError }) => {
     const faqs = [
         { q: "Does my child need prior experience?", a: "Not at all. We start from the very beginning and move at your child's pace." },
         { q: "What age groups do you teach?", a: "We welcome students from age 5 to 60+. Music has no age limit." },
-        { q: "Are online classes available?", a: "Yes — all 8 instruments are available online and in-person at our Kismatpur centre." },
+        { q: "Are online classes available?", a: "All our classes are in-person at our Kismatpur centre — we believe music is best learnt together." },
         { q: "How soon will my child play a real song?", a: "Most students play their first song within 4–6 weeks. We make early wins a priority." },
-        { q: "What is the monthly fee?", a: "Classes start from ₹2000/month. Your first demo class is completely free." },
+        { q: "What are the fees?", a: "We offer a Trial Pack (4 classes, starting ₹2000) and a Quarterly Pack (24 classes). Your first demo class is completely free — no commitment." },
         { q: "What if we need to pause or stop?", a: "No problem. We have a flexible pause policy — life happens and we understand." }
     ];
 
     const testimonials = [
-        { quote: "My daughter went from complete beginner to performing on stage in just 6 months. The teachers at HSM are incredibly patient.", author: "Priya M.", role: "Parent of Tabla student", initials: "PM", color: "#4285F4" },
-        { quote: "The best music school in Hyderabad. The facilities are top-notch and the curriculum is very structured.", author: "Rahul S.", role: "Adult Piano student", initials: "RS", color: "#EA4335" },
-        { quote: "My son looks forward to his guitar class every week. The community events have built his confidence so much!", author: "Anita K.", role: "Parent of Guitar student", initials: "AK", color: "#34A853" },
-        { quote: "Learning Hindustani vocals online has been seamless. The audio quality and teacher attention is exactly like being in person.", author: "Vikram R.", role: "Online Vocal student", initials: "VR", color: "#FBBC04" },
-        { quote: "I thought I was too old to learn the drums. HSM proved me wrong. Fantastic instructors who know how to teach adults.", author: "Sanjay D.", role: "Adult Drum student", initials: "SD", color: "#9C27B0" },
+        { quote: "I recently started learning guitar at HSM near Bandlaguda and I'm really happy! The teachers are outstanding — they break down concepts from the very basics, making learning easy and enjoyable. Visit and speak with the team — you'll immediately sense their dedication and passion for teaching.", author: "Kishore Gandhi", role: "Guitar student", initials: "KG", color: "#4285F4" },
+        { quote: "I was looking for drum classes for my son and, after a bit of searching, decided to visit Hyderabad School of Music because it was nearby. From the moment I walked in, I was thrilled by the lively activities and the welcoming atmosphere. The staff is not only talented but also incredibly friendly, creating a perfect environment for learning and creativity. My son is now learning drums here and making amazing progress, thanks to the patient and skilled instructors. My wife has also joined for advanced Hindustani music lessons, and she's just as impressed with the quality of teaching and the dedication of the faculty.", author: "Bharath Raj Kuttikad", role: "Parent", initials: "BK", color: "#34A853" },
+        { quote: "My son is learning guitar in HSM from past 3 months. I am really happy with my decision. He is getting practical teaching lessons from good teachers who are very friendly. The HSM members have a lot of interest in music and take good care of the students. Recently, the members organized a musical event involving all age groups which was awesome. It was a good exposure for the students.", author: "Yodesh Shaw", role: "Parent of Guitar student", initials: "YS", color: "#EA4335" },
+        { quote: "Nestled in the heart of our community, Hyderabad School Of Music (HSM) is a beacon of musical excellence. From the moment you step through the door, you're greeted with a warm atmosphere and a sense of belonging. I've had the pleasure of experiencing music education in various settings, and HSM stands out for its unwavering commitment to nurturing talent and fostering a love for music in students of all ages.", author: "Jayasudha Venkatesh", role: "Student", initials: "JV", color: "#9C27B0" },
+        { quote: "Enrolled my kid for keyboard. He is enjoying the learning. Good facilities, sir pays attention to each student which is good. Would definitely recommend.", author: "B Srinivasu", role: "Parent of Keyboard student", initials: "BS", color: "#FBBC04" },
     ];
 
     useEffect(() => {
@@ -69,17 +70,18 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLogin, authError }) => {
                 const res = await fetch(`${API_BASE_URL}/api/teachers`);
                 if (res.ok) {
                     const data = await res.json();
-                    setTeachers(data.teachers.slice(0, 4));
+                    setTeachers(data.teachers);
                 } else {
                     throw new Error('Failed to fetch teachers');
                 }
             } catch (err) {
                 console.error("Failed to fetch teachers for landing page:", err);
                 setTeachers([
-                    { id: 1, name: 'Ravi Kumar', specialty: 'Guitar · Drums', experience: '8 years teaching', quote: '"Every student has music inside them — I just help bring it out."' },
-                    { id: 2, name: 'Anjali Desai', specialty: 'Hindustani Vocals', experience: '12 years teaching', quote: '"Your voice is an instrument that only you can play."' },
-                    { id: 3, name: 'David Smith', specialty: 'Piano · Keyboard', experience: '15 years teaching', quote: '"Consistency is the key to unlocking your musical potential."' },
-                    { id: 4, name: 'Megha Sharma', specialty: 'Violin', experience: '6 years teaching', quote: '"Let the music guide your strings."' }
+                    { id: 1, name: 'Josva', specialty: 'Keyboard · Guitar' },
+                    { id: 2, name: 'David', specialty: 'Piano' },
+                    { id: 3, name: 'Subroto Bhaduri', specialty: 'Drums · Tabla · Octopad' },
+                    { id: 4, name: 'Issac Lawrence', specialty: 'Violin' },
+                    { id: 5, name: 'Sangeeta', specialty: 'Hindustani Classical · Carnatic Classical' },
                 ]);
             }
         };
@@ -92,7 +94,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLogin, authError }) => {
                 const res = await fetch(`${API_BASE_URL}/api/batches`);
                 if (res.ok) {
                     const data = await res.json();
-                    setBatches(data.batches.slice(0, 5));
+                    setBatches(data.batches);
                 } else {
                     throw new Error('Failed to fetch batches');
                 }
@@ -191,6 +193,9 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLogin, authError }) => {
                 <LocationSection />
                 <FooterCTA onOpenModal={handleOpenModal} />
             </main>
+
+            {/* Public Cleff chatbot — no auth required */}
+            <PublicCleffChat onBookDemo={() => handleOpenModal({ preventDefault: () => {} } as React.MouseEvent)} />
 
             {/* Intake form — rendered in an iframe so the landing page stays mounted */}
             {isModalOpen && (

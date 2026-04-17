@@ -16,10 +16,10 @@
     --text-muted: #94a3b8;
 
     /* Typography */
-    --font-serif: 'Playfair Display', Georgia, serif;
-    /* Elegant headings */
-    --font-cursive: 'Caveat', cursive;
-    /* Playful section labels */
+    --font-serif: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+    /* Sleek headings */
+    --font-cursive: 'Inter', system-ui, -apple-system, sans-serif;
+    /* Section labels */
     --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
     /* Neutral body */
 
@@ -146,8 +146,8 @@ img {
 }
 
 .serif-heading em {
-    font-style: italic;
-    font-weight: 400;
+    font-style: normal;
+    font-weight: 500;
     color: var(--brand-orange);
 }
 
@@ -668,47 +668,53 @@ img {
 
 .instrument-grid {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 1.5rem;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1rem;
     padding-top: 2rem;
 }
 
 @media (max-width: 1000px) {
     .instrument-grid {
-        grid-template-columns: repeat(2, 1fr);
+        grid-template-columns: repeat(3, 1fr);
     }
 }
 
 .instrument-card {
     background: var(--bg-tertiary);
-    border-radius: 20px;
-    padding: 2rem 1.5rem;
+    border-radius: 16px;
+    padding: 1.25rem 1rem;
     text-align: center;
     display: flex;
     flex-direction: column;
     align-items: center;
-    border: 1px solid rgba(0, 0, 0, 0.03);
+    border: 1px solid rgba(0, 0, 0, 0.05);
     height: 100%;
-    transition: transform 0.3s ease, box-shadow 0.3s ease;
+    cursor: pointer;
+    transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.instrument-card:hover {
+    border-color: var(--brand-orange);
+    transform: translateY(-4px);
 }
 
 .instrument-icon {
-    font-size: 3rem;
-    margin-bottom: 1rem;
+    font-size: 2rem;
+    margin-bottom: 0.6rem;
 }
 
 .instrument-name {
-    font-size: 1.25rem;
+    font-size: 1rem;
     font-weight: 700;
-    margin-bottom: 0.75rem;
+    margin-bottom: 0.4rem;
     color: var(--text-heading);
 }
 
 .instrument-desc {
-    font-size: 0.95rem;
+    font-size: 0.8rem;
     color: var(--text-body);
-    margin-bottom: 1.5rem;
     flex-grow: 1;
+    line-height: 1.4;
 }
 
 .btn-sm {
@@ -757,40 +763,64 @@ img {
 }
 
 /* Section 5: Teachers */
-.teachers-grid {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 2rem;
+/* Teachers: horizontal scroll carousel on desktop */
+.teachers-carousel {
+    display: flex;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+    gap: 1.5rem;
+    padding-bottom: 1.5rem;
+    padding-top: 0.5rem;
+    -webkit-mask-image: linear-gradient(to right, black 88%, transparent 100%);
+    mask-image: linear-gradient(to right, black 88%, transparent 100%);
+    scrollbar-width: none;
 }
 
-@media (max-width: 1000px) {
-    .teachers-grid {
-        grid-template-columns: repeat(2, 1fr);
-    }
-}
-
-@media (max-width: 600px) {
-    .teachers-grid {
-        grid-template-columns: 1fr;
-    }
-}
+.teachers-carousel::-webkit-scrollbar { display: none; }
 
 .teacher-card {
     background: var(--bg-tertiary);
     border-radius: var(--border-radius-lg);
-    padding: 2.5rem 1.5rem;
+    padding: 2rem 1.5rem;
     text-align: center;
     display: flex;
     flex-direction: column;
     align-items: center;
-    border: 1px solid rgba(0, 0, 0, 0.03);
+    border: 1px solid rgba(0, 0, 0, 0.04);
+    flex: 0 0 240px;
+    scroll-snap-align: start;
+    box-sizing: border-box;
+}
+
+/* Mobile: vertical stack */
+@media (max-width: 600px) {
+    .teachers-carousel {
+        flex-direction: column;
+        overflow-x: visible;
+        scroll-snap-type: none;
+        -webkit-mask-image: none;
+        mask-image: none;
+        gap: 1rem;
+    }
+    .teacher-card {
+        flex: none;
+        width: 100%;
+    }
+}
+
+.teacher-icon-badge {
+    font-size: 1.5rem;
+    margin-bottom: 0.75rem;
+    letter-spacing: 0.1em;
 }
 
 .teacher-photo-wrapper {
-    width: 100px;
-    height: 100px;
+    width: 80px;
+    height: 80px;
     border-radius: 50%;
-    margin-bottom: 1.5rem;
+    margin-bottom: 1rem;
     overflow: hidden;
     background: var(--brand-orange-light);
     display: flex;
@@ -799,35 +829,29 @@ img {
 }
 
 .teacher-photo-placeholder {
-    font-size: 2.5rem;
+    font-size: 2rem;
     color: var(--brand-orange);
-    font-family: var(--font-serif);
     font-weight: 700;
 }
 
 .teacher-name {
-    font-size: 1.25rem;
+    font-size: 1.15rem;
     font-weight: 700;
     color: var(--text-heading);
-    margin-bottom: 0.25rem;
+    margin-bottom: 0.2rem;
 }
 
 .teacher-specialty {
     font-weight: 600;
-    margin-bottom: 0.25rem;
-    font-size: 0.95rem;
-}
-
-.teacher-exp {
-    font-size: 0.9rem;
-    margin-bottom: 1.5rem;
+    margin-bottom: 0.75rem;
+    font-size: 0.85rem;
 }
 
 .teacher-quote {
     font-style: italic;
-    font-size: 0.95rem;
-    color: var(--text-body);
-    line-height: 1.5;
+    font-size: 0.82rem;
+    color: var(--text-muted);
+    line-height: 1.55;
 }
 
 /* Section 6: Testimonials */
@@ -1301,6 +1325,11 @@ img {
     }
 }
 
+@keyframes hsm-pulse-glow {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(242, 107, 56, 0); border-color: rgba(255,255,255,0.35); }
+    50%       { box-shadow: 0 0 0 6px rgba(242, 107, 56, 0.35); border-color: rgba(242,107,56,0.8); }
+}
+
 /* Theme Toggle */
 .theme-toggle {
     background: none;
@@ -1460,26 +1489,4 @@ img {
         scroll-snap-align: start;
     }
 
-    /* Teachers grid: horizontal scroll on mobile too */
-    .teachers-grid {
-        display: flex !important;
-        grid-template-columns: none !important;
-        flex-wrap: nowrap !important;
-        overflow-x: auto !important;
-        scroll-snap-type: x mandatory;
-        -webkit-overflow-scrolling: touch;
-        gap: 1rem;
-        padding-bottom: 1.5rem;
-        padding-top: 0.5rem;
-        width: 100%;
-        -webkit-mask-image: linear-gradient(to right, black 85%, transparent 100%);
-        mask-image: linear-gradient(to right, black 85%, transparent 100%);
-    }
-
-    .teacher-card {
-        flex: 0 0 75vw !important;
-        min-width: 220px !important;
-        max-width: 280px !important;
-        scroll-snap-align: start;
-    }
 }

@@ -11,11 +11,11 @@ const WhyHSM: React.FC = () => {
         <div className="value-props-grid">
           <div className="value-card pop-shadow">
             <h3 className="value-title"><span className="value-emoji">🎓</span> Expert Teachers</h3>
-            <p className="value-desc">10+ faculty trained at leading music conservatories</p>
+            <p className="value-desc">Qualified faculty trained at leading music conservatories</p>
           </div>
           <div className="value-card pop-shadow">
-            <h3 className="value-title"><span className="value-emoji">🎵</span> 8 Instruments</h3>
-            <p className="value-desc">India's most complete music school offering classical + western</p>
+            <h3 className="value-title"><span className="value-emoji">🎵</span> 9 Streams</h3>
+            <p className="value-desc">7 instruments + 2 vocal streams — a blend of Indian classical and western music under one roof</p>
           </div>
           <div className="value-card pop-shadow">
             <h3 className="value-title"><span className="value-emoji">🆓</span> First Class Free</h3>
