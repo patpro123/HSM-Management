@@ -65,6 +65,19 @@ function botResponseToMessage(resp: BotApiResponse): ChatMessageUnion {
       return { ...base, type: 'card', title: resp.text, fields };
     }
 
+    case 'chart': {
+      const chartData = (resp.card?.chart ?? {}) as Record<string, unknown>;
+      return {
+        ...base,
+        type: 'chart',
+        title: resp.text,
+        chartType: (chartData.type as 'bar' | 'line') ?? 'bar',
+        data: (chartData.data as Record<string, unknown>[]) ?? [],
+        xKey: (chartData.xKey as string) ?? 'label',
+        series: (chartData.series as import('./chatTypes').ChartSeries[]) ?? [],
+      };
+    }
+
     default:
       return { ...base, type: 'text', text: resp.text };
   }

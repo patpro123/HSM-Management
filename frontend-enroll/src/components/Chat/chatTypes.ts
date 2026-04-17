@@ -55,13 +55,29 @@ export interface NudgeMessage extends BaseMessage {
   dismissed: boolean;
 }
 
+export interface ChartSeries {
+  key: string;
+  color: string;
+  label: string;
+}
+
+export interface ChartMessage extends BaseMessage {
+  type: 'chart';
+  title: string;
+  chartType: 'bar' | 'line';
+  data: Record<string, unknown>[];
+  xKey: string;
+  series: ChartSeries[];
+}
+
 export type ChatMessageUnion =
   | TextMessage
   | CardMessage
   | ListMessage
   | ConfirmMessage
   | AttendancePickerMessage
-  | NudgeMessage;
+  | NudgeMessage
+  | ChartMessage;
 
 export interface AttendancePickerStudent {
   student_id: string;
@@ -93,7 +109,7 @@ export interface ChatRequest {
 
 export interface BotApiResponse {
   session_id: string;
-  type: 'text' | 'card' | 'list' | 'error';
+  type: 'text' | 'card' | 'list' | 'chart' | 'error';
   text: string;
   suggestions: string[];
   card: Record<string, unknown> | null;

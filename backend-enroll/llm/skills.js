@@ -365,19 +365,24 @@ const skills = {
   },
 
   'report.attendance': async ({ params }) => {
-    const { batch_id, from_date, to_date } = params;
+    const { from_date, to_date } = params;
+    const batch_id = isUUID(params.batch_id) ? params.batch_id : null;
+    const whereClause = batch_id
+      ? `WHERE ar.batch_id = $3 AND ar.session_date BETWEEN $1 AND $2`
+      : `WHERE ar.session_date BETWEEN $1 AND $2`;
+    const queryParams = batch_id ? [from_date, to_date, batch_id] : [from_date, to_date];
     const rows = (await pool.query(
       `SELECT s.name,
               COUNT(*) FILTER (WHERE ar.status = 'present') AS present,
               COUNT(*) AS total
        FROM attendance_records ar
        JOIN students s ON ar.student_id = s.id
-       WHERE ar.batch_id = $1
-         AND ar.session_date BETWEEN $2 AND $3
+       ${whereClause}
        GROUP BY s.id, s.name ORDER BY s.name`,
-      [batch_id, from_date, to_date]
+      queryParams
     )).rows;
-    return makeResponse('list', `Attendance report for ${from_date} to ${to_date}.`, ['Export', 'View by date'], { report: rows });
+    if (!rows.length) return makeResponse('text', `No attendance records found for ${from_date} to ${to_date}.`, []);
+    return makeResponse('list', `Attendance report: ${from_date} to ${to_date}.`, ['Export', 'View chart'], { report: rows });
   },
 
   'report.revenue': async ({ params }) => {
@@ -498,6 +503,82 @@ const skills = {
       ['View profile', 'Check credits'], { students: rows });
   },
 
+  // ── Charts ────────────────────────────────────────────────────────────────
+
+  'chart.attendance': async ({ params }) => {
+    const period = (params.period || 'month').toLowerCase();
+    let dateFilter, label;
+    if (period === 'week') {
+      dateFilter = `session_date >= date_trunc('week', CURRENT_DATE)`;
+      label = 'this week';
+    } else {
+      dateFilter = `session_date >= date_trunc('month', CURRENT_DATE)`;
+      label = 'this month';
+    }
+    const rows = (await pool.query(
+      `SELECT session_date::text AS label,
+              COUNT(*) FILTER (WHERE status = 'present') AS present,
+              COUNT(*) FILTER (WHERE status = 'absent')  AS absent
+       FROM attendance_records
+       WHERE ${dateFilter}
+       GROUP BY session_date
+       ORDER BY session_date`
+    )).rows;
+    if (!rows.length) return makeResponse('text', `No attendance data for ${label}.`, []);
+    return makeResponse('chart', `Daily attendance — ${label}`, ['View by batch', 'Mark attendance'], {
+      chart: {
+        type: 'bar',
+        data: rows,
+        xKey: 'label',
+        series: [
+          { key: 'present', color: '#4caf50', label: 'Present' },
+          { key: 'absent',  color: '#f44336', label: 'Absent' },
+        ],
+      },
+    });
+  },
+
+  'chart.students': async () => {
+    const rows = (await pool.query(
+      `SELECT i.name AS label, COUNT(DISTINCT s.id) AS value
+       FROM students s
+       JOIN enrollments e ON e.student_id = s.id AND e.status = 'active'
+       JOIN enrollment_batches eb ON eb.enrollment_id = e.id
+       JOIN batches b ON eb.batch_id = b.id
+       JOIN instruments i ON b.instrument_id = i.id
+       WHERE s.is_active = true
+       GROUP BY i.name ORDER BY value DESC`
+    )).rows;
+    return makeResponse('chart', 'Active students by instrument', ['View list', 'Check attendance'], {
+      chart: {
+        type: 'bar',
+        data: rows,
+        xKey: 'label',
+        series: [{ key: 'value', color: '#f3c13a', label: 'Students' }],
+      },
+    });
+  },
+
+  'chart.revenue': async () => {
+    const rows = (await pool.query(
+      `SELECT TO_CHAR(timestamp, 'Mon YY') AS label,
+              SUM(amount)::int             AS value
+       FROM payments
+       WHERE timestamp >= NOW() - INTERVAL '6 months'
+       GROUP BY DATE_TRUNC('month', timestamp), TO_CHAR(timestamp, 'Mon YY')
+       ORDER BY DATE_TRUNC('month', timestamp)`
+    )).rows;
+    if (!rows.length) return makeResponse('text', 'No revenue data in the last 6 months.', []);
+    return makeResponse('chart', 'Monthly revenue — last 6 months', ['View breakdown', 'Export'], {
+      chart: {
+        type: 'bar',
+        data: rows,
+        xKey: 'label',
+        series: [{ key: 'value', color: '#ff904e', label: '₹ Revenue' }],
+      },
+    });
+  },
+
   'teacher.payout': async ({ params }) => {
     let { teacher_id } = params;
     if (teacher_id && !isUUID(teacher_id)) {
@@ -574,6 +655,10 @@ const TOOL_DEFINITIONS = [
   // Teacher analytics
   T('teacher.students',  'List and count of students under a specific teacher', { teacher_id: S('name or UUID') }),
   T('teacher.payout',    'Estimated monthly payout for a teacher based on their rate and student count', { teacher_id: S('name or UUID') }),
+  // Charts
+  T('chart.attendance',  'Bar chart of daily present/absent counts for this week or month', { period: S('week | month') }),
+  T('chart.students',    'Bar chart of active students per instrument',  {}),
+  T('chart.revenue',     'Bar chart of monthly revenue for the last 6 months', {}),
   // Actions
   T('attendance.mark',   'Mark a student present/absent for a session',      { batch_id: S('UUID'), student_id: S('name or UUID'), status: { type: 'string', enum: ['present', 'absent', 'excused'] }, session_date: S('YYYY-MM-DD') }, ['status']),
   T('payment.record',    'Record a fee payment from a student',              { student_id: S('name or UUID'), package_id: S('UUID'), amount: { type: 'number' }, method: S('cash/UPI/bank') }, ['amount', 'method']),
@@ -586,6 +671,6 @@ const TOOL_DEFINITIONS = [
 ];
 
 const ACTION_SKILLS = new Set(['attendance.mark', 'payment.record', 'enroll.student', 'student.update', 'batch.move', 'payout.record']);
-const LOOKUP_SKILLS = new Set(['student.lookup', 'student.credits', 'student.profile', 'student.list', 'teacher.list', 'teacher.profile', 'teacher.students', 'teacher.payout', 'batch.roster', 'batch.schedule', 'payment.status', 'fee.query', 'stats.students', 'stats.unpaid', 'stats.attendance', 'report.lowcredits', 'reminder.payment']);
+const LOOKUP_SKILLS = new Set(['student.lookup', 'student.credits', 'student.profile', 'student.list', 'teacher.list', 'teacher.profile', 'teacher.students', 'teacher.payout', 'batch.roster', 'batch.schedule', 'payment.status', 'fee.query', 'stats.students', 'stats.unpaid', 'stats.attendance', 'report.lowcredits', 'reminder.payment', 'chart.attendance', 'chart.students', 'chart.revenue']);
 
 module.exports = { skills, TOOL_DEFINITIONS, ACTION_SKILLS, LOOKUP_SKILLS };

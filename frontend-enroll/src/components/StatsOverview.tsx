@@ -33,15 +33,8 @@ const StatsOverview: React.FC<StatsProps> = ({ students, prospectsCount, attenda
   const totalRevenue = payments.reduce((acc, p) => acc + parseFloat(String(p.amount || '0')), 0);
   const activeStudents = students.length;
 
-  // Count enrollments at instrument level: unique (student, instrument) pairs
-  const totalEnrollments = students.reduce((count, student) => {
-    const instrumentIds = new Set(
-      ((student as any).batches || [])
-        .map((b: any) => b.instrument_id)
-        .filter(Boolean)
-    );
-    return count + instrumentIds.size;
-  }, 0);
+  // Count students with an active enrollment status
+  const totalEnrollments = students.filter(s => (s as any).status === 'active').length;
   
   // Chart data: Monthly enrollment trend (last 3 months)
   const chartData = [
@@ -225,7 +218,7 @@ const StatsOverview: React.FC<StatsProps> = ({ students, prospectsCount, attenda
         <div className="bg-white p-6 rounded-xl border border-slate-200 hover:shadow-lg transition-shadow">
           <h4 className="text-sm font-semibold text-slate-600 mb-2">Active Enrollments</h4>
           <p className="text-3xl font-bold text-slate-900">{totalEnrollments}</p>
-          <p className="text-xs text-slate-500 mt-2">Student–instrument pairs</p>
+          <p className="text-xs text-slate-500 mt-2">Students with active enrollment</p>
         </div>
         <div className="bg-white p-6 rounded-xl border border-slate-200 hover:shadow-lg transition-shadow">
           <h4 className="text-sm font-semibold text-slate-600 mb-2">Avg. Revenue/Student</h4>

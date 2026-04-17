@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { ChatMessageUnion, AttendancePickerResult } from './chatTypes';
 import { MessageCard } from './MessageCard';
+import { MessageChart } from './MessageChart';
 import { MessageConfirm } from './MessageConfirm';
 import { AttendancePicker } from './AttendancePicker';
 
@@ -90,6 +91,16 @@ export function ChatMessage({ message, onChipSelect, onAttendanceSave }: ChatMes
               </div>
             ))}
           </div>
+        );
+
+      case 'chart':
+        return (
+          <MessageChart
+            title={message.title}
+            data={message.data}
+            xKey={message.xKey}
+            series={message.series}
+          />
         );
 
       case 'confirm':
