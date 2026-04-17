@@ -582,6 +582,617 @@ const skills = {
     });
   },
 
+  // ── Prospect analytics ───────────────────────────────────────────────────
+
+  'prospect.summary': async () => {
+    const [summaryRes, noteRes] = await Promise.all([
+      pool.query(`
+        SELECT
+          COUNT(*)                                                          AS total,
+          COUNT(*) FILTER (WHERE is_active = true)                         AS active,
+          COUNT(*) FILTER (WHERE metadata->>'status' = 'new')              AS status_new,
+          COUNT(*) FILTER (WHERE metadata->>'status' = 'contacted')        AS status_contacted,
+          COUNT(*) FILTER (WHERE metadata->>'status' = 'enrolled')         AS status_enrolled,
+          COUNT(*) FILTER (WHERE metadata->>'status' NOT IN ('new','contacted','enrolled')
+                                 AND metadata->>'status' IS NOT NULL)      AS status_other
+        FROM students
+        WHERE student_type = 'prospect'
+      `),
+      pool.query(`SELECT COUNT(DISTINCT prospect_id)::int AS followed_up FROM prospect_notes`),
+    ]);
+    const s = summaryRes.rows[0];
+    const followedUp   = noteRes.rows[0].followed_up ?? 0;
+    const notFollowedUp = Math.max(0, Number(s.active) - Number(followedUp));
+    return makeResponse('card',
+      `Prospects — ${s.active} active of ${s.total} total`,
+      ['View aging', 'Who needs follow-up?', 'Prospects by instrument'],
+      {
+        student: {
+          total_prospects:  s.total,
+          active_prospects: s.active,
+          status_new:       s.status_new,
+          status_contacted: s.status_contacted,
+          status_enrolled:  s.status_enrolled,
+          followed_up:      followedUp,
+          not_followed_up:  notFollowedUp,
+        },
+      }
+    );
+  },
+
+  'prospect.list': async ({ params }) => {
+    const { status, aging, instrument } = params;
+    const values = [];
+    const wheres = ["s.student_type = 'prospect'", 's.is_active = true'];
+
+    if (status) {
+      values.push(status);
+      wheres.push(`s.metadata->>'status' = $${values.length}`);
+    }
+    if (aging) {
+      const agingSQL = {
+        fresh:    `s.created_at >= NOW() - INTERVAL '7 days'`,
+        followup: `s.created_at < NOW() - INTERVAL '7 days'  AND s.created_at >= NOW() - INTERVAL '14 days'`,
+        warm:     `s.created_at < NOW() - INTERVAL '14 days' AND s.created_at >= NOW() - INTERVAL '30 days'`,
+        cold:     `s.created_at < NOW() - INTERVAL '30 days'`,
+      };
+      const clause = agingSQL[aging.toLowerCase()];
+      if (clause) wheres.push(clause);
+    }
+    if (instrument) {
+      values.push(`%${instrument}%`);
+      wheres.push(`s.metadata->>'interested_instrument' ILIKE $${values.length}`);
+    }
+
+    const rows = (await pool.query(
+      `SELECT s.name,
+              s.phone,
+              s.metadata->>'interested_instrument' AS instrument,
+              s.metadata->>'status'                AS status,
+              s.metadata->>'lead_source'           AS source,
+              EXTRACT(DAY FROM NOW() - s.created_at)::int AS age_days,
+              (SELECT COUNT(*) FROM prospect_notes pn WHERE pn.prospect_id = s.id)::int AS note_count
+       FROM students s
+       WHERE ${wheres.join(' AND ')}
+       ORDER BY s.created_at DESC
+       LIMIT 30`,
+      values
+    )).rows;
+
+    if (!rows.length) return makeResponse('text', 'No prospects found for those filters.', ['View all prospects', 'View aging summary']);
+
+    const label = [
+      aging     ? `aging: ${aging}`           : '',
+      status    ? `status: ${status}`         : '',
+      instrument? `instrument: ${instrument}` : '',
+    ].filter(Boolean).join(', ') || 'all active';
+
+    return makeResponse('list',
+      `${rows.length} prospect(s) — ${label}`,
+      ['View aging', 'Who needs follow-up?'],
+      {
+        students: rows.map(r => ({
+          name:  r.name,
+          phone: r.phone,
+          label: `${r.instrument || 'Unknown'} · ${r.age_days}d old · ${r.note_count ? r.note_count + ' note(s)' : 'no follow-up'}`,
+          value: r.name,
+        })),
+      }
+    );
+  },
+
+  'prospect.aging': async () => {
+    const row = (await pool.query(`
+      SELECT
+        COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '7 days')                                        AS fresh,
+        COUNT(*) FILTER (WHERE created_at < NOW() - INTERVAL '7 days'
+                           AND created_at >= NOW() - INTERVAL '14 days')                                       AS followup,
+        COUNT(*) FILTER (WHERE created_at < NOW() - INTERVAL '14 days'
+                           AND created_at >= NOW() - INTERVAL '30 days')                                       AS warm,
+        COUNT(*) FILTER (WHERE created_at < NOW() - INTERVAL '30 days')                                        AS cold
+      FROM students
+      WHERE student_type = 'prospect' AND is_active = true
+    `)).rows[0];
+
+    const total = Number(row.fresh) + Number(row.followup) + Number(row.warm) + Number(row.cold);
+    return makeResponse('card',
+      `Prospect aging — ${total} active total`,
+      ['Show cold prospects', 'Show fresh prospects', 'View as chart'],
+      {
+        student: {
+          'fresh (0–7d)':      row.fresh,
+          'follow-up (8–14d)': row.followup,
+          'warm (15–30d)':     row.warm,
+          'cold (30d+)':       row.cold,
+          total:               total,
+        },
+      }
+    );
+  },
+
+  'prospect.followup': async ({ params }) => {
+    const mode = (params.mode || 'pending').toLowerCase(); // 'pending' = no notes, 'done' = has notes
+    const hasnotes = mode === 'done';
+
+    const rows = (await pool.query(
+      `SELECT s.name, s.phone,
+              s.metadata->>'interested_instrument'  AS instrument,
+              s.metadata->>'status'                 AS status,
+              EXTRACT(DAY FROM NOW() - s.created_at)::int AS age_days,
+              COUNT(pn.id)::int                      AS note_count
+       FROM students s
+       LEFT JOIN prospect_notes pn ON pn.prospect_id = s.id
+       WHERE s.student_type = 'prospect' AND s.is_active = true
+       GROUP BY s.id, s.name, s.phone, s.metadata, s.created_at
+       HAVING ${hasnotes ? 'COUNT(pn.id) > 0' : 'COUNT(pn.id) = 0'}
+       ORDER BY s.created_at ASC
+       LIMIT 30`
+    )).rows;
+
+    const label = hasnotes ? 'followed up (have notes)' : 'NOT yet followed up (no notes)';
+    if (!rows.length) return makeResponse('text', `No prospects ${label}.`, ['View all prospects', 'View aging']);
+
+    return makeResponse('list',
+      `${rows.length} prospect(s) ${label}`,
+      hasnotes ? ['View aging', 'View pending follow-ups'] : ['View aging', 'View followed-up list'],
+      {
+        students: rows.map(r => ({
+          name:  r.name,
+          phone: r.phone,
+          label: `${r.instrument || 'Unknown'} · ${r.age_days}d old · status: ${r.status || 'new'}`,
+          value: r.name,
+        })),
+      }
+    );
+  },
+
+  // ── Prospect chart ────────────────────────────────────────────────────────
+
+  'chart.prospects': async ({ params }) => {
+    const by        = (params.by         || 'aging').toLowerCase();
+    const chartType = (params.chart_type || 'pie').toLowerCase();
+
+    let rows, title;
+
+    if (by === 'instrument') {
+      rows = (await pool.query(`
+        SELECT
+          COALESCE(metadata->>'interested_instrument', 'Not specified') AS label,
+          COUNT(*)::int AS value
+        FROM students
+        WHERE student_type = 'prospect' AND is_active = true
+        GROUP BY label ORDER BY value DESC
+      `)).rows;
+      title = 'Prospects by instrument';
+    } else if (by === 'status') {
+      rows = (await pool.query(`
+        SELECT
+          COALESCE(NULLIF(metadata->>'status', ''), 'new') AS label,
+          COUNT(*)::int AS value
+        FROM students
+        WHERE student_type = 'prospect' AND is_active = true
+        GROUP BY label ORDER BY value DESC
+      `)).rows;
+      title = 'Prospects by status';
+    } else {
+      // aging (default)
+      rows = [
+        { label: 'Fresh (0–7d)',    value: 0 },
+        { label: 'Follow-up (8–14d)', value: 0 },
+        { label: 'Warm (15–30d)',   value: 0 },
+        { label: 'Cold (30d+)',     value: 0 },
+      ];
+      const res = (await pool.query(`
+        SELECT
+          COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '7 days')                                    AS fresh,
+          COUNT(*) FILTER (WHERE created_at < NOW() - INTERVAL '7 days'
+                             AND created_at >= NOW() - INTERVAL '14 days')                                   AS followup,
+          COUNT(*) FILTER (WHERE created_at < NOW() - INTERVAL '14 days'
+                             AND created_at >= NOW() - INTERVAL '30 days')                                   AS warm,
+          COUNT(*) FILTER (WHERE created_at < NOW() - INTERVAL '30 days')                                    AS cold
+        FROM students
+        WHERE student_type = 'prospect' AND is_active = true
+      `)).rows[0];
+      rows[0].value = Number(res.fresh);
+      rows[1].value = Number(res.followup);
+      rows[2].value = Number(res.warm);
+      rows[3].value = Number(res.cold);
+      title = 'Prospects by aging';
+    }
+
+    if (!rows.length || rows.every(r => r.value === 0)) {
+      return makeResponse('text', 'No prospect data available for a chart.', ['View prospect summary']);
+    }
+
+    return makeResponse('chart', title, ['View details', 'View prospect list'], {
+      chart: {
+        type: chartType,
+        data: rows,
+        xKey: 'label',
+        series: [{ key: 'value', label: 'Prospects' }],
+      },
+    });
+  },
+
+  // ── Finance analytics ────────────────────────────────────────────────────
+
+  'finance.summary': async ({ params }) => {
+    const monthStr = params.month || new Date().toISOString().slice(0, 7); // YYYY-MM
+    const [year, month] = monthStr.split('-');
+    const periodStart = `${year}-${month}-01`;
+    const periodEnd   = new Date(Number(year), Number(month), 0).toISOString().slice(0, 10);
+
+    const [revenueRes, expenseRes, payoutRes, budgetRes] = await Promise.all([
+      pool.query(
+        `SELECT COALESCE(SUM(amount),0)::numeric(10,2) AS total,
+                COUNT(*)::int                           AS count
+         FROM payments
+         WHERE timestamp::date BETWEEN $1 AND $2`,
+        [periodStart, periodEnd]
+      ),
+      pool.query(
+        `SELECT COALESCE(SUM(amount),0)::numeric(10,2) AS total,
+                COUNT(*)::int                           AS count
+         FROM expenses
+         WHERE date BETWEEN $1 AND $2`,
+        [periodStart, periodEnd]
+      ),
+      pool.query(
+        `SELECT COALESCE(SUM(amount),0)::numeric(10,2) AS total
+         FROM teacher_payouts
+         WHERE created_at::date BETWEEN $1 AND $2`,
+        [periodStart, periodEnd]
+      ),
+      pool.query(
+        `SELECT revenue_target, expense_limits
+         FROM monthly_budgets WHERE month = $1`,
+        [monthStr]
+      ),
+    ]);
+
+    const revenue    = Number(revenueRes.rows[0].total);
+    const expenses   = Number(expenseRes.rows[0].total);
+    const payouts    = Number(payoutRes.rows[0].total);
+    const totalCosts = expenses + payouts;
+    const net        = revenue - totalCosts;
+    const budget     = budgetRes.rows[0];
+    const target     = budget ? Number(budget.revenue_target) : null;
+    const vsTarget   = target ? `₹${revenue} of ₹${target} target (${Math.round((revenue / target) * 100)}%)` : 'No target set';
+
+    return makeResponse('card',
+      `Finance summary — ${monthStr}`,
+      ['Show expense breakdown', 'Show payment details', 'Revenue vs expenses chart'],
+      {
+        student: {
+          period:           monthStr,
+          revenue:          `₹${revenue} (${revenueRes.rows[0].count} payments)`,
+          expenses:         `₹${expenses} (${expenseRes.rows[0].count} entries)`,
+          teacher_payouts:  `₹${payouts}`,
+          net_income:       `₹${net}`,
+          vs_target:        vsTarget,
+        },
+      }
+    );
+  },
+
+  'finance.revenue': async ({ params }) => {
+    const period = (params.period || 'this_month').toLowerCase().replace(' ', '_');
+    let start, end, label;
+
+    if (period === 'last_month') {
+      const d = new Date();
+      d.setDate(1); d.setMonth(d.getMonth() - 1);
+      start = d.toISOString().slice(0, 7) + '-01';
+      const lastDay = new Date(d.getFullYear(), d.getMonth() + 1, 0);
+      end = lastDay.toISOString().slice(0, 10);
+      label = 'last month';
+    } else if (period === 'this_year') {
+      start = new Date().getFullYear() + '-01-01';
+      end = new Date().toISOString().slice(0, 10);
+      label = 'this year';
+    } else if (period === 'last_3_months') {
+      const d = new Date();
+      d.setMonth(d.getMonth() - 3);
+      start = d.toISOString().slice(0, 10);
+      end = new Date().toISOString().slice(0, 10);
+      label = 'last 3 months';
+    } else {
+      // this_month (default)
+      const now = new Date();
+      start = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+      end = now.toISOString().slice(0, 10);
+      label = 'this month';
+    }
+
+    const [totalsRes, methodRes, instrumentRes] = await Promise.all([
+      pool.query(
+        `SELECT COALESCE(SUM(amount),0)::numeric(10,2) AS total,
+                COUNT(*)::int                           AS count,
+                AVG(amount)::numeric(10,2)              AS avg_payment
+         FROM payments WHERE timestamp::date BETWEEN $1 AND $2`,
+        [start, end]
+      ),
+      pool.query(
+        `SELECT COALESCE(method,'unknown') AS label,
+                COUNT(*)::int              AS count,
+                SUM(amount)::numeric(10,2) AS total
+         FROM payments
+         WHERE timestamp::date BETWEEN $1 AND $2
+         GROUP BY method ORDER BY total DESC`,
+        [start, end]
+      ),
+      pool.query(
+        `SELECT i.name AS label, SUM(p.amount)::numeric(10,2) AS total, COUNT(*)::int AS count
+         FROM payments p
+         JOIN packages pkg ON p.package_id = pkg.id
+         JOIN instruments i ON pkg.instrument_id = i.id
+         WHERE p.timestamp::date BETWEEN $1 AND $2
+         GROUP BY i.name ORDER BY total DESC`,
+        [start, end]
+      ),
+    ]);
+
+    const t = totalsRes.rows[0];
+    if (Number(t.count) === 0) return makeResponse('text', `No payments recorded for ${label}.`, ['Check last month', 'View expenses']);
+
+    const methodLines = methodRes.rows.map(r => `${r.label}: ₹${r.total} (${r.count})`).join(' · ');
+    const instrumentLines = instrumentRes.rows.map(r => `${r.label}: ₹${r.total}`).join(' · ');
+
+    return makeResponse('card',
+      `Revenue ${label}: ₹${t.total} across ${t.count} payment(s)`,
+      ['View by instrument chart', 'Show P&L', 'Show expenses'],
+      {
+        student: {
+          period:        label,
+          total_revenue: `₹${t.total}`,
+          payment_count: t.count,
+          avg_payment:   `₹${t.avg_payment}`,
+          by_method:     methodLines || 'N/A',
+          by_instrument: instrumentLines || 'N/A',
+        },
+      }
+    );
+  },
+
+  'finance.expenses': async ({ params }) => {
+    const period = (params.period || 'this_month').toLowerCase().replace(' ', '_');
+    let start, end, label;
+    const now = new Date();
+
+    if (period === 'last_month') {
+      const d = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      start = d.toISOString().slice(0, 10);
+      end   = new Date(now.getFullYear(), now.getMonth(), 0).toISOString().slice(0, 10);
+      label = 'last month';
+    } else if (period === 'this_year') {
+      start = `${now.getFullYear()}-01-01`;
+      end   = now.toISOString().slice(0, 10);
+      label = 'this year';
+    } else {
+      start = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+      end   = now.toISOString().slice(0, 10);
+      label = 'this month';
+    }
+
+    const [totalRes, categoryRes] = await Promise.all([
+      pool.query(
+        `SELECT COALESCE(SUM(amount),0)::numeric(10,2) AS total, COUNT(*)::int AS count
+         FROM expenses WHERE date BETWEEN $1 AND $2`,
+        [start, end]
+      ),
+      pool.query(
+        `SELECT category AS label,
+                SUM(amount)::numeric(10,2) AS total,
+                COUNT(*)::int              AS count
+         FROM expenses
+         WHERE date BETWEEN $1 AND $2
+         GROUP BY category ORDER BY total DESC`,
+        [start, end]
+      ),
+    ]);
+
+    if (Number(totalRes.rows[0].count) === 0) {
+      return makeResponse('text', `No expenses recorded for ${label}.`, ['Check last month', 'View revenue']);
+    }
+
+    return makeResponse('list',
+      `Expenses ${label}: ₹${totalRes.rows[0].total} across ${totalRes.rows[0].count} entr(ies)`,
+      ['Show P&L', 'Show revenue', 'Expenses chart'],
+      {
+        students: categoryRes.rows.map(r => ({
+          name:  r.label,
+          label: `₹${r.total} · ${r.count} item(s)`,
+          value: r.label,
+        })),
+      }
+    );
+  },
+
+  'finance.pnl': async ({ params }) => {
+    const monthStr = params.month || new Date().toISOString().slice(0, 7);
+    const [year, month] = monthStr.split('-');
+    const start = `${year}-${month}-01`;
+    const end   = new Date(Number(year), Number(month), 0).toISOString().slice(0, 10);
+
+    const [revenueRes, expenseRes, payoutRes, prevRevenueRes] = await Promise.all([
+      pool.query(
+        `SELECT COALESCE(SUM(amount),0)::numeric(10,2) AS total, COUNT(*)::int AS count
+         FROM payments WHERE timestamp::date BETWEEN $1 AND $2`,
+        [start, end]
+      ),
+      pool.query(
+        `SELECT COALESCE(SUM(amount),0)::numeric(10,2) AS total
+         FROM expenses WHERE date BETWEEN $1 AND $2`,
+        [start, end]
+      ),
+      pool.query(
+        `SELECT COALESCE(SUM(amount),0)::numeric(10,2) AS total
+         FROM teacher_payouts WHERE created_at::date BETWEEN $1 AND $2`,
+        [start, end]
+      ),
+      // Previous month revenue for comparison
+      pool.query(
+        `SELECT COALESCE(SUM(amount),0)::numeric(10,2) AS total
+         FROM payments
+         WHERE timestamp::date BETWEEN
+           (DATE_TRUNC('month', $1::date) - INTERVAL '1 month')
+           AND (DATE_TRUNC('month', $1::date) - INTERVAL '1 day')`,
+        [start]
+      ),
+    ]);
+
+    const revenue   = Number(revenueRes.rows[0].total);
+    const expenses  = Number(expenseRes.rows[0].total);
+    const payouts   = Number(payoutRes.rows[0].total);
+    const totalCost = expenses + payouts;
+    const net       = revenue - totalCost;
+    const margin    = revenue > 0 ? Math.round((net / revenue) * 100) : 0;
+    const prevRev   = Number(prevRevenueRes.rows[0].total);
+    const growth    = prevRev > 0 ? `${revenue >= prevRev ? '+' : ''}${Math.round(((revenue - prevRev) / prevRev) * 100)}% vs last month` : 'N/A';
+
+    return makeResponse('card',
+      `P&L — ${monthStr}: Net ₹${net} (${margin}% margin)`,
+      ['Show revenue details', 'Show expenses', 'Revenue vs expenses chart'],
+      {
+        student: {
+          month:            monthStr,
+          revenue:          `₹${revenue} (${revenueRes.rows[0].count} payments)`,
+          expenses:         `₹${expenses}`,
+          teacher_payouts:  `₹${payouts}`,
+          total_costs:      `₹${totalCost}`,
+          net_income:       `₹${net}`,
+          margin:           `${margin}%`,
+          vs_last_month:    growth,
+        },
+      }
+    );
+  },
+
+  'finance.payouts': async ({ params }) => {
+    const period = (params.period || 'this_month').toLowerCase().replace(' ', '_');
+    let start, end, label;
+    const now = new Date();
+
+    if (period === 'last_month') {
+      const d = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      start = d.toISOString().slice(0, 10);
+      end   = new Date(now.getFullYear(), now.getMonth(), 0).toISOString().slice(0, 10);
+      label = 'last month';
+    } else if (period === 'this_year') {
+      start = `${now.getFullYear()}-01-01`;
+      end   = now.toISOString().slice(0, 10);
+      label = 'this year';
+    } else {
+      start = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+      end   = now.toISOString().slice(0, 10);
+      label = 'this month';
+    }
+
+    const [totalRes, perTeacherRes] = await Promise.all([
+      pool.query(
+        `SELECT COALESCE(SUM(amount),0)::numeric(10,2) AS total, COUNT(*)::int AS count
+         FROM teacher_payouts WHERE created_at::date BETWEEN $1 AND $2`,
+        [start, end]
+      ),
+      pool.query(
+        `SELECT t.name AS label,
+                SUM(tp.amount)::numeric(10,2) AS total,
+                COUNT(*)::int                 AS count
+         FROM teacher_payouts tp
+         JOIN teachers t ON tp.teacher_id = t.id
+         WHERE tp.created_at::date BETWEEN $1 AND $2
+         GROUP BY t.id, t.name ORDER BY total DESC`,
+        [start, end]
+      ),
+    ]);
+
+    if (Number(totalRes.rows[0].count) === 0) {
+      return makeResponse('text', `No teacher payouts recorded for ${label}.`, ['View revenue', 'Show P&L']);
+    }
+
+    return makeResponse('list',
+      `Teacher payouts ${label}: ₹${totalRes.rows[0].total} total`,
+      ['Show P&L', 'Show expenses'],
+      {
+        students: perTeacherRes.rows.map(r => ({
+          name:  r.label,
+          label: `₹${r.total}`,
+          value: r.label,
+        })),
+      }
+    );
+  },
+
+  'chart.finance': async ({ params }) => {
+    const view      = (params.view       || 'revenue_vs_expenses').toLowerCase();
+    const chartType = (params.chart_type || 'bar').toLowerCase();
+    let rows, title;
+
+    if (view === 'expenses_by_category') {
+      const now = new Date();
+      const start = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+      rows = (await pool.query(
+        `SELECT category AS label, SUM(amount)::int AS value
+         FROM expenses WHERE date >= $1
+         GROUP BY category ORDER BY value DESC`,
+        [start]
+      )).rows;
+      title = 'Expenses by category — this month';
+    } else if (view === 'revenue_by_instrument') {
+      rows = (await pool.query(
+        `SELECT i.name AS label, SUM(p.amount)::int AS value
+         FROM payments p
+         JOIN packages pkg ON p.package_id = pkg.id
+         JOIN instruments i ON pkg.instrument_id = i.id
+         WHERE p.timestamp >= NOW() - INTERVAL '1 month'
+         GROUP BY i.name ORDER BY value DESC`
+      )).rows;
+      title = 'Revenue by instrument — this month';
+    } else {
+      // revenue_vs_expenses (default) — last 6 months
+      rows = (await pool.query(
+        `SELECT
+           TO_CHAR(month_series, 'Mon YY')  AS label,
+           COALESCE(rev.total, 0)::int       AS revenue,
+           COALESCE(exp.total, 0)::int       AS expenses
+         FROM generate_series(
+           DATE_TRUNC('month', NOW() - INTERVAL '5 months'),
+           DATE_TRUNC('month', NOW()),
+           '1 month'
+         ) AS month_series
+         LEFT JOIN (
+           SELECT DATE_TRUNC('month', timestamp) AS m, SUM(amount) AS total
+           FROM payments GROUP BY m
+         ) rev ON rev.m = month_series
+         LEFT JOIN (
+           SELECT DATE_TRUNC('month', date) AS m, SUM(amount) AS total
+           FROM expenses GROUP BY m
+         ) exp ON exp.m = month_series
+         ORDER BY month_series`
+      )).rows;
+      title = 'Revenue vs Expenses — last 6 months';
+    }
+
+    if (!rows.length || rows.every(r => (r.value ?? r.revenue) === 0)) {
+      return makeResponse('text', 'No financial data available for a chart.', ['View finance summary']);
+    }
+
+    const isSingle = view !== 'revenue_vs_expenses';
+    return makeResponse('chart', title, ['View P&L', 'Show details'], {
+      chart: {
+        type: chartType,
+        data: rows,
+        xKey: 'label',
+        series: isSingle
+          ? [{ key: 'value', label: title.split('—')[0].trim() }]
+          : [
+              { key: 'revenue',  color: '#4a90d9', label: 'Revenue'  },
+              { key: 'expenses', color: '#e74c3c', label: 'Expenses' },
+            ],
+      },
+    });
+  },
+
   'teacher.payout': async ({ params }) => {
     let { teacher_id } = params;
     if (teacher_id && !isUUID(teacher_id)) {
@@ -659,10 +1270,23 @@ const TOOL_DEFINITIONS = [
   // Teacher analytics
   T('teacher.students',  'List and count of students under a specific teacher', { teacher_id: S('name or UUID') }),
   T('teacher.payout',    'Estimated monthly payout for a teacher based on their rate and student count', { teacher_id: S('name or UUID') }),
+  // Prospect analytics
+  T('prospect.summary',  'Overview of all prospects: total, active, by status, and follow-up counts', {}),
+  T('prospect.list',     'List prospects with optional filters by status, aging bucket, or instrument', { status: S('new | contacted | enrolled'), aging: S('fresh | followup | warm | cold'), instrument: S('instrument name') }),
+  T('prospect.aging',    'Breakdown of active prospects by age: fresh(0-7d), follow-up(8-14d), warm(15-30d), cold(30+d)', {}),
+  T('prospect.followup', 'Prospects who have or have not been followed up (have notes)', { mode: S('pending (no notes) | done (has notes)') }),
   // Charts
   T('chart.attendance',  'Chart of daily present/absent. Use chart_type=line for trend view.',         { period: S('week | month'), chart_type: S('bar | line') }),
   T('chart.students',    'Chart of students per instrument. Defaults to pie; use bar if requested.',   { chart_type: S('pie | bar') }),
   T('chart.revenue',     'Chart of monthly revenue last 6 months. Use chart_type=line for trend.',     { chart_type: S('bar | line') }),
+  T('chart.prospects',   'Chart of prospects. by=aging|instrument|status. Defaults to pie.',           { by: S('aging | instrument | status'), chart_type: S('pie | bar') }),
+  // Finance analytics
+  T('finance.summary',  'Finance snapshot for a month: revenue, expenses, teacher payouts, net income, vs target', { month: S('YYYY-MM, defaults to current month') }),
+  T('finance.revenue',  'Total revenue, payment count, avg payment, breakdown by method and instrument', { period: S('this_month | last_month | last_3_months | this_year') }),
+  T('finance.expenses', 'Total expenses and breakdown by category for a period', { period: S('this_month | last_month | this_year') }),
+  T('finance.pnl',      'Profit & Loss: revenue minus expenses and teacher payouts, margin, vs last month', { month: S('YYYY-MM, defaults to current month') }),
+  T('finance.payouts',  'Total teacher payouts and per-teacher breakdown for a period', { period: S('this_month | last_month | this_year') }),
+  T('chart.finance',    'Finance chart. view=revenue_vs_expenses|expenses_by_category|revenue_by_instrument', { view: S('revenue_vs_expenses | expenses_by_category | revenue_by_instrument'), chart_type: S('bar | line') }),
   // Actions
   T('attendance.mark',   'Mark a student present/absent for a session',      { batch_id: S('UUID'), student_id: S('name or UUID'), status: { type: 'string', enum: ['present', 'absent', 'excused'] }, session_date: S('YYYY-MM-DD') }, ['status']),
   T('payment.record',    'Record a fee payment from a student',              { student_id: S('name or UUID'), package_id: S('UUID'), amount: { type: 'number' }, method: S('cash/UPI/bank') }, ['amount', 'method']),
@@ -675,6 +1299,6 @@ const TOOL_DEFINITIONS = [
 ];
 
 const ACTION_SKILLS = new Set(['attendance.mark', 'payment.record', 'enroll.student', 'student.update', 'batch.move', 'payout.record']);
-const LOOKUP_SKILLS = new Set(['student.lookup', 'student.credits', 'student.profile', 'student.list', 'teacher.list', 'teacher.profile', 'teacher.students', 'teacher.payout', 'batch.roster', 'batch.schedule', 'payment.status', 'fee.query', 'stats.students', 'stats.unpaid', 'stats.attendance', 'report.lowcredits', 'reminder.payment', 'chart.attendance', 'chart.students', 'chart.revenue']);
+const LOOKUP_SKILLS = new Set(['student.lookup', 'student.credits', 'student.profile', 'student.list', 'teacher.list', 'teacher.profile', 'teacher.students', 'teacher.payout', 'batch.roster', 'batch.schedule', 'payment.status', 'fee.query', 'stats.students', 'stats.unpaid', 'stats.attendance', 'report.lowcredits', 'reminder.payment', 'chart.attendance', 'chart.students', 'chart.revenue', 'prospect.summary', 'prospect.list', 'prospect.aging', 'prospect.followup', 'chart.prospects', 'finance.summary', 'finance.revenue', 'finance.expenses', 'finance.pnl', 'finance.payouts', 'chart.finance']);
 
 module.exports = { skills, TOOL_DEFINITIONS, ACTION_SKILLS, LOOKUP_SKILLS };
