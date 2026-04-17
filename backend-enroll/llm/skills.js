@@ -506,7 +506,8 @@ const skills = {
   // ── Charts ────────────────────────────────────────────────────────────────
 
   'chart.attendance': async ({ params }) => {
-    const period = (params.period || 'month').toLowerCase();
+    const period    = (params.period     || 'month').toLowerCase();
+    const chartType = (params.chart_type || 'bar').toLowerCase();
     let dateFilter, label;
     if (period === 'week') {
       dateFilter = `session_date >= date_trunc('week', CURRENT_DATE)`;
@@ -527,20 +528,21 @@ const skills = {
     if (!rows.length) return makeResponse('text', `No attendance data for ${label}.`, []);
     return makeResponse('chart', `Daily attendance — ${label}`, ['View by batch', 'Mark attendance'], {
       chart: {
-        type: 'bar',
+        type: chartType,
         data: rows,
         xKey: 'label',
         series: [
           { key: 'present', color: '#4caf50', label: 'Present' },
-          { key: 'absent',  color: '#f44336', label: 'Absent' },
+          { key: 'absent',  color: '#f44336', label: 'Absent'  },
         ],
       },
     });
   },
 
-  'chart.students': async () => {
+  'chart.students': async ({ params }) => {
+    const chartType = (params.chart_type || 'pie').toLowerCase();
     const rows = (await pool.query(
-      `SELECT i.name AS label, COUNT(DISTINCT s.id) AS value
+      `SELECT i.name AS label, COUNT(DISTINCT s.id)::int AS value
        FROM students s
        JOIN enrollments e ON s.id = e.student_id
        JOIN enrollment_batches eb ON e.id = eb.enrollment_id
@@ -551,15 +553,16 @@ const skills = {
     )).rows;
     return makeResponse('chart', 'Students by instrument', ['View list', 'Check attendance'], {
       chart: {
-        type: 'bar',
+        type: chartType,
         data: rows,
         xKey: 'label',
-        series: [{ key: 'value', color: '#f3c13a', label: 'Students' }],
+        series: [{ key: 'value', label: 'Students' }],
       },
     });
   },
 
-  'chart.revenue': async () => {
+  'chart.revenue': async ({ params }) => {
+    const chartType = (params.chart_type || 'bar').toLowerCase();
     const rows = (await pool.query(
       `SELECT TO_CHAR(timestamp, 'Mon YY') AS label,
               SUM(amount)::int             AS value
@@ -571,10 +574,10 @@ const skills = {
     if (!rows.length) return makeResponse('text', 'No revenue data in the last 6 months.', []);
     return makeResponse('chart', 'Monthly revenue — last 6 months', ['View breakdown', 'Export'], {
       chart: {
-        type: 'bar',
+        type: chartType,
         data: rows,
         xKey: 'label',
-        series: [{ key: 'value', color: '#ff904e', label: '₹ Revenue' }],
+        series: [{ key: 'value', label: '₹ Revenue' }],
       },
     });
   },
@@ -657,9 +660,9 @@ const TOOL_DEFINITIONS = [
   T('teacher.students',  'List and count of students under a specific teacher', { teacher_id: S('name or UUID') }),
   T('teacher.payout',    'Estimated monthly payout for a teacher based on their rate and student count', { teacher_id: S('name or UUID') }),
   // Charts
-  T('chart.attendance',  'Bar chart of daily present/absent counts for this week or month', { period: S('week | month') }),
-  T('chart.students',    'Bar chart of active students per instrument',  {}),
-  T('chart.revenue',     'Bar chart of monthly revenue for the last 6 months', {}),
+  T('chart.attendance',  'Chart of daily present/absent. Use chart_type=line for trend view.',         { period: S('week | month'), chart_type: S('bar | line') }),
+  T('chart.students',    'Chart of students per instrument. Defaults to pie; use bar if requested.',   { chart_type: S('pie | bar') }),
+  T('chart.revenue',     'Chart of monthly revenue last 6 months. Use chart_type=line for trend.',     { chart_type: S('bar | line') }),
   // Actions
   T('attendance.mark',   'Mark a student present/absent for a session',      { batch_id: S('UUID'), student_id: S('name or UUID'), status: { type: 'string', enum: ['present', 'absent', 'excused'] }, session_date: S('YYYY-MM-DD') }, ['status']),
   T('payment.record',    'Record a fee payment from a student',              { student_id: S('name or UUID'), package_id: S('UUID'), amount: { type: 'number' }, method: S('cash/UPI/bank') }, ['amount', 'method']),

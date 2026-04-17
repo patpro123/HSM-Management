@@ -24,8 +24,22 @@ router.post('/', authenticateJWT, async (req, res) => {
   }
 
   const userId   = req.user.id;
+  const userName = req.user.name || null;
   const userRole = (req.user.roles || []).find(r => ['admin', 'teacher', 'student', 'parent'].includes(r)) || 'parent';
   const provider = process.env.LLM_PROVIDER || 'groq';
+
+  // Short-circuit greetings — no LLM call needed
+  const GREETING_RE = /^\s*(hi|hello|hey|yo|howdy|good\s+(morning|afternoon|evening|day)|namaste|hola|greetings|what'?s\s+up|wassup)\s*[!?.]*\s*$/i;
+  if (GREETING_RE.test(message.trim())) {
+    const firstName = userName ? userName.split(' ')[0] : 'there';
+    return res.json({
+      session_id: null,
+      type: 'text',
+      text: `Hey ${firstName}! 🎵 I'm Cleff, your musical sidekick at HSM. What can I play for you today?`,
+      suggestions: ["Today's attendance", 'Active students', 'Payment status', 'What can you do?'],
+      card: null,
+    });
+  }
 
   try {
     // Rate limit check
@@ -62,7 +76,7 @@ router.post('/', authenticateJWT, async (req, res) => {
     const history = Array.isArray(session.messages) ? session.messages : [];
     const trimmed = history.slice(-MAX_HISTORY_MESSAGES);
 
-    const systemPrompt = getPrompt(userRole, new Date());
+    const systemPrompt = getPrompt(userRole, new Date(), userName);
     const llmMessages  = [
       { role: 'system',    content: systemPrompt },
       ...trimmed,

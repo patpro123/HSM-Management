@@ -4,6 +4,7 @@ import { MessageCard } from './MessageCard';
 import { MessageChart } from './MessageChart';
 import { MessageConfirm } from './MessageConfirm';
 import { AttendancePicker } from './AttendancePicker';
+import { CleffAvatar } from './CleffAvatar';
 
 interface ChatMessageProps {
   message: ChatMessageUnion;
@@ -148,6 +149,7 @@ export function ChatMessage({ message, onChipSelect, onAttendanceSave }: ChatMes
         return (
           <MessageChart
             title={message.title}
+            chartType={message.chartType}
             data={message.data}
             xKey={message.xKey}
             series={message.series}
@@ -205,6 +207,8 @@ export function ChatMessage({ message, onChipSelect, onAttendanceSave }: ChatMes
     }
   };
 
+  const isStructured = ['list', 'card', 'chart'].includes(message.type);
+
   return (
     <div
       ref={ref}
@@ -212,38 +216,43 @@ export function ChatMessage({ message, onChipSelect, onAttendanceSave }: ChatMes
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
-      <div style={{ position: 'relative', maxWidth: '85%', width: message.type === 'list' || message.type === 'card' || message.type === 'chart' ? '85%' : undefined }}>
-        {renderContent()}
-        {copyable && (hovered || copied) && (
-          <button
-            onClick={handleCopy}
-            title="Copy for WhatsApp"
-            type="button"
-            style={{
-              position: 'absolute',
-              bottom: -22,
-              right: 0,
-              display: 'flex',
-              alignItems: 'center',
-              gap: 4,
-              background: copied ? '#e8f5e9' : '#fff',
-              border: `1px solid ${copied ? '#4caf50' : 'var(--border, #e5e0d5)'}`,
-              borderRadius: 10,
-              padding: '2px 8px',
-              fontSize: 10,
-              fontWeight: 600,
-              color: copied ? '#388e3c' : 'var(--muted, #8a7d65)',
-              cursor: 'pointer',
-              whiteSpace: 'nowrap',
-              boxShadow: '0 1px 4px rgba(0,0,0,0.08)',
-              transition: 'all 0.15s',
-            }}
-          >
-            {copied ? '✓ Copied' : '📋 Copy'}
-          </button>
-        )}
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, width: isStructured && !isUser ? '100%' : undefined }}>
+        {/* Cleff avatar for bot messages */}
+        {!isUser && <div style={{ flexShrink: 0, marginTop: 2 }}><CleffAvatar size={28} /></div>}
+
+        <div style={{ position: 'relative', flex: isStructured ? 1 : undefined, maxWidth: isUser ? '80%' : isStructured ? undefined : '85%' }}>
+          {renderContent()}
+          {copyable && (hovered || copied) && (
+            <button
+              onClick={handleCopy}
+              title="Copy for WhatsApp"
+              type="button"
+              style={{
+                position: 'absolute',
+                bottom: -22,
+                right: 0,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 4,
+                background: copied ? '#e8f5e9' : '#fff',
+                border: `1px solid ${copied ? '#4caf50' : 'var(--border, #e5e0d5)'}`,
+                borderRadius: 10,
+                padding: '2px 8px',
+                fontSize: 10,
+                fontWeight: 600,
+                color: copied ? '#388e3c' : 'var(--muted, #8a7d65)',
+                cursor: 'pointer',
+                whiteSpace: 'nowrap',
+                boxShadow: '0 1px 4px rgba(0,0,0,0.08)',
+                transition: 'all 0.15s',
+              }}
+            >
+              {copied ? '✓ Copied' : '📋 Copy'}
+            </button>
+          )}
+        </div>
       </div>
-      <span style={{ fontSize: 10, color: '#999', marginTop: copied || hovered ? 28 : 3, transition: 'margin-top 0.15s' }}>
+      <span style={{ fontSize: 10, color: '#999', marginTop: copied || hovered ? 28 : 4, marginLeft: isUser ? 0 : 36, transition: 'margin-top 0.15s' }}>
         {timestamp}
       </span>
     </div>

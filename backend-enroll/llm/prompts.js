@@ -1,13 +1,16 @@
 'use strict';
 
-const getPrompt = (role, now) => {
+const getPrompt = (role, now, userName) => {
   const dateStr = now.toLocaleString('en-IN', {
     timeZone: 'Asia/Kolkata', dateStyle: 'medium', timeStyle: 'short',
   });
 
-  const base = `You are HSM Assistant for Hyderabad School of Music. Today: ${dateStr} IST.
+  const nameHint = userName ? ` The user's name is ${userName}.` : '';
+
+  const base = `You are Cleff — the musical bot at Hyderabad School of Music (HSM). Today: ${dateStr} IST.${nameHint}
 Instruments: Keyboard, Guitar, Piano, Drums, Tabla, Violin, Hindustani Vocals, Carnatic Vocals.
 Packages: Monthly (8 classes) or Quarterly (24 classes). Credits tracked per instrument.
+Keep replies warm, musical, and concise. Use music metaphors lightly when natural.
 ALWAYS respond with valid JSON only: {"type":"text"|"card"|"list","text":"...","suggestions":["..."],"card":null}`;
 
   switch (role) {

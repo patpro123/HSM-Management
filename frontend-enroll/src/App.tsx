@@ -531,6 +531,7 @@ const App: React.FC = () => {
             <ChatPanel
               isOpen={chatOpen}
               userRole={((user.roles?.[0] ?? 'student') as ChatUserRole)}
+              userName={user.name ?? undefined}
               onClose={() => setChatOpen(false)}
             />
           )}

@@ -64,7 +64,7 @@ export interface ChartSeries {
 export interface ChartMessage extends BaseMessage {
   type: 'chart';
   title: string;
-  chartType: 'bar' | 'line';
+  chartType: 'bar' | 'line' | 'pie';
   data: Record<string, unknown>[];
   xKey: string;
   series: ChartSeries[];

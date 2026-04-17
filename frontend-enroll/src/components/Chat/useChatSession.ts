@@ -145,12 +145,35 @@ function makeBotMessage(
   } as ChatMessageUnion;
 }
 
-export function useChatSession(userRole: ChatUserRole): UseChatSessionReturn {
+function makeWelcomeMessage(userRole: ChatUserRole, userName?: string): TextMessage {
+  const firstName = userName ? userName.split(' ')[0] : null;
+  const greeting = firstName ? `Hey ${firstName}!` : 'Hey there!';
+  const roleLines: Record<ChatUserRole, string> = {
+    admin:   "I'm Cleff — your musical command centre. I know every student, batch, and rupee in this school.",
+    teacher: "I'm Cleff — your backstage crew. Ask me about your batches, students, or payout.",
+    student: "I'm Cleff — your musical journey tracker. Ask me about your classes, attendance, or next session.",
+    parent:  "I'm Cleff — your child's musical diary. Ask me about classes remaining, attendance, or payments.",
+  };
+  return {
+    id: crypto.randomUUID(),
+    sender: 'bot',
+    timestamp: new Date().toISOString(),
+    sessionId: '',
+    type: 'text',
+    text: `${greeting} 🎵 ${roleLines[userRole] ?? roleLines.parent} How can I help you today?`,
+  };
+}
+
+export function useChatSession(userRole: ChatUserRole, userName?: string): UseChatSessionReturn {
   const persisted = useRef(loadPersistedSession());
+
+  const welcomeMessage = useRef<TextMessage>(makeWelcomeMessage(userRole, userName));
 
   const [state, setState] = useState<ChatSessionState>({
     sessionId:  persisted.current?.sessionId ?? null,
-    messages:   persisted.current?.messages  ?? [],
+    messages:   persisted.current?.messages?.length
+      ? persisted.current.messages
+      : [welcomeMessage.current],
     chips:      getRoleDefaultChips(userRole),
     isTyping:   false,
     inputValue: '',
@@ -257,13 +280,13 @@ export function useChatSession(userRole: ChatUserRole): UseChatSessionReturn {
     localStorage.removeItem(STORAGE_KEY);
     setState({
       sessionId:  null,
-      messages:   [],
+      messages:   [makeWelcomeMessage(userRole, userName)],
       chips:      getRoleDefaultChips(userRole),
       isTyping:   false,
       inputValue: '',
       error:      null,
     });
-  }, [userRole]);
+  }, [userRole, userName]);
 
   return { state, sendMessage, sendChip, saveAttendance, dismissError, setInputValue, resetSession };
 }

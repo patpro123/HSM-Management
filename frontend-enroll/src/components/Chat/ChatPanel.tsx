@@ -5,16 +5,25 @@ import { useChatSession } from './useChatSession';
 import { MessageList } from './MessageList';
 import { QuickReplyChips } from './QuickReplyChips';
 import { ChatInput } from './ChatInput';
+import { CleffAvatar } from './CleffAvatar';
 
 interface ChatPanelProps {
   isOpen: boolean;
   userRole: ChatUserRole;
+  userName?: string;
   onClose: () => void;
 }
 
-export function ChatPanel({ isOpen, userRole, onClose }: ChatPanelProps) {
+const ROLE_TAGLINES: Record<ChatUserRole, string> = {
+  admin:   'Maestro · Music school command centre',
+  teacher: 'Your backstage pass to HSM',
+  student: 'Your musical journey tracker',
+  parent:  "Your child's musical diary",
+};
+
+export function ChatPanel({ isOpen, userRole, userName, onClose }: ChatPanelProps) {
   const panelRef = useRef<HTMLDivElement>(null);
-  const { state, sendMessage, sendChip, saveAttendance, dismissError, setInputValue } = useChatSession(userRole);
+  const { state, sendMessage, sendChip, saveAttendance, dismissError, setInputValue } = useChatSession(userRole, userName);
 
   useEffect(() => {
     const el = panelRef.current;
@@ -25,8 +34,6 @@ export function ChatPanel({ isOpen, userRole, onClose }: ChatPanelProps) {
       el.classList.remove('chat-panel--open');
     }
   }, [isOpen]);
-
-  const roleLabel = userRole.charAt(0).toUpperCase() + userRole.slice(1);
 
   return (
     <div
@@ -49,36 +56,25 @@ export function ChatPanel({ isOpen, userRole, onClose }: ChatPanelProps) {
     >
       {/* Header */}
       <div style={{
-        background: 'linear-gradient(135deg, var(--accent, #f3c13a) 0%, var(--accent-strong, #ff904e) 100%)',
-        padding: '14px 16px',
+        background: 'linear-gradient(135deg, #1b1307 0%, #2d2110 100%)',
+        padding: '12px 16px',
         display: 'flex',
         alignItems: 'center',
         gap: 10,
         flexShrink: 0,
       }}>
-        <div style={{
-          width: 32,
-          height: 32,
-          borderRadius: '50%',
-          background: 'rgba(255,255,255,0.3)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          fontSize: 16,
-        }}>
-          🎵
-        </div>
+        <CleffAvatar size={38} />
         <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 15, fontWeight: 700, color: '#1b1307' }}>HSM Assistant</div>
-          <div style={{ fontSize: 11, color: '#1b1307', opacity: 0.7, display: 'flex', alignItems: 'center', gap: 4 }}>
+          <div style={{ fontSize: 16, fontWeight: 800, color: '#f3c13a', letterSpacing: 0.5 }}>Cleff</div>
+          <div style={{ fontSize: 11, color: '#f3c13a', opacity: 0.7, display: 'flex', alignItems: 'center', gap: 4 }}>
             <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#27ae60', display: 'inline-block' }} />
-            {roleLabel} mode
+            {ROLE_TAGLINES[userRole]}
           </div>
         </div>
         <button
           onClick={onClose}
           type="button"
-          style={{ background: 'transparent', border: 'none', fontSize: 20, cursor: 'pointer', color: '#1b1307', lineHeight: 1, padding: 4 }}
+          style={{ background: 'transparent', border: 'none', fontSize: 22, cursor: 'pointer', color: '#f3c13a', lineHeight: 1, padding: 4 }}
           aria-label="Close"
         >
           ×

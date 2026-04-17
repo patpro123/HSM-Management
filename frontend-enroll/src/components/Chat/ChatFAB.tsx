@@ -1,3 +1,5 @@
+import { CleffAvatar } from './CleffAvatar';
+
 interface ChatFABProps {
   isOpen: boolean;
   unreadNudgeCount: number;
@@ -36,9 +38,7 @@ export function ChatFAB({ isOpen, unreadNudgeCount, onClick }: ChatFABProps) {
           <path d="M18 6L6 18M6 6l12 12" stroke="white" strokeWidth="2.5" strokeLinecap="round"/>
         </svg>
       ) : (
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-          <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-        </svg>
+        <CleffAvatar size={36} />
       )}
       {unreadNudgeCount > 0 && !isOpen && (
         <div style={{
