@@ -661,6 +661,13 @@ img {
     position: relative;
 }
 
+.location-actions {
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin-top: 1.5rem;
+}
+
 .relative {
     position: relative;
 }
@@ -1541,5 +1548,13 @@ img {
     .location-map iframe {
         min-height: 250px !important;
         max-height: 260px;
+    }
+
+    /* Centre location info on mobile */
+    .location-info {
+        text-align: center;
+    }
+    .location-actions {
+        justify-content: center;
     }
 }

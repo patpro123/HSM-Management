@@ -1,4 +1,4 @@
-import cleffImg from '../../images/cleff_animated.gif';
+import cleffImg from '../../images/cleff_talking.gif';
 
 interface CleffAvatarProps {
   size?: number;
