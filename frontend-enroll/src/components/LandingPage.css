@@ -794,19 +794,21 @@ img {
     box-sizing: border-box;
 }
 
-/* Mobile: vertical stack */
+/* Mobile: keep horizontal carousel, wider cards */
 @media (max-width: 600px) {
     .teachers-carousel {
-        flex-direction: column;
-        overflow-x: visible;
-        scroll-snap-type: none;
-        -webkit-mask-image: none;
-        mask-image: none;
+        flex-direction: row;
+        overflow-x: auto;
+        scroll-snap-type: x mandatory;
+        -webkit-mask-image: linear-gradient(to right, black 85%, transparent 100%);
+        mask-image: linear-gradient(to right, black 85%, transparent 100%);
         gap: 1rem;
     }
     .teacher-card {
-        flex: none;
-        width: 100%;
+        flex: 0 0 78vw;
+        min-width: 220px;
+        max-width: 300px;
+        width: unset;
     }
 }
 
@@ -1489,4 +1491,35 @@ img {
         scroll-snap-align: start;
     }
 
+    /* Remove full-viewport height from sections — prevents excessive whitespace */
+    .stack-section {
+        min-height: auto;
+    }
+
+    /* Tighten split-layout vertical padding */
+    .split-layout {
+        padding: 2.5rem 0;
+        gap: 2rem;
+    }
+
+    /* Smaller orange CTA banner so it doesn't cover footer content */
+    .cta-box {
+        padding: 3rem 1.5rem;
+    }
+    .cta-box .serif-heading {
+        font-size: clamp(1.6rem, 6vw, 2.2rem);
+    }
+    .real-footer {
+        padding-top: 8rem;
+    }
+
+    /* Map: constrain height on mobile */
+    .location-map {
+        min-height: 250px;
+        max-height: 260px;
+    }
+    .location-map iframe {
+        min-height: 250px !important;
+        max-height: 260px;
+    }
 }

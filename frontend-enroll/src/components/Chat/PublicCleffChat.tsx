@@ -39,11 +39,13 @@ export function PublicCleffChat({ onBookDemo }: PublicCleffChatProps) {
   const [input, setInput]         = useState('');
   const [isTyping, setIsTyping]   = useState(false);
   const [history, setHistory]     = useState<HistoryEntry[]>([]);
-  const [nudged, setNudged]       = useState(false);
+  const [nudged, setNudged]               = useState(false);
+  const [nudgeDismissed, setNudgeDismissed] = useState(false);
 
-  const bottomRef   = useRef<HTMLDivElement>(null);
-  const inputRef    = useRef<HTMLInputElement>(null);
-  const nudgeTimer  = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const bottomRef      = useRef<HTMLDivElement>(null);
+  const inputRef       = useRef<HTMLInputElement>(null);
+  const nudgeTimer     = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const nudgeDismissTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Auto-scroll to bottom on new messages
   useEffect(() => {
@@ -55,14 +57,28 @@ export function PublicCleffChat({ onBookDemo }: PublicCleffChatProps) {
     if (isOpen) setTimeout(() => inputRef.current?.focus(), 150);
   }, [isOpen]);
 
-  // Nudge after 45s of inactivity on landing page
+  // Nudge after 20s of inactivity on landing page
   useEffect(() => {
-    if (nudged || isOpen) return;
+    if (nudged || nudgeDismissed || isOpen) return;
     nudgeTimer.current = setTimeout(() => {
       setNudged(true);
-    }, 45_000);
+    }, 20_000);
     return () => { if (nudgeTimer.current) clearTimeout(nudgeTimer.current); };
+  }, [nudged, nudgeDismissed, isOpen]);
+
+  // Auto-dismiss nudge badge after 6s
+  useEffect(() => {
+    if (!nudged || isOpen) return;
+    nudgeDismissTimer.current = setTimeout(() => dismissNudge(), 6_000);
+    return () => { if (nudgeDismissTimer.current) clearTimeout(nudgeDismissTimer.current); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nudged, isOpen]);
+
+  const dismissNudge = () => {
+    setNudged(false);
+    setNudgeDismissed(true);
+    if (nudgeDismissTimer.current) clearTimeout(nudgeDismissTimer.current);
+  };
 
   const sendMessage = useCallback(async (text: string) => {
     if (!text.trim() || isTyping) return;
@@ -116,19 +132,32 @@ export function PublicCleffChat({ onBookDemo }: PublicCleffChatProps) {
       {/* Nudge badge */}
       {nudged && !isOpen && (
         <div
-          onClick={() => setIsOpen(true)}
           style={{
             position: 'fixed', bottom: 82, right: 16, zIndex: 1001,
             background: '#1b1307', color: '#f3c13a',
             borderRadius: 12, padding: '8px 14px',
             fontSize: 13, fontWeight: 600,
             boxShadow: '0 4px 16px rgba(0,0,0,0.25)',
-            cursor: 'pointer', maxWidth: 220,
+            maxWidth: 220,
             animation: 'fadeSlideUp 0.35s ease',
+            display: 'flex', alignItems: 'flex-start', gap: 8,
           }}
         >
-          🎵 Book your free demo — no credit card needed!
-          <div style={{ fontSize: 10, opacity: 0.7, marginTop: 2 }}>Chat with Cleff</div>
+          <div onClick={() => setIsOpen(true)} style={{ cursor: 'pointer', flex: 1 }}>
+            🎵 Book your free demo — no credit card needed!
+            <div style={{ fontSize: 10, opacity: 0.7, marginTop: 2 }}>Chat with Cleff</div>
+          </div>
+          <button
+            onClick={dismissNudge}
+            type="button"
+            style={{
+              background: 'transparent', border: 'none',
+              color: '#f3c13a', cursor: 'pointer',
+              fontSize: 16, lineHeight: 1, padding: 0, opacity: 0.7,
+              flexShrink: 0, marginTop: -2,
+            }}
+            aria-label="Dismiss"
+          >×</button>
         </div>
       )}
 
@@ -311,7 +340,7 @@ export function PublicCleffChat({ onBookDemo }: PublicCleffChatProps) {
                 background: '#27ae60', border: '2px solid #fff',
               }} />
             )}
-            {nudged && !isOpen && (
+            {nudged && !isOpen && !nudgeDismissed && (
               <span style={{
                 position: 'absolute', top: -4, right: -4,
                 width: 18, height: 18, borderRadius: '50%',
