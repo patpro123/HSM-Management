@@ -73,7 +73,7 @@ const TeachersSection: React.FC<TeachersSectionProps> = ({ teachers }) => {
 
   useEffect(() => {
     const el = gridRef.current;
-    if (!el) return;
+    if (!el || teachers.length === 0) return;
     let isInteracting = false;
     const onTouch = () => { isInteracting = true; };
     const onTouchEnd = () => { setTimeout(() => { isInteracting = false; }, 2500); };
@@ -92,7 +92,7 @@ const TeachersSection: React.FC<TeachersSectionProps> = ({ teachers }) => {
       el.removeEventListener('touchstart', onTouch);
       el.removeEventListener('touchend', onTouchEnd);
     };
-  }, []);
+  }, [teachers]);
 
   const enriched = teachers.map(t => {
     const key = t.name.split(' ')[0].toLowerCase();
