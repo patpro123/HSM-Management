@@ -2,13 +2,15 @@ import React, { useState, useEffect } from 'react';
 import { apiGet } from '../api';
 import { Student, Batch, Instrument } from '../types';
 
-type PaymentType = 'trial' | 'quarterly';
+type PaymentType = 'trial' | 'quarterly' | 'pbel_4' | 'pbel_8';
 
 export interface EnrollmentSelection {
   batch_id: number | string;
   payment_frequency: PaymentType;
   enrollment_date: string;
   trinity_grade?: string;
+  fee_structure_id?: string;
+  classes_remaining?: number;
 }
 
 const VOCAL_INSTRUMENTS = ['Hindustani Vocals', 'Carnatic Vocals'];
@@ -20,10 +22,11 @@ interface StudentDetailsProps {
   instruments: Instrument[];
   onSave: (data: any, enrollments: EnrollmentSelection[], prospectId?: string, feeTotal?: number) => void;
   onCancel: () => void;
+  initialProspectId?: string | null;
 }
 
 
-const StudentDetails: React.FC<StudentDetailsProps> = ({ student, batches, instruments, onSave, onCancel }) => {
+const StudentDetails: React.FC<StudentDetailsProps> = ({ student, batches, instruments, onSave, onCancel, initialProspectId }) => {
   const [formData, setFormData] = useState({
     first_name: '', last_name: '', date_of_birth: '',
     email: '', phone: '', guardian_name: '', guardian_phone: '', address: ''
@@ -36,7 +39,8 @@ const StudentDetails: React.FC<StudentDetailsProps> = ({ student, batches, instr
   const [instrGrades, setInstrGrades] = useState<Record<string, string>>({});
   const [instrPayTypes, setInstrPayTypes] = useState<Record<string, PaymentType>>({});
   const [instrFees, setInstrFees] = useState<Record<string, { fee_amount: number; fee_structure_id: string } | null>>({});
-  const [mainBranchId, setMainBranchId] = useState<string | null>(null);
+  const [branches, setBranches] = useState<Array<{id: string; name: string; code: string}>>([]);
+  const [selectedBranchId, setSelectedBranchId] = useState<string | null>(null);
 
   const [prospects, setProspects] = useState<any[]>([]);
   const [selectedProspectId, setSelectedProspectId] = useState<string>('');
@@ -46,21 +50,39 @@ const StudentDetails: React.FC<StudentDetailsProps> = ({ student, batches, instr
   useEffect(() => {
     apiGet('/api/fee-structures/branches')
       .then(data => {
-        const main = (data.branches || []).find((b: any) => b.code === 'main');
-        if (main) setMainBranchId(main.id);
+        const branchList = data.branches || [];
+        setBranches(branchList);
+        const main = branchList.find((b: any) => b.code === 'main');
+        if (main) setSelectedBranchId(main.id);
       })
       .catch(() => {});
   }, []);
 
   const resolveFee = async (instrumentId: string, grade: string, payType: PaymentType) => {
-    if (!mainBranchId) return;
+    const branchId = selectedBranchId;
+    if (!branchId) return;
     const isVocal = VOCAL_INSTRUMENTS.includes(instruments.find(i => String(i.id) === instrumentId)?.name || '');
     const isTrial = payType === 'trial';
-    const resolveGrade = isTrial ? 'Initial' : (isVocal ? 'Fixed' : grade);
-    const classesCount = isTrial ? 4 : 24;
+
+    let resolveGrade: string;
+    let classesCount: number;
+    if (isTrial) {
+      resolveGrade = 'Initial';
+      classesCount = 4;
+    } else if (payType === 'pbel_4') {
+      resolveGrade = 'Fixed';
+      classesCount = 4;
+    } else if (payType === 'pbel_8') {
+      resolveGrade = 'Fixed';
+      classesCount = 8;
+    } else {
+      resolveGrade = isVocal ? 'Fixed' : grade;
+      classesCount = 24;
+    }
+
     try {
       const data = await apiGet(
-        `/api/fee-structures/resolve?branch_id=${mainBranchId}&instrument_id=${instrumentId}` +
+        `/api/fee-structures/resolve?branch_id=${branchId}&instrument_id=${instrumentId}` +
         `&trinity_grade=${encodeURIComponent(resolveGrade)}&classes_count=${classesCount}&is_trial=${isTrial}`
       );
       setInstrFees(prev => ({ ...prev, [instrumentId]: { fee_amount: data.fee_structure.fee_amount, fee_structure_id: data.fee_structure.id } }));
@@ -76,6 +98,12 @@ const StudentDetails: React.FC<StudentDetailsProps> = ({ student, batches, instr
         .catch(() => {});
     }
   }, [student]);
+
+  useEffect(() => {
+    if (initialProspectId && prospects.length > 0) {
+      handleProspectSelect(initialProspectId);
+    }
+  }, [initialProspectId, prospects]);
 
   useEffect(() => {
     if (student) {
@@ -169,7 +197,7 @@ const StudentDetails: React.FC<StudentDetailsProps> = ({ student, batches, instr
     const isVocal = VOCAL_INSTRUMENTS.includes(instruments.find(i => String(i.id) === instrKey)?.name || '');
     const grade = isVocal ? 'Fixed' : (instrGrades[instrKey] || 'Initial');
     if (!instrFees[instrKey]) resolveFee(instrKey, grade, settings.payment_frequency);
-    const newDay1: EnrollmentSelection = { batch_id: batchId, payment_frequency: settings.payment_frequency, enrollment_date: settings.enrollment_date, trinity_grade: grade };
+    const newDay1: EnrollmentSelection = { batch_id: batchId, payment_frequency: settings.payment_frequency, enrollment_date: settings.enrollment_date, trinity_grade: grade, fee_structure_id: instrFees[instrKey]?.fee_structure_id };
     const newInstrBatches: EnrollmentSelection[] = [newDay1];
     if (day2 && String(day2.batch_id) !== batchId) newInstrBatches.push(day2);
     setSelectedBatches([...others, ...newInstrBatches]);
@@ -184,7 +212,7 @@ const StudentDetails: React.FC<StudentDetailsProps> = ({ student, batches, instr
     const settings = instrumentSettings[instrKey] || { payment_frequency: 'quarterly' as PaymentType, enrollment_date: new Date().toISOString().split('T')[0] };
     const isVocal = VOCAL_INSTRUMENTS.includes(instruments.find(i => String(i.id) === instrKey)?.name || '');
     const grade = isVocal ? 'Fixed' : (instrGrades[instrKey] || 'Initial');
-    const newDay2: EnrollmentSelection = { batch_id: batchId, payment_frequency: settings.payment_frequency, enrollment_date: settings.enrollment_date, trinity_grade: grade };
+    const newDay2: EnrollmentSelection = { batch_id: batchId, payment_frequency: settings.payment_frequency, enrollment_date: settings.enrollment_date, trinity_grade: grade, fee_structure_id: instrFees[instrKey]?.fee_structure_id };
     setSelectedBatches([...others, day1, newDay2]);
   };
 
@@ -204,6 +232,17 @@ const StudentDetails: React.FC<StudentDetailsProps> = ({ student, batches, instr
     resolveFee(instrumentId, grade, payType);
     const instrBatchIds = batches.filter(b => String(b.instrument_id) === instrumentId).map(b => String(b.id));
     setSelectedBatches(prev => prev.map(eb => instrBatchIds.includes(String(eb.batch_id)) ? { ...eb, trinity_grade: grade } : eb));
+  };
+
+  const handleBranchChange = (branchId: string) => {
+    setSelectedBranchId(branchId);
+    setInstrFees({});
+    setInstrPayTypes({});
+    setInstrumentSettings(prev => {
+      const reset: typeof prev = {};
+      Object.keys(prev).forEach(k => { reset[k] = { ...prev[k], payment_frequency: 'quarterly' }; });
+      return reset;
+    });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -359,6 +398,29 @@ const StudentDetails: React.FC<StudentDetailsProps> = ({ student, batches, instr
             <textarea name="address" value={formData.address} onChange={handleInputChange} rows={2} className="w-full px-4 py-2 rounded-lg border border-slate-300 focus:border-orange-500 focus:ring-2 focus:ring-orange-200 outline-none" />
           </div>
 
+          {/* Branch Selector */}
+          {branches.length > 1 && (
+            <div className="border-t border-slate-200 pt-4">
+              <label className="block text-sm font-semibold text-slate-700 mb-2">Branch</label>
+              <div className="flex gap-2 flex-wrap">
+                {branches.map(branch => (
+                  <button
+                    key={branch.id}
+                    type="button"
+                    onClick={() => handleBranchChange(branch.id)}
+                    className={`px-4 py-2 rounded-lg border-2 text-sm font-semibold transition ${
+                      selectedBranchId === branch.id
+                        ? 'border-orange-500 bg-orange-500 text-white'
+                        : 'border-slate-300 bg-white text-slate-700 hover:border-orange-400'
+                    }`}
+                  >
+                    {branch.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Instrument Selection */}
           <div className="border-t border-slate-200 pt-4">
             <label className="block text-sm font-semibold text-slate-700 mb-1">
@@ -460,18 +522,33 @@ const StudentDetails: React.FC<StudentDetailsProps> = ({ student, batches, instr
                     )}
                     <div className="flex-1 min-w-[110px]">
                       <label className="block text-xs font-semibold text-slate-600 mb-1">Package</label>
-                      <div className="flex gap-1.5">
-                        {(['trial', 'quarterly'] as PaymentType[]).map(pt => (
-                          <button
-                            key={pt}
-                            type="button"
-                            onClick={() => handleInstrumentSettingChange(instrKey, 'payment_frequency', pt)}
-                            className={`flex-1 px-2 py-1.5 rounded-lg border-2 text-xs font-semibold transition text-center ${settings.payment_frequency === pt ? 'border-orange-500 bg-orange-500 text-white' : 'border-slate-300 bg-white text-slate-700 hover:border-orange-400'}`}
-                          >
-                            {pt === 'trial' ? 'Trial' : 'Quarterly'}
-                          </button>
-                        ))}
-                      </div>
+                      {(() => {
+                        const isPbel = branches.find(b => b.id === selectedBranchId)?.code === 'pbel';
+                        const opts: Array<{ type: PaymentType; label: string }> = isPbel
+                          ? [
+                              { type: 'trial',  label: 'Trial' },
+                              { type: 'pbel_4', label: '4-Class' },
+                              { type: 'pbel_8', label: '8-Class' },
+                            ]
+                          : [
+                              { type: 'trial',     label: 'Trial' },
+                              { type: 'quarterly', label: 'Quarterly' },
+                            ];
+                        return (
+                          <div className="flex gap-1.5">
+                            {opts.map(({ type: pt, label }) => (
+                              <button
+                                key={pt}
+                                type="button"
+                                onClick={() => handleInstrumentSettingChange(instrKey, 'payment_frequency', pt)}
+                                className={`flex-1 px-2 py-1.5 rounded-lg border-2 text-xs font-semibold transition text-center ${settings.payment_frequency === pt ? 'border-orange-500 bg-orange-500 text-white' : 'border-slate-300 bg-white text-slate-700 hover:border-orange-400'}`}
+                              >
+                                {label}
+                              </button>
+                            ))}
+                          </div>
+                        );
+                      })()}
                     </div>
                     {feeInfo && (
                       <span className="inline-flex items-center gap-1 text-xs bg-green-50 border border-green-200 rounded-lg px-2.5 py-1.5">

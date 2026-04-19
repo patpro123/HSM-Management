@@ -331,6 +331,29 @@ const EnrollmentForm: React.FC<EnrollmentFormProps> = ({ students, batches, inst
       {/* Step 1: Student Selection */}
       {step === 1 && (
         <div>
+          {/* Branch Selector */}
+          {branches.length > 1 && (
+            <div className="mb-6">
+              <label className="block text-sm font-semibold text-slate-700 mb-2">Branch</label>
+              <div className="flex gap-3 flex-wrap">
+                {branches.map(branch => (
+                  <button
+                    key={branch.id}
+                    type="button"
+                    onClick={() => handleBranchChange(branch.id)}
+                    className={`px-5 py-2.5 rounded-lg border-2 font-semibold text-sm transition ${
+                      selectedBranchId === branch.id
+                        ? 'border-indigo-500 bg-indigo-600 text-white'
+                        : 'border-slate-300 bg-white text-slate-700 hover:border-indigo-400'
+                    }`}
+                  >
+                    {branch.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           <h3 className="text-xl font-bold text-slate-800 mb-4">Select a Student</h3>
           <input
             type="text"
@@ -373,6 +396,11 @@ const EnrollmentForm: React.FC<EnrollmentFormProps> = ({ students, batches, inst
               <div>
                 <p className="font-bold text-slate-900">{getStudentDisplayName(selectedStudent)}</p>
                 <p className="text-sm text-slate-600">{selectedStudent.email || (selectedStudent as any).metadata?.email || 'No email'}</p>
+                {branches.length > 1 && (
+                  <span className="inline-block mt-1 text-xs font-semibold bg-indigo-100 text-indigo-700 rounded px-2 py-0.5">
+                    {branches.find(b => b.id === selectedBranchId)?.name || 'Branch'}
+                  </span>
+                )}
               </div>
             </div>
             <button
@@ -382,29 +410,6 @@ const EnrollmentForm: React.FC<EnrollmentFormProps> = ({ students, batches, inst
               Change
             </button>
           </div>
-
-          {/* Branch Selector */}
-          {branches.length > 1 && (
-            <div className="mb-6">
-              <label className="block text-sm font-semibold text-slate-700 mb-2">Branch</label>
-              <div className="flex gap-3 flex-wrap">
-                {branches.map(branch => (
-                  <button
-                    key={branch.id}
-                    type="button"
-                    onClick={() => handleBranchChange(branch.id)}
-                    className={`px-4 py-2 rounded-lg border-2 font-semibold text-sm transition ${
-                      selectedBranchId === branch.id
-                        ? 'border-indigo-500 bg-indigo-600 text-white'
-                        : 'border-slate-300 bg-white text-slate-700 hover:border-indigo-400'
-                    }`}
-                  >
-                    {branch.name}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
 
           <h3 className="text-xl font-bold text-slate-800 mb-2">Select Instrument & Package</h3>
           <p className="text-sm text-slate-500 mb-6">For each instrument, set the student's level (in consultation with the teacher) and choose a package before selecting the batch time.</p>

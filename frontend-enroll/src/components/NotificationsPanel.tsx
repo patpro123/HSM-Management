@@ -14,7 +14,7 @@ interface Notification {
 }
 
 interface NotificationsPanelProps {
-    onNavigation?: (path: string) => void;
+    onNavigation?: (path: string, prospectId?: string) => void;
 }
 
 const NotificationsPanel: React.FC<NotificationsPanelProps> = ({ onNavigation }) => {
@@ -257,9 +257,9 @@ const NotificationsPanel: React.FC<NotificationsPanelProps> = ({ onNavigation })
                 <ProspectViewerModal
                     prospect={selectedProspect}
                     onClose={() => setSelectedProspect(null)}
-                    onConvert={() => {
+                    onConvert={(prospectId: string) => {
                         setSelectedProspect(null);
-                        if (onNavigation) onNavigation('students');
+                        if (onNavigation) onNavigation('students', prospectId);
                     }}
                 />
             )}

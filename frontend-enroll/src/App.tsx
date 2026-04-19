@@ -50,6 +50,7 @@ const App: React.FC = () => {
   const [authChecked, setAuthChecked] = useState(false);
   const [bypassedUser, setBypassedUser] = useState<any>(null);
   const [authError, setAuthError] = useState<string | null>(null);
+  const [pendingEnrollProspectId, setPendingEnrollProspectId] = useState<string | null>(null);
   const [devProfile, setDevProfile] = useState<'admin' | 'teacher' | 'student'>('admin');
   const [devOverride, setDevOverride] = useState<{ email: string; name: string } | null>(null);
 
@@ -338,7 +339,10 @@ const App: React.FC = () => {
             </h2>
           </div>
           <div className="flex items-center gap-4">
-            {isAdmin && <NotificationsPanel onNavigation={(path) => handleTabChange(path as any)} />}
+            {isAdmin && <NotificationsPanel onNavigation={(path, prospectId) => {
+              handleTabChange(path as any);
+              if (prospectId) setPendingEnrollProspectId(prospectId);
+            }} />}
             <div className="hidden md:flex flex-col text-right">
               <span className="text-sm font-bold text-slate-700">{user?.name || user?.email}</span>
               <span className="text-xs text-slate-500 capitalize">{user?.roles[0]}</span>
@@ -366,6 +370,8 @@ const App: React.FC = () => {
                   instruments={instruments}
                   prospects={prospects}
                   onRefresh={fetchData}
+                  enrollProspectId={pendingEnrollProspectId}
+                  onEnrollProspectHandled={() => setPendingEnrollProspectId(null)}
                 />
               )}
               {activeTab === 'attendance' && (

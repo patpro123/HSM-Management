@@ -17,6 +17,8 @@ interface StudentManagementProps {
   instruments: Instrument[];
   prospects: any[];
   onRefresh: () => void;
+  enrollProspectId?: string | null;
+  onEnrollProspectHandled?: () => void;
 }
 
 const AGE_BUCKETS = [
@@ -32,7 +34,7 @@ const getAgeDays = (createdAt: string) =>
 const getAgeBucket = (days: number) =>
   AGE_BUCKETS.find(b => days <= b.maxDays) || AGE_BUCKETS[3];
 
-const StudentManagement: React.FC<StudentManagementProps> = ({ students: propStudents, batches, instruments, prospects, onRefresh }) => {
+const StudentManagement: React.FC<StudentManagementProps> = ({ students: propStudents, batches, instruments, prospects, onRefresh, enrollProspectId, onEnrollProspectHandled }) => {
   const [successBanner, setSuccessBanner] = useState('');
   const [errorBanner, setErrorBanner] = useState('');
   const [students, setStudents] = useState<Student[]>(propStudents || []);
@@ -54,10 +56,20 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students: propStu
   const [savingPayment, setSavingPayment] = useState(false);
   const [viewMode, setViewMode] = useState<'card' | 'table'>('card');
   const [selectedStudentId, setSelectedStudentId] = useState<string | number | null>(null);
+  const [initialProspectId, setInitialProspectId] = useState<string | null>(null);
 
   useEffect(() => {
     setStudents(propStudents || []);
   }, [propStudents]);
+
+  useEffect(() => {
+    if (enrollProspectId) {
+      setEditingStudent(null);
+      setInitialProspectId(enrollProspectId);
+      setShowAddModal(true);
+      onEnrollProspectHandled?.();
+    }
+  }, [enrollProspectId]);
 
   useEffect(() => {
     apiGet('/api/teachers').then(res => setTeachers(res.teachers || []));
@@ -251,7 +263,8 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students: propStu
             instrument_id: batchObj?.instrument_id || null,
             payment_frequency: batch.payment_frequency,
             trinity_grade: batch.trinity_grade || 'Initial',
-            enrolled_on: batch.enrollment_date || new Date()
+            enrolled_on: batch.enrollment_date || new Date(),
+            fee_structure_id: (batch as any).fee_structure_id || null
           };
         })
       };
@@ -441,7 +454,8 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students: propStu
               batches={batches}
               instruments={instruments}
               onSave={handleSaveStudent}
-              onCancel={() => setShowAddModal(false)}
+              onCancel={() => { setShowAddModal(false); setInitialProspectId(null); }}
+              initialProspectId={initialProspectId}
             />
           </div>
         </div>

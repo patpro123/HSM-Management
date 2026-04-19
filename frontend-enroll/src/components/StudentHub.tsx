@@ -9,9 +9,11 @@ interface StudentHubProps {
   instruments: Instrument[];
   prospects: any[];
   onRefresh: () => void;
+  enrollProspectId?: string | null;
+  onEnrollProspectHandled?: () => void;
 }
 
-const StudentHub: React.FC<StudentHubProps> = ({ students, batches, instruments, prospects, onRefresh }) => {
+const StudentHub: React.FC<StudentHubProps> = ({ students, batches, instruments, prospects, onRefresh, enrollProspectId, onEnrollProspectHandled }) => {
   const [activeTab, setActiveTab] = useState<'all' | 'today'>('all');
 
   return (
@@ -44,6 +46,8 @@ const StudentHub: React.FC<StudentHubProps> = ({ students, batches, instruments,
           instruments={instruments}
           prospects={prospects}
           onRefresh={onRefresh}
+          enrollProspectId={enrollProspectId}
+          onEnrollProspectHandled={onEnrollProspectHandled}
         />
       ) : (
         <TodaysClasses 
