@@ -16,6 +16,7 @@ import LocationSection from './LandingPage/LocationSection';
 import FooterCTA from './LandingPage/FooterCTA';
 
 const PORTAL_URL = process.env.NEXT_PUBLIC_PORTAL_URL || 'https://portal.hsm.org.in';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'https://hsm-management.onrender.com';
 
 interface Teacher {
     id: number;
@@ -53,7 +54,6 @@ const testimonials = [
 
 const LandingPage: React.FC<LandingPageProps> = ({ teachers, batches }) => {
     const [isScrolled, setIsScrolled] = useState(false);
-    const [isDark, setIsDark] = useState(false);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [prefilledInstrument, setPrefilledInstrument] = useState('');
     const [testimonialIndex, setTestimonialIndex] = useState(0);
@@ -63,11 +63,6 @@ const LandingPage: React.FC<LandingPageProps> = ({ teachers, batches }) => {
         const handleScroll = () => { setIsScrolled(window.scrollY > 50); };
         window.addEventListener('scroll', handleScroll);
         return () => window.removeEventListener('scroll', handleScroll);
-    }, []);
-
-    useEffect(() => {
-        const savedTheme = localStorage.getItem('theme');
-        if (savedTheme === 'dark') setIsDark(true);
     }, []);
 
     useEffect(() => {
@@ -88,12 +83,6 @@ const LandingPage: React.FC<LandingPageProps> = ({ teachers, batches }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-    const toggleTheme = () => {
-        const newTheme = !isDark;
-        setIsDark(newTheme);
-        localStorage.setItem('theme', newTheme ? 'dark' : 'light');
-    };
-
     const handleOpenModal = (e: React.MouseEvent, instrument?: string) => {
         e.preventDefault();
         setPrefilledInstrument(instrument || '');
@@ -109,13 +98,11 @@ const LandingPage: React.FC<LandingPageProps> = ({ teachers, batches }) => {
     const intakeSrc = `${PORTAL_URL}/intake?embed=1${prefilledInstrument ? `&instrument=${encodeURIComponent(prefilledInstrument)}` : ''}`;
 
     return (
-        <div className={`landing-wrapper ${isDark ? 'dark-theme' : ''}`}>
+        <div className="landing-wrapper">
             <Navbar
                 isScrolled={isScrolled}
-                isDark={isDark}
-                onLogin={() => { window.location.href = `${PORTAL_URL}/`; }}
+                onLogin={() => { window.location.href = `${API_BASE_URL}/api/auth/google`; }}
                 onOpenModal={handleOpenModal}
-                onToggleTheme={toggleTheme}
             />
 
             <main className="stacking-container">

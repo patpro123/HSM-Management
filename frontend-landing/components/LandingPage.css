@@ -355,11 +355,12 @@ img {
 }
 
 @media (max-width: 480px) {
-    .nav-actions .nav-signin {
-        display: none;
-    }
     .nav-phone {
         display: none;
+    }
+    .nav-actions .nav-signin {
+        padding: 0.5rem 0.9rem;
+        font-size: 0.82rem;
     }
     .nav-actions .btn-cta {
         padding: 0.5rem 0.9rem;
@@ -1372,24 +1373,6 @@ img {
     50%       { box-shadow: 0 0 0 6px rgba(242, 107, 56, 0.35); border-color: rgba(242,107,56,0.8); }
 }
 
-/* Theme Toggle */
-.theme-toggle {
-    background: none;
-    border: none;
-    color: var(--text-heading);
-    font-size: 1.25rem;
-    cursor: pointer;
-    padding: 0.5rem;
-    border-radius: 50%;
-    transition: background 0.2s;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.theme-toggle:hover {
-    background: rgba(150, 150, 150, 0.1);
-}
 
 /* Modal Overlay & Form Styling */
 .modal-overlay {

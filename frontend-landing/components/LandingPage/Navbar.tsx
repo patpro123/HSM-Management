@@ -2,13 +2,11 @@ import React from 'react';
 
 interface NavbarProps {
   isScrolled: boolean;
-  isDark: boolean;
   onLogin: () => void;
-  onOpenModal: (e: React.MouseEvent) => void;
-  onToggleTheme: () => void;
+  onOpenModal: (e: React.MouseEvent, instrument?: string) => void;
 }
 
-const Navbar: React.FC<NavbarProps> = ({ isScrolled, isDark, onLogin, onOpenModal, onToggleTheme }) => {
+const Navbar: React.FC<NavbarProps> = ({ isScrolled, onLogin, onOpenModal }) => {
   return (
     <nav className={`navbar ${isScrolled ? 'scrolled' : ''}`} id="navbar">
       <div className="nav-container">
@@ -16,7 +14,7 @@ const Navbar: React.FC<NavbarProps> = ({ isScrolled, isDark, onLogin, onOpenModa
           <img
             src="/HSM_Logo_Horizontal.png"
             alt="HSM Logo"
-            className={`nav-logo ${isDark ? "logo-screen" : "logo-multiply"}`}
+            className="nav-logo logo-multiply"
           />
         </a>
 
@@ -40,9 +38,6 @@ const Navbar: React.FC<NavbarProps> = ({ isScrolled, isDark, onLogin, onOpenModa
           </button>
           <button onClick={onOpenModal} className="btn btn-cta">
             Book Free Class
-          </button>
-          <button className="theme-toggle" onClick={onToggleTheme} aria-label="Toggle Dark Mode">
-            {isDark ? '☀' : '☾'}
           </button>
         </div>
       </div>
