@@ -1518,9 +1518,15 @@ img {
         scroll-snap-align: start;
     }
 
-    /* Remove full-viewport height from sections — prevents excessive whitespace */
+    /* Full-screen snap sections on mobile */
+    html {
+        scroll-snap-type: y mandatory;
+    }
     .stack-section {
-        min-height: auto;
+        min-height: 100svh;
+        position: relative;
+        scroll-snap-align: start;
+        scroll-snap-stop: always;
     }
 
     /* Tighten split-layout vertical padding */

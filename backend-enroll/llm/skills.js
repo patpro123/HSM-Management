@@ -1351,6 +1351,38 @@ const skills = {
     });
   },
 
+  'school.locations': async () => {
+    const locations = [
+      {
+        name:        'Main Campus — Bandlaguda',
+        address:     'Flat No 1, 3rd Floor, House No 7-214, Abhyudaya Nagar, Kishan Nagar Colony, Bandlaguda Jagir-Kismatpura, Hyderabad — 500086',
+        landmark:    'Opposite Kritunga Restaurant, near Bandlaguda / Rajendranagar',
+        instruments: 'All instruments and vocal streams',
+        status:      'open',
+      },
+      {
+        name:        'PBEL City Campus (New)',
+        address:     'PBEL City, Hyderabad',
+        landmark:    '',
+        instruments: 'Hindustani Vocals & Carnatic Vocals — open now. Guitar, Keyboard, Piano, Drums and other instruments coming soon.',
+        status:      'partial',
+      },
+    ];
+    const lines = locations.map(l =>
+      `${l.name}: ${l.address}${l.landmark ? ' (' + l.landmark + ')' : ''} — ${l.instruments}`
+    ).join('\n');
+    return makeResponse('list', `HSM has ${locations.length} campus location(s):\n${lines}`,
+      ['Get directions', 'Which instruments at PBEL City?', 'Working hours'],
+      {
+        students: locations.map(l => ({
+          name:  l.name,
+          label: l.instruments,
+          value: l.status,
+        })),
+      }
+    );
+  },
+
   'teacher.payout': async ({ params }) => {
     let { teacher_id } = params;
     if (teacher_id && !isUUID(teacher_id)) {
@@ -1406,6 +1438,8 @@ const S = (desc) => ({ type: 'string', description: desc });
 const I = (desc) => ({ type: 'integer', description: desc });
 
 const TOOL_DEFINITIONS = [
+  // School info
+  T('school.locations', 'List all HSM campus locations, which instruments are available at each, and which are coming soon', {}),
   // Lookups
   T('student.lookup',    'Search students by name or phone',                 { query: S('name or phone') }, ['query']),
   T('student.credits',   'Classes remaining per instrument for a student',   { student_id: S('name or UUID') }),
@@ -1468,6 +1502,6 @@ const TOOL_DEFINITIONS = [
 ];
 
 const ACTION_SKILLS = new Set(['attendance.mark', 'attendance.mark_batch', 'payment.record', 'enroll.student', 'student.update', 'batch.move', 'payout.record']);
-const LOOKUP_SKILLS = new Set(['student.lookup', 'student.credits', 'student.profile', 'student.list', 'teacher.list', 'teacher.profile', 'teacher.students', 'teacher.payout', 'batch.roster', 'batch.schedule', 'payment.status', 'fee.query', 'stats.students', 'stats.unpaid', 'stats.attendance', 'report.lowcredits', 'reminder.payment', 'chart.attendance', 'chart.students', 'chart.revenue', 'prospect.summary', 'prospect.list', 'prospect.aging', 'prospect.followup', 'chart.prospects', 'finance.summary', 'finance.revenue', 'finance.expenses', 'finance.pnl', 'finance.payouts', 'chart.finance']);
+const LOOKUP_SKILLS = new Set(['school.locations', 'student.lookup', 'student.credits', 'student.profile', 'student.list', 'teacher.list', 'teacher.profile', 'teacher.students', 'teacher.payout', 'batch.roster', 'batch.schedule', 'payment.status', 'fee.query', 'stats.students', 'stats.unpaid', 'stats.attendance', 'report.lowcredits', 'reminder.payment', 'chart.attendance', 'chart.students', 'chart.revenue', 'prospect.summary', 'prospect.list', 'prospect.aging', 'prospect.followup', 'chart.prospects', 'finance.summary', 'finance.revenue', 'finance.expenses', 'finance.pnl', 'finance.payouts', 'chart.finance']);
 
 module.exports = { skills, TOOL_DEFINITIONS, ACTION_SKILLS, LOOKUP_SKILLS };

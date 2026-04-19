@@ -94,17 +94,25 @@ const TeachersSection: React.FC<TeachersSectionProps> = ({ teachers }) => {
     };
   }, [teachers]);
 
-  const enriched = teachers.map(t => {
-    const key = t.name.split(' ')[0].toLowerCase();
-    const profile = TEACHER_PROFILES[key];
-    return {
-      ...t,
-      displayName: profile?.displayName || t.name,
-      specialty: t.specialty || profile?.specialty || 'Instructor',
-      icon: profile?.icon || '🎵',
-      quote: t.quote || profile?.quote || '',
-    };
-  });
+  const seen = new Set<string>();
+  const enriched = teachers
+    .filter(t => {
+      const key = (t.id ?? t.name).toString();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .map(t => {
+      const profileKey = t.name.split(' ')[0].toLowerCase();
+      const profile = TEACHER_PROFILES[profileKey];
+      return {
+        ...t,
+        displayName: profile?.displayName || t.name,
+        specialty: t.specialty || profile?.specialty || 'Instructor',
+        icon: profile?.icon || '🎵',
+        quote: t.quote || profile?.quote || '',
+      };
+    });
 
   return (
     <section className="stack-section teachers-section" id="teachers">
