@@ -31,3 +31,14 @@ Marketing strategy and campaign documentation for the HSM website launch.
 Contains: SEO strategy, social media playbook, campaign plans, metrics dashboard, redesign specs, roadmap.
 
 **Status:** Planning phase.
+
+---
+
+### `DOMAIN_MIGRATION_PLAN.md`
+Step-by-step plan to split the app across two domains using GoDaddy DNS + Vercel free tier.
+
+- Phase 1: Admin portal → `portal.hsm.org.in` (~30 min, $0)
+- Phase 2: Public landing page → `hsm.org.in` (Next.js SSG)
+- Phase 3: Backend API → `api.hsm.org.in` (optional)
+
+**Status:** Ready to execute Phase 1.
