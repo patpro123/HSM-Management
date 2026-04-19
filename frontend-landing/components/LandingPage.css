@@ -269,6 +269,7 @@ img {
     background: rgba(253, 253, 253, 0.95);
     backdrop-filter: blur(10px);
     box-shadow: 0 2px 15px rgba(0, 0, 0, 0.03);
+    overflow: hidden;
     transition: height 0.3s;
 }
 
