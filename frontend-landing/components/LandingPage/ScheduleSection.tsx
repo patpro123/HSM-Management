@@ -1,4 +1,5 @@
-import React from 'react';
+'use client';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 
 const SCHEDULE_DAYS = [
   { key: 'TUE', label: 'Tue' },
@@ -8,6 +9,24 @@ const SCHEDULE_DAYS = [
   { key: 'SAT', label: 'Sat' },
   { key: 'SUN', label: 'Sun' },
 ];
+
+const INSTRUMENT_ICONS: Record<string, string> = {
+  guitar:     '🎸',
+  keyboard:   '🎹',
+  piano:      '🎹',
+  tabla:      '🪘',
+  drums:      '🥁',
+  octopad:    '🎛️',
+  violin:     '🎻',
+  hindustani: '🎤',
+  carnatic:   '🎤',
+  vocals:     '🎤',
+};
+
+function getIcon(name: string): string {
+  const key = name.toLowerCase().split(' ')[0];
+  return INSTRUMENT_ICONS[key] || '🎵';
+}
 
 interface Batch {
   instrument_name?: string;
@@ -55,6 +74,31 @@ interface ScheduleSectionProps {
 const ScheduleSection: React.FC<ScheduleSectionProps> = ({ batches, onOpenModal }) => {
   const grid = buildScheduleGrid(batches);
   const instruments = Object.keys(grid).sort();
+  const total = instruments.length;
+
+  const [deckIndex, setDeckIndex] = useState(0);
+  const touchStartX = useRef(0);
+  const isPaused = useRef(false);
+
+  const nextCard = useCallback(() => setDeckIndex(i => (i + 1) % total), [total]);
+  const prevCard = useCallback(() => setDeckIndex(i => (i - 1 + total) % total), [total]);
+
+  // Auto-rotate every 3s, pause on touch
+  useEffect(() => {
+    if (total === 0) return;
+    const timer = setInterval(() => {
+      if (!isPaused.current) nextCard();
+    }, 3000);
+    return () => clearInterval(timer);
+  }, [total, nextCard]);
+
+  const cardPosition = (idx: number) => {
+    const pos = (idx - deckIndex + total) % total;
+    if (pos === 0) return 'deck-card--active';
+    if (pos === 1) return 'deck-card--behind-1';
+    if (pos === 2) return 'deck-card--behind-2';
+    return 'deck-card--hidden';
+  };
 
   return (
     <section className="stack-section schedule-section bg-secondary" id="schedule">
@@ -67,7 +111,8 @@ const ScheduleSection: React.FC<ScheduleSectionProps> = ({ batches, onOpenModal 
           </p>
         </div>
 
-        <div className="schedule-table-container pop-shadow bg-white" style={{ overflowX: 'auto', borderRadius: 16, padding: '1.5rem' }}>
+        {/* Desktop: table */}
+        <div className="schedule-table-desktop schedule-table-container pop-shadow bg-white" style={{ overflowX: 'auto', borderRadius: 16, padding: '1.5rem' }}>
           {instruments.length > 0 ? (
             <>
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
@@ -129,6 +174,87 @@ const ScheduleSection: React.FC<ScheduleSectionProps> = ({ batches, onOpenModal 
             <p style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '2rem 0' }}>Loading schedule...</p>
           )}
         </div>
+
+        {/* Mobile: stacked deck */}
+        {instruments.length > 0 && (
+          <div className="schedule-deck instrument-deck">
+            <div
+              className="deck-stack"
+              onTouchStart={e => {
+                touchStartX.current = e.touches[0].clientX;
+                isPaused.current = true;
+              }}
+              onTouchEnd={e => {
+                const dx = touchStartX.current - e.changedTouches[0].clientX;
+                if (dx > 40) nextCard();
+                else if (dx < -40) prevCard();
+                setTimeout(() => { isPaused.current = false; }, 3000);
+              }}
+            >
+              {instruments.map((name, idx) => {
+                const pos = cardPosition(idx);
+                const icon = getIcon(name);
+                const activeDays = SCHEDULE_DAYS.filter(d => grid[name][d.key]?.morning || grid[name][d.key]?.evening);
+                return (
+                  <div
+                    key={name}
+                    className={`deck-card schedule-deck-card ${pos}`}
+                    onClick={pos === 'deck-card--active' ? nextCard : undefined}
+                  >
+                    <div style={{ fontSize: '3rem', marginBottom: '0.5rem' }}>{icon}</div>
+                    <h3 style={{ fontSize: '1.3rem', fontWeight: 700, color: 'var(--text-heading)', margin: '0 0 1rem' }}>{name}</h3>
+
+                    <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                      {activeDays.map(d => {
+                        const cell = grid[name][d.key];
+                        return (
+                          <div key={d.key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.4rem 0.75rem', background: 'rgba(0,0,0,0.04)', borderRadius: 10 }}>
+                            <span style={{ fontWeight: 600, fontSize: '0.85rem', color: 'var(--text-heading)' }}>{d.label}</span>
+                            <div style={{ display: 'flex', gap: '0.4rem' }}>
+                              {cell.morning && (
+                                <span style={{ background: '#fef3c7', color: '#92400e', borderRadius: 20, padding: '2px 10px', fontSize: '0.7rem', fontWeight: 700 }}>Morn</span>
+                              )}
+                              {cell.evening && (
+                                <span style={{ background: 'rgba(242,107,56,0.15)', color: 'var(--brand-orange)', borderRadius: 20, padding: '2px 10px', fontSize: '0.7rem', fontWeight: 700 }}>Eve</span>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {pos === 'deck-card--active' && (
+                      <button
+                        className="btn btn-cta"
+                        onClick={e => { e.stopPropagation(); onOpenModal(e); }}
+                        style={{ marginTop: '1rem', width: '100%', justifyContent: 'center' }}
+                      >
+                        Book this slot →
+                      </button>
+                    )}
+                    {pos === 'deck-card--active' && (
+                      <p className="deck-tap-hint">Auto-rotating · tap to skip · swipe to jump</p>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="deck-footer">
+              <div className="deck-dots">
+                {instruments.map((_, i) => (
+                  <button
+                    key={i}
+                    className={`deck-dot${i === deckIndex ? ' deck-dot--active' : ''}`}
+                    onClick={() => { setDeckIndex(i); isPaused.current = true; setTimeout(() => { isPaused.current = false; }, 5000); }}
+                    aria-label={`Go to ${instruments[i]}`}
+                  />
+                ))}
+              </div>
+              <span className="deck-counter">{deckIndex + 1} / {total}</span>
+            </div>
+          </div>
+        )}
 
         <div className="text-center mt-5">
           <button onClick={onOpenModal} className="btn btn-primary">Book your slot →</button>

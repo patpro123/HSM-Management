@@ -1492,6 +1492,122 @@ img {
     }
 }
 
+/* ========== STACKED DECK (hidden on desktop, shown via mobile media query below) ========== */
+
+.teacher-deck,
+.instrument-deck {
+    display: none;
+}
+
+.deck-stack {
+    position: relative;
+    height: 380px;
+    width: 100%;
+    max-width: 360px;
+    margin: 0 auto;
+}
+
+.deck-card {
+    position: absolute;
+    inset: 0;
+    background: var(--bg-tertiary);
+    border-radius: 20px;
+    padding: 1.75rem 1.5rem;
+    border: 1px solid rgba(0, 0, 0, 0.06);
+    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.10);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    transition: transform 0.35s cubic-bezier(0.34, 1.3, 0.64, 1), opacity 0.3s ease, box-shadow 0.3s ease;
+    will-change: transform, opacity;
+    overflow: hidden;
+}
+
+.deck-card--active {
+    z-index: 3;
+    transform: translateY(0) scale(1);
+    opacity: 1;
+    cursor: pointer;
+    box-shadow: 0 12px 36px rgba(0, 0, 0, 0.15);
+}
+
+.deck-card--behind-1 {
+    z-index: 2;
+    transform: translateY(14px) scale(0.95);
+    opacity: 0.75;
+    pointer-events: none;
+}
+
+.deck-card--behind-2 {
+    z-index: 1;
+    transform: translateY(28px) scale(0.90);
+    opacity: 0.45;
+    pointer-events: none;
+}
+
+.deck-card--hidden {
+    z-index: 0;
+    transform: translateY(28px) scale(0.90);
+    opacity: 0;
+    pointer-events: none;
+}
+
+.deck-tap-hint {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    margin-top: auto;
+    padding-top: 0.75rem;
+    opacity: 0.8;
+}
+
+.deck-footer {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+    margin-top: 1.25rem;
+    padding-top: 0.5rem;
+}
+
+.deck-dots {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+.deck-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--text-muted);
+    opacity: 0.35;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    transition: opacity 0.2s, transform 0.2s, background 0.2s;
+}
+
+.deck-dot--active {
+    background: var(--brand-orange);
+    opacity: 1;
+    transform: scale(1.35);
+}
+
+.deck-counter {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    font-weight: 500;
+}
+
+.instrument-deck .deck-stack {
+    height: 360px;
+}
+.schedule-deck .deck-stack {
+    height: 420px;
+}
+
 /* ========== MOBILE FIXES ========== */
 @media (max-width: 767px) {
     /* Reduce section padding on mobile */
@@ -1566,4 +1682,20 @@ img {
     .location-actions {
         justify-content: center;
     }
+
+    /* Hide desktop carousel/grid on mobile */
+    .teachers-carousel--desktop,
+    .instrument-grid--desktop,
+    .trinity-grid--desktop,
+    .schedule-table-desktop {
+        display: none !important;
+    }
+
+    /* Show stacked deck on mobile */
+    .teacher-deck,
+    .instrument-deck,
+    .schedule-deck {
+        display: block !important;
+    }
 }
+

@@ -1,4 +1,5 @@
-import React, { useRef, useEffect } from 'react';
+'use client';
+import React, { useRef, useEffect, useState, useCallback } from 'react';
 
 interface Teacher {
   id?: number;
@@ -70,7 +71,10 @@ const TEACHER_PROFILES: Record<string, TeacherProfile> = {
 
 const TeachersSection: React.FC<TeachersSectionProps> = ({ teachers }) => {
   const gridRef = useRef<HTMLDivElement>(null);
+  const [deckIndex, setDeckIndex] = useState(0);
+  const touchStartX = useRef(0);
 
+  // Desktop carousel auto-scroll
   useEffect(() => {
     const el = gridRef.current;
     if (!el || teachers.length === 0) return;
@@ -114,34 +118,92 @@ const TeachersSection: React.FC<TeachersSectionProps> = ({ teachers }) => {
       };
     });
 
+  const total = enriched.length;
+  const next = useCallback(() => setDeckIndex(i => (i + 1) % total), [total]);
+  const prev = useCallback(() => setDeckIndex(i => (i - 1 + total) % total), [total]);
+
+  const cardPosition = (idx: number) => {
+    const pos = (idx - deckIndex + total) % total;
+    if (pos === 0) return 'deck-card--active';
+    if (pos === 1) return 'deck-card--behind-1';
+    if (pos === 2) return 'deck-card--behind-2';
+    return 'deck-card--hidden';
+  };
+
   return (
     <section className="stack-section teachers-section" id="teachers">
       <div className="container section-padding">
-        <div className="text-center mb-5">
+        <div className="text-center" style={{ marginBottom: '1.5rem' }}>
           <span className="section-label">Learn from working musicians</span>
-          <h2 className="section-title serif-heading">Our teachers are performers first,<br />educators always.</h2>
+          <h2 className="serif-heading" style={{ fontSize: 'clamp(1.4rem, 4vw, 2.5rem)', marginBottom: 0 }}>
+            Our teachers are performers first,<br />educators always.
+          </h2>
         </div>
 
+        {/* Desktop: horizontal carousel */}
         {enriched.length > 0 ? (
-          <div className="teachers-carousel" ref={gridRef}>
+          <div className="teachers-carousel teachers-carousel--desktop" ref={gridRef}>
             {enriched.map((teacher, idx) => (
               <div className="teacher-card pop-shadow" key={teacher.id || idx}>
                 <div className="teacher-icon-badge">{teacher.icon}</div>
                 <div className="teacher-photo-wrapper">
-                  <div className="teacher-photo-placeholder">
-                    {teacher.displayName.charAt(0)}
-                  </div>
+                  <div className="teacher-photo-placeholder">{teacher.displayName.charAt(0)}</div>
                 </div>
                 <h3 className="teacher-name">{teacher.displayName}</h3>
                 <p className="teacher-specialty text-orange">{teacher.specialty}</p>
-                {teacher.quote && (
-                  <p className="teacher-quote">{teacher.quote}</p>
-                )}
+                {teacher.quote && <p className="teacher-quote">{teacher.quote}</p>}
               </div>
             ))}
           </div>
         ) : (
-          <p className="text-center">Loading teachers...</p>
+          <p className="text-center teachers-carousel--desktop">Loading teachers...</p>
+        )}
+
+        {/* Mobile: stacked deck */}
+        {enriched.length > 0 && (
+          <div className="teacher-deck">
+            <div
+              className="deck-stack"
+              onTouchStart={e => { touchStartX.current = e.touches[0].clientX; }}
+              onTouchEnd={e => {
+                const dx = touchStartX.current - e.changedTouches[0].clientX;
+                if (dx > 40) next();
+                else if (dx < -40) prev();
+              }}
+            >
+              {enriched.map((teacher, idx) => (
+                <div
+                  key={teacher.id || idx}
+                  className={`deck-card ${cardPosition(idx)}`}
+                  onClick={cardPosition(idx) === 'deck-card--active' ? next : undefined}
+                >
+                  <div className="teacher-icon-badge">{teacher.icon}</div>
+                  <div className="teacher-photo-wrapper">
+                    <div className="teacher-photo-placeholder">{teacher.displayName.charAt(0)}</div>
+                  </div>
+                  <h3 className="teacher-name">{teacher.displayName}</h3>
+                  <p className="teacher-specialty text-orange">{teacher.specialty}</p>
+                  {teacher.quote && <p className="teacher-quote">{teacher.quote}</p>}
+                  {cardPosition(idx) === 'deck-card--active' && (
+                    <p className="deck-tap-hint">Tap to see next →</p>
+                  )}
+                </div>
+              ))}
+            </div>
+            <div className="deck-footer">
+              <div className="deck-dots">
+                {enriched.map((_, i) => (
+                  <button
+                    key={i}
+                    className={`deck-dot${i === deckIndex ? ' deck-dot--active' : ''}`}
+                    onClick={() => setDeckIndex(i)}
+                    aria-label={`Go to teacher ${i + 1}`}
+                  />
+                ))}
+              </div>
+              <span className="deck-counter">{deckIndex + 1} / {total}</span>
+            </div>
+          </div>
         )}
       </div>
     </section>
