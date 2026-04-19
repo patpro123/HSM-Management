@@ -287,6 +287,12 @@ img {
     align-items: center;
 }
 
+@media (max-width: 480px) {
+    .nav-container {
+        padding: 0 1rem;
+    }
+}
+
 .nav-logo {
     height: 120px;
     width: auto;
