@@ -109,6 +109,7 @@
     background-color: var(--bg-primary);
     line-height: 1.6;
     -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
 }
 
 a {
@@ -175,31 +176,6 @@ img {
 
 .text-center {
     text-align: center;
-}
-
-/* Section title — responsive heading used across all sections */
-.section-title {
-    font-size: clamp(1.6rem, 4vw, 3rem);
-    margin-bottom: 1.5rem;
-}
-
-/* Spacing utilities (Tailwind not loaded in Next.js) */
-.mb-0 { margin-bottom: 0; }
-.mb-4 { margin-bottom: 1rem; }
-.mb-5 { margin-bottom: 1.25rem; }
-.mt-4 { margin-top: 1rem; }
-.mt-5 { margin-top: 1.25rem; }
-.w-full { width: 100%; }
-
-/* Mobile: scale down decorative label so it doesn't bleed off-screen */
-@media (max-width: 767px) {
-    .section-label {
-        font-size: 1.2rem;
-        transform: rotate(-1.5deg);
-    }
-    .section-title {
-        font-size: clamp(1.4rem, 5vw, 2rem);
-    }
 }
 
 /* Motifs (Repeating Orange Circles/Elements) */
