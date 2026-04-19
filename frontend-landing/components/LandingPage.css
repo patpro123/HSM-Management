@@ -269,7 +269,6 @@ img {
     background: rgba(253, 253, 253, 0.95);
     backdrop-filter: blur(10px);
     box-shadow: 0 2px 15px rgba(0, 0, 0, 0.03);
-    overflow: hidden;
     transition: height 0.3s;
 }
 
@@ -295,7 +294,7 @@ img {
 
 @media (max-width: 767px) {
     .nav-logo {
-        height: 100px;
+        height: 52px;
     }
 }
 
@@ -349,8 +348,14 @@ img {
 
 @media (max-width: 480px) {
     .nav-actions .nav-signin {
-        padding: 0.4rem 0.6rem;
-        font-size: 0.75rem;
+        display: none;
+    }
+    .nav-phone {
+        display: none;
+    }
+    .nav-actions .btn-cta {
+        padding: 0.5rem 0.9rem;
+        font-size: 0.82rem;
     }
 }
 

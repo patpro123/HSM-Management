@@ -1,3 +1,5 @@
+'use client';
+
 interface CleffAvatarProps {
   size?: number;
 }
