@@ -82,7 +82,7 @@ const TeachersSection: React.FC<TeachersSectionProps> = ({ teachers }) => {
     const timer = setInterval(() => {
       if (isInteracting) return;
       const cardWidth = (el.firstElementChild as HTMLElement)?.offsetWidth ?? 280;
-      const gap = 24;
+      const gap = parseFloat(getComputedStyle(el).gap) || 16;
       const maxScroll = el.scrollWidth - el.clientWidth;
       const next = el.scrollLeft + cardWidth + gap;
       el.scrollTo({ left: next >= maxScroll - 10 ? 0 : next, behavior: 'smooth' });

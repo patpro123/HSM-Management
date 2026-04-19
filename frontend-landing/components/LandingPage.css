@@ -833,21 +833,28 @@ img {
     box-sizing: border-box;
 }
 
-/* Mobile: keep horizontal carousel, wider cards */
+/* Mobile: one card at a time */
 @media (max-width: 600px) {
     .teachers-carousel {
         flex-direction: row;
         overflow-x: auto;
         scroll-snap-type: x mandatory;
-        -webkit-mask-image: linear-gradient(to right, black 85%, transparent 100%);
-        mask-image: linear-gradient(to right, black 85%, transparent 100%);
+        -webkit-overflow-scrolling: touch;
+        -webkit-mask-image: none;
+        mask-image: none;
         gap: 1rem;
+        scrollbar-width: none;
+        padding-left: 0;
+        padding-right: 0;
     }
+    .teachers-carousel::-webkit-scrollbar { display: none; }
     .teacher-card {
-        flex: 0 0 78vw;
-        min-width: 220px;
-        max-width: 300px;
+        flex: 0 0 100%;
+        min-width: unset;
+        max-width: unset;
         width: unset;
+        scroll-snap-align: start;
+        padding: 2rem;
     }
 }
 
@@ -1505,7 +1512,7 @@ img {
         display: block;
     }
 
-    /* Instrument grid: horizontal scroll carousel */
+    /* Instrument grid: one card at a time */
     .instrument-grid {
         display: flex !important;
         grid-template-columns: none !important;
@@ -1517,18 +1524,26 @@ img {
         padding-bottom: 1.5rem;
         padding-top: 0.5rem;
         width: 100%;
-        /* Fade-out right edge hint */
-        -webkit-mask-image: linear-gradient(to right, black 85%, transparent 100%);
-        mask-image: linear-gradient(to right, black 85%, transparent 100%);
+        -webkit-mask-image: none;
+        mask-image: none;
+        scrollbar-width: none;
     }
 
-    /* Each card ~75vw so ~1.3 cards are visible — swipe is obvious */
+    .instrument-grid::-webkit-scrollbar { display: none; }
+
+    /* Each card fills the full width — one card per view */
     .instrument-card {
-        flex: 0 0 75vw !important;
-        min-width: 220px !important;
-        max-width: 280px !important;
+        flex: 0 0 100% !important;
+        min-width: unset !important;
+        max-width: unset !important;
         scroll-snap-align: start;
+        padding: 2rem 1.5rem !important;
+        height: auto;
     }
+
+    .instrument-icon { font-size: 3rem; margin-bottom: 1rem; }
+    .instrument-name { font-size: 1.3rem; margin-bottom: 0.6rem; }
+    .instrument-desc { font-size: 0.95rem; }
 
     /* Full-screen snap sections on mobile */
     html {

@@ -30,7 +30,7 @@ const InstrumentShowcase: React.FC<InstrumentShowcaseProps> = ({ onOpenModal }) 
     const timer = setInterval(() => {
       if (isInteracting) return;
       const cardWidth = (el.firstElementChild as HTMLElement)?.offsetWidth ?? window.innerWidth * 0.75;
-      const gap = 16;
+      const gap = parseFloat(getComputedStyle(el).gap) || 16;
       const maxScroll = el.scrollWidth - el.clientWidth;
       const next = el.scrollLeft + cardWidth + gap;
       el.scrollTo({ left: next >= maxScroll - 10 ? 0 : next, behavior: 'smooth' });
