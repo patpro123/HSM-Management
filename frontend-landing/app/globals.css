@@ -6,3 +6,10 @@ body {
   margin: 0;
   padding: 0;
 }
+
+/* Wire Next.js font variables into the CSS variables LandingPage.css uses */
+:root {
+  --font-sans: var(--loaded-inter), system-ui, -apple-system, sans-serif;
+  --font-serif: var(--loaded-jakarta), system-ui, -apple-system, sans-serif;
+  --font-cursive: var(--loaded-inter), system-ui, -apple-system, sans-serif;
+}
