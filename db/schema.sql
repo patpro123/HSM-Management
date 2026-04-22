@@ -205,6 +205,7 @@ CREATE TABLE IF NOT EXISTS packages (
   name text NOT NULL,
   classes_count integer NOT NULL CHECK (classes_count > 0),
   price numeric(10,2) NOT NULL CHECK (price >= 0),
+  location text,
   created_at timestamptz DEFAULT now()
 );
 

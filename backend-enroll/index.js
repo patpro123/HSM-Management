@@ -234,20 +234,29 @@ app.use('/api/prospects',    require('./routes/prospects'));
 app.use('/api/migration',    require('./routes/migration'));
 app.use('/api',              require('./routes/documents'));
 
-// GET /api/packages — list all packages, optionally filtered by instrument_id
+// GET /api/packages — list all packages, optionally filtered by instrument_id and location
 app.get('/api/packages', async (req, res) => {
-  const { instrument_id } = req.query;
+  const { instrument_id, location } = req.query;
   try {
     let query = `
-      SELECT p.id, p.name, p.classes_count, p.price, p.instrument_id,
+      SELECT p.id, p.name, p.classes_count, p.price, p.instrument_id, p.location,
              i.name AS instrument_name
       FROM packages p
       JOIN instruments i ON p.instrument_id = i.id
     `;
     const params = [];
+    const conditions = [];
+
     if (instrument_id) {
-      query += ' WHERE p.instrument_id = $1';
       params.push(instrument_id);
+      conditions.push(`p.instrument_id = $${params.length}`);
+    }
+    if (location) {
+      params.push(location);
+      conditions.push(`(p.location = $${params.length} OR p.location IS NULL)`);
+    }
+    if (conditions.length > 0) {
+      query += ' WHERE ' + conditions.join(' AND ');
     }
     query += ' ORDER BY i.name, p.classes_count';
     const result = await pool.query(query, params);

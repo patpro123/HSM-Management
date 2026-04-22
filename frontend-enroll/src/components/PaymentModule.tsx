@@ -39,6 +39,9 @@ const PaymentModule: React.FC<PaymentModuleProps> = ({ students, payments, onRef
   const [availablePackages, setAvailablePackages] = useState<Package[]>([]);
   const [selectedPackageId, setSelectedPackageId] = useState('');
   const [packageLoading, setPackageLoading] = useState(false);
+  const [useCustomPackage, setUseCustomPackage] = useState(false);
+  const [customClasses, setCustomClasses] = useState('');
+  const [customAmount, setCustomAmount] = useState('');
 
   // Filters
   const [searchName, setSearchName] = useState('');
@@ -169,11 +172,16 @@ const PaymentModule: React.FC<PaymentModuleProps> = ({ students, payments, onRef
       return;
     }
     setPackageLoading(true);
-    apiGet(`/api/packages?instrument_id=${selectedInstrumentId}`)
-      .then((d: { packages: Package[] }) => setAvailablePackages(d.packages || []))
+    const loc = formData.location;
+    const url = `/api/packages?instrument_id=${selectedInstrumentId}${loc ? `&location=${loc}` : ''}`;
+    apiGet(url)
+      .then((d: { packages: Package[] }) => {
+        setAvailablePackages(d.packages || []);
+        setSelectedPackageId('');
+      })
       .catch(() => setAvailablePackages([]))
       .finally(() => setPackageLoading(false));
-  }, [selectedInstrumentId]);
+  }, [selectedInstrumentId, formData.location]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -215,17 +223,29 @@ const PaymentModule: React.FC<PaymentModuleProps> = ({ students, payments, onRef
         });
         alert('Payment updated successfully!');
       } else {
-        const selectedPkg = availablePackages.find(p => p.id === selectedPackageId);
-        const classCredits = selectedPkg?.classes_count ?? 0;
+        let classCredits: number;
+        let packageId: string | undefined;
+        let amount: number;
+
+        if (useCustomPackage) {
+          classCredits = parseInt(customClasses) || 0;
+          amount = parseFloat(customAmount) || parseFloat(formData.amount) || 0;
+          packageId = undefined;
+        } else {
+          const selectedPkg = availablePackages.find(p => p.id === selectedPackageId);
+          classCredits = selectedPkg?.classes_count ?? 0;
+          amount = parseFloat(formData.amount);
+          packageId = selectedPackageId || undefined;
+        }
 
         await apiPost('/api/payments', {
           student_id: formData.student_id,
-          amount: parseFloat(formData.amount),
+          amount,
           payment_method: formData.payment_method,
           payment_for: formData.payment_for,
           notes: formData.notes,
           payment_date: formData.payment_date,
-          package_id: selectedPackageId || undefined,
+          package_id: packageId,
           location: formData.location,
           class_credits: classCredits,
           batch_id: paymentBatchId || undefined
@@ -247,6 +267,9 @@ const PaymentModule: React.FC<PaymentModuleProps> = ({ students, payments, onRef
       setSelectedInstrumentId('');
       setSelectedPackageId('');
       setAvailablePackages([]);
+      setUseCustomPackage(false);
+      setCustomClasses('');
+      setCustomAmount('');
       onRefresh();
     } catch (error) {
       console.error('Error saving payment:', error);
@@ -584,32 +607,90 @@ const PaymentModule: React.FC<PaymentModuleProps> = ({ students, payments, onRef
                   {/* Package selector */}
                   {selectedInstrumentId && (
                     <div>
-                      <label className="block text-sm font-semibold text-slate-700 mb-2">Package *</label>
-                      {packageLoading ? (
-                        <p className="text-sm text-slate-400">Loading packages...</p>
-                      ) : (
-                        <select
-                          value={selectedPackageId}
-                          onChange={e => {
-                            setSelectedPackageId(e.target.value);
-                            const pkg = availablePackages.find(p => p.id === e.target.value);
-                            if (pkg) setFormData(prev => ({ ...prev, amount: String(pkg.price) }));
+                      <div className="flex items-center justify-between mb-2">
+                        <label className="text-sm font-semibold text-slate-700">Package *</label>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setUseCustomPackage(v => !v);
+                            setSelectedPackageId('');
+                            setCustomClasses('');
+                            setCustomAmount('');
+                            setFormData(prev => ({ ...prev, amount: '' }));
                           }}
-                          required={!editingPayment}
-                          className="w-full px-4 py-2 rounded-lg border border-slate-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none"
+                          className="text-xs text-indigo-600 hover:text-indigo-800 underline"
                         >
-                          <option value="">-- Select package --</option>
-                          {availablePackages.map(pkg => (
-                            <option key={pkg.id} value={pkg.id}>
-                              {pkg.name} — {pkg.classes_count} classes · ₹{pkg.price}
-                            </option>
-                          ))}
-                        </select>
-                      )}
-                      {selectedPackageId && availablePackages.find(p => p.id === selectedPackageId) && (
-                        <div className="mt-2 bg-indigo-50 border border-indigo-200 rounded-lg px-3 py-2 text-sm text-indigo-800">
-                          <strong>{availablePackages.find(p => p.id === selectedPackageId)!.classes_count} classes</strong> will be credited
+                          {useCustomPackage ? 'Use package list' : "Can't find package? Enter manually"}
+                        </button>
+                      </div>
+
+                      {useCustomPackage ? (
+                        <div className="space-y-3 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                          <p className="text-xs text-amber-700 font-medium">Manual override — enter classes and amount directly</p>
+                          <div className="grid grid-cols-2 gap-3">
+                            <div>
+                              <label className="block text-xs text-slate-600 mb-1">Classes to credit *</label>
+                              <input
+                                type="number"
+                                value={customClasses}
+                                onChange={e => setCustomClasses(e.target.value)}
+                                min="1"
+                                required
+                                placeholder="e.g. 8"
+                                className="w-full px-3 py-2 rounded-lg border border-slate-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none text-sm"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs text-slate-600 mb-1">Amount (₹) *</label>
+                              <input
+                                type="number"
+                                value={customAmount}
+                                onChange={e => {
+                                  setCustomAmount(e.target.value);
+                                  setFormData(prev => ({ ...prev, amount: e.target.value }));
+                                }}
+                                min="0"
+                                required
+                                placeholder="e.g. 2000"
+                                className="w-full px-3 py-2 rounded-lg border border-slate-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none text-sm"
+                              />
+                            </div>
+                          </div>
+                          {customClasses && (
+                            <div className="bg-indigo-50 border border-indigo-200 rounded-lg px-3 py-2 text-sm text-indigo-800">
+                              <strong>{customClasses} classes</strong> will be credited
+                            </div>
+                          )}
                         </div>
+                      ) : (
+                        <>
+                          {packageLoading ? (
+                            <p className="text-sm text-slate-400">Loading packages...</p>
+                          ) : (
+                            <select
+                              value={selectedPackageId}
+                              onChange={e => {
+                                setSelectedPackageId(e.target.value);
+                                const pkg = availablePackages.find(p => p.id === e.target.value);
+                                if (pkg) setFormData(prev => ({ ...prev, amount: String(pkg.price) }));
+                              }}
+                              required={!editingPayment && !useCustomPackage}
+                              className="w-full px-4 py-2 rounded-lg border border-slate-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none"
+                            >
+                              <option value="">-- Select package --</option>
+                              {availablePackages.map(pkg => (
+                                <option key={pkg.id} value={pkg.id}>
+                                  {pkg.name} — {pkg.classes_count} classes · ₹{pkg.price}
+                                </option>
+                              ))}
+                            </select>
+                          )}
+                          {selectedPackageId && availablePackages.find(p => p.id === selectedPackageId) && (
+                            <div className="mt-2 bg-indigo-50 border border-indigo-200 rounded-lg px-3 py-2 text-sm text-indigo-800">
+                              <strong>{availablePackages.find(p => p.id === selectedPackageId)!.classes_count} classes</strong> will be credited
+                            </div>
+                          )}
+                        </>
                       )}
                     </div>
                   )}
@@ -676,20 +757,22 @@ const PaymentModule: React.FC<PaymentModuleProps> = ({ students, payments, onRef
                     className="w-full px-4 py-2 rounded-lg border border-slate-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none"
                   />
                 </div>
-                <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-2">Amount (₹) *</label>
-                  <input
-                    type="number"
-                    name="amount"
-                    value={formData.amount}
-                    onChange={handleInputChange}
-                    required
-                    disabled={!!editingPayment}
-                    min="0"
-                    step="0.01"
-                    className="w-full px-4 py-2 rounded-lg border border-slate-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none"
-                  />
-                </div>
+                {!useCustomPackage && (
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-700 mb-2">Amount (₹) *</label>
+                    <input
+                      type="number"
+                      name="amount"
+                      value={formData.amount}
+                      onChange={handleInputChange}
+                      required
+                      disabled={!!editingPayment}
+                      min="0"
+                      step="0.01"
+                      className="w-full px-4 py-2 rounded-lg border border-slate-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none"
+                    />
+                  </div>
+                )}
 
                 <div>
                   <label className="block text-sm font-semibold text-slate-700 mb-2">Payment Method *</label>
