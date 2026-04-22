@@ -37,7 +37,9 @@ router.post('/', authenticateJWT, authorizeRole(['admin']), async (req, res) => 
       });
 
       instrumentFreqs.forEach(freq => {
-        if (freq === 'trial') totalCredits += 4;
+        if (freq === 'pbel_4') totalCredits += 4;
+        else if (freq === 'trial') totalCredits += 4;
+        else if (freq === 'pbel_8') totalCredits += 8;
         else if (freq === 'monthly') totalCredits += 8;
         else if (freq === 'quarterly') totalCredits += 24;
         else if (freq === 'half_yearly') totalCredits += 48;
@@ -102,16 +104,23 @@ router.post('/', authenticateJWT, authorizeRole(['admin']), async (req, res) => 
         const { batch_id, payment_frequency, classes_remaining, enrolled_on, trinity_grade, fee_structure_id } = batch;
 
         let initialCredits = classes_remaining || 0;
-        const freq = (payment_frequency || '').toLowerCase();
-        if (!initialCredits && freq === 'monthly') initialCredits = 8;
-        if (!initialCredits && freq === 'quarterly') initialCredits = 24;
+        let freq = (payment_frequency || 'monthly').toLowerCase();
+
+        // Translate PBEL AND trial package types to valid DB enum values
+        if (freq === 'pbel_4') { initialCredits = initialCredits || 4; freq = 'monthly'; }
+        else if (freq === 'pbel_8') { initialCredits = initialCredits || 8; freq = 'monthly'; }
+        else if (freq === 'trial') { initialCredits = initialCredits || 4; freq = 'monthly'; }
+        else if (!initialCredits && freq === 'monthly') initialCredits = 8;
+        else if (!initialCredits && freq === 'quarterly') initialCredits = 24;
+        else if (!initialCredits && freq === 'half_yearly') initialCredits = 48;
+        else if (!initialCredits && freq === 'yearly') initialCredits = 96;
 
         const batchResult = await client.query(
           `INSERT INTO enrollment_batches
              (enrollment_id, batch_id, payment_frequency, classes_remaining, enrolled_on, trinity_grade, fee_structure_id)
            VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
           [
-            enrollment.id, batch_id, payment_frequency || 'monthly', initialCredits,
+            enrollment.id, batch_id, freq, initialCredits,
             enrolled_on || new Date(),
             trinity_grade || 'Initial',
             fee_structure_id || null
@@ -374,7 +383,7 @@ router.put('/:id', authenticateJWT, authorizeRole(['admin']), async (req, res) =
            (enrollment_id, batch_id, payment_frequency, classes_remaining, enrolled_on, trinity_grade, fee_structure_id)
            VALUES ($1, $2, $3, $4, $5, $6, $7)`,
           [enrollmentId, b.batch_id, freq, initialCredits, b.enrolled_on || new Date(),
-           b.trinity_grade || 'Initial', b.fee_structure_id || null]
+            b.trinity_grade || 'Initial', b.fee_structure_id || null]
         );
       }
 

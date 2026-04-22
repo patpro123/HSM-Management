@@ -20,7 +20,7 @@ interface StudentDetailsProps {
   student?: Student | null;
   batches: Batch[];
   instruments: Instrument[];
-  onSave: (data: any, enrollments: EnrollmentSelection[], prospectId?: string, feeTotal?: number) => void;
+  onSave: (data: any, enrollments: EnrollmentSelection[], prospectId?: string, feeTotal?: number, creditsTotal?: number) => void;
   onCancel: () => void;
   initialProspectId?: string | null;
 }
@@ -39,7 +39,7 @@ const StudentDetails: React.FC<StudentDetailsProps> = ({ student, batches, instr
   const [instrGrades, setInstrGrades] = useState<Record<string, string>>({});
   const [instrPayTypes, setInstrPayTypes] = useState<Record<string, PaymentType>>({});
   const [instrFees, setInstrFees] = useState<Record<string, { fee_amount: number; fee_structure_id: string } | null>>({});
-  const [branches, setBranches] = useState<Array<{id: string; name: string; code: string}>>([]);
+  const [branches, setBranches] = useState<Array<{ id: string; name: string; code: string }>>([]);
   const [selectedBranchId, setSelectedBranchId] = useState<string | null>(null);
 
   const [prospects, setProspects] = useState<any[]>([]);
@@ -55,7 +55,7 @@ const StudentDetails: React.FC<StudentDetailsProps> = ({ student, batches, instr
         const main = branchList.find((b: any) => b.code === 'main');
         if (main) setSelectedBranchId(main.id);
       })
-      .catch(() => {});
+      .catch(() => { });
   }, []);
 
   const resolveFee = async (instrumentId: string, grade: string, payType: PaymentType) => {
@@ -95,7 +95,7 @@ const StudentDetails: React.FC<StudentDetailsProps> = ({ student, batches, instr
     if (!student) {
       apiGet('/api/prospects')
         .then(res => setProspects(res.prospects || []))
-        .catch(() => {});
+        .catch(() => { });
     }
   }, [student]);
 
@@ -248,7 +248,27 @@ const StudentDetails: React.FC<StudentDetailsProps> = ({ student, batches, instr
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const feeTotal = selectedInstrumentIds.reduce((sum, id) => sum + (instrFees[id]?.fee_amount || 0), 0);
-    onSave(formData, selectedBatches, selectedProspectId, feeTotal);
+    let creditsTotal = 0;
+
+    // Deduplicate batches by instrument to avoid double counting credits
+    const uniqueInstrumentsMap = new Map();
+    selectedBatches.forEach(b => {
+      const batchObj = batches.find(db => String(db.id) === String(b.batch_id));
+      if (batchObj?.instrument_id) {
+        uniqueInstrumentsMap.set(String(batchObj.instrument_id), b);
+      }
+    });
+
+    Array.from(uniqueInstrumentsMap.values()).forEach(b => {
+      const type = (b.payment_frequency || 'monthly').toLowerCase();
+      if (type === 'pbel_4' || type === 'trial') creditsTotal += 4;
+      else if (type === 'pbel_8' || type === 'monthly') creditsTotal += 8;
+      else if (type === 'quarterly') creditsTotal += 24;
+      else if (type === 'half_yearly') creditsTotal += 48;
+      else if (type === 'yearly') creditsTotal += 96;
+    });
+
+    onSave(formData, selectedBatches, selectedProspectId, feeTotal, creditsTotal);
   };
 
   // For new enrollments: only non-deprecated instruments.
@@ -408,11 +428,10 @@ const StudentDetails: React.FC<StudentDetailsProps> = ({ student, batches, instr
                     key={branch.id}
                     type="button"
                     onClick={() => handleBranchChange(branch.id)}
-                    className={`px-4 py-2 rounded-lg border-2 text-sm font-semibold transition ${
-                      selectedBranchId === branch.id
-                        ? 'border-orange-500 bg-orange-500 text-white'
-                        : 'border-slate-300 bg-white text-slate-700 hover:border-orange-400'
-                    }`}
+                    className={`px-4 py-2 rounded-lg border-2 text-sm font-semibold transition ${selectedBranchId === branch.id
+                      ? 'border-orange-500 bg-orange-500 text-white'
+                      : 'border-slate-300 bg-white text-slate-700 hover:border-orange-400'
+                      }`}
                   >
                     {branch.name}
                   </button>
@@ -440,15 +459,14 @@ const StudentDetails: React.FC<StudentDetailsProps> = ({ student, batches, instr
                     type="button"
                     onClick={() => !isLegacy && toggleInstrument(instrKey)}
                     disabled={!hasBatches}
-                    className={`px-4 py-2 rounded-full border-2 text-sm font-semibold transition ${
-                      isSelected && isLegacy
-                        ? 'border-amber-500 bg-amber-500 text-white cursor-default'
-                        : isSelected
-                          ? 'border-orange-500 bg-orange-500 text-white'
-                          : hasBatches
-                            ? 'border-slate-300 bg-white text-slate-700 hover:border-orange-400'
-                            : 'border-slate-200 bg-slate-50 text-slate-400 cursor-not-allowed'
-                    }`}
+                    className={`px-4 py-2 rounded-full border-2 text-sm font-semibold transition ${isSelected && isLegacy
+                      ? 'border-amber-500 bg-amber-500 text-white cursor-default'
+                      : isSelected
+                        ? 'border-orange-500 bg-orange-500 text-white'
+                        : hasBatches
+                          ? 'border-slate-300 bg-white text-slate-700 hover:border-orange-400'
+                          : 'border-slate-200 bg-slate-50 text-slate-400 cursor-not-allowed'
+                      }`}
                   >
                     {inst.name}
                     {isLegacy && <span className="ml-1 text-[10px] opacity-75">(legacy)</span>}
@@ -526,14 +544,14 @@ const StudentDetails: React.FC<StudentDetailsProps> = ({ student, batches, instr
                         const isPbel = branches.find(b => b.id === selectedBranchId)?.code === 'pbel';
                         const opts: Array<{ type: PaymentType; label: string }> = isPbel
                           ? [
-                              { type: 'trial',  label: 'Trial' },
-                              { type: 'pbel_4', label: '4-Class' },
-                              { type: 'pbel_8', label: '8-Class' },
-                            ]
+                            { type: 'trial', label: 'Trial' },
+                            { type: 'pbel_4', label: '4-Class' },
+                            { type: 'pbel_8', label: '8-Class' },
+                          ]
                           : [
-                              { type: 'trial',     label: 'Trial' },
-                              { type: 'quarterly', label: 'Quarterly' },
-                            ];
+                            { type: 'trial', label: 'Trial' },
+                            { type: 'quarterly', label: 'Quarterly' },
+                          ];
                         return (
                           <div className="flex gap-1.5">
                             {opts.map(({ type: pt, label }) => (

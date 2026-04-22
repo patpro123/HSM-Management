@@ -50,7 +50,7 @@ const EnrollmentForm: React.FC<EnrollmentFormProps> = ({ students, batches, inst
   const [instrPayTypes, setInstrPayTypes] = useState<Record<string, PaymentType>>({});
   const [instrFees, setInstrFees] = useState<Record<string, { fee_amount: number; fee_structure_id: string } | null>>({});
 
-  const [branches, setBranches] = useState<Array<{id: string; name: string; code: string}>>([]);
+  const [branches, setBranches] = useState<Array<{ id: string; name: string; code: string }>>([]);
   const [mainBranchId, setMainBranchId] = useState<string | null>(null);
   const [selectedBranchId, setSelectedBranchId] = useState<string | null>(null);
 
@@ -73,7 +73,7 @@ const EnrollmentForm: React.FC<EnrollmentFormProps> = ({ students, batches, inst
           setSelectedBranchId(main.id);
         }
       })
-      .catch(() => {});
+      .catch(() => { });
   }, []);
 
   const isVocalInstrument = (instrumentId: string | number) =>
@@ -213,9 +213,25 @@ const EnrollmentForm: React.FC<EnrollmentFormProps> = ({ students, batches, inst
     resolveFee(instrumentId, grade, payType);
   };
 
-  const totalAmount = enrollmentData.enrollments.reduce((sum, e) => {
+  const uniqueInstrumentsMap = new Map();
+  enrollmentData.enrollments.forEach(e => {
+    uniqueInstrumentsMap.set(String(e.instrument_id), e);
+  });
+  const uniqueEnrollments = Array.from(uniqueInstrumentsMap.values());
+
+  const totalAmount = uniqueEnrollments.reduce((sum, e) => {
     const fee = instrFees[String(e.instrument_id)];
     return sum + (fee?.fee_amount || 0);
+  }, 0);
+
+  const totalCredits = uniqueEnrollments.reduce((sum, e) => {
+    const type = (e.payment_type || 'monthly').toLowerCase();
+    if (type === 'pbel_4' || type === 'trial') return sum + 4;
+    if (type === 'pbel_8' || type === 'monthly') return sum + 8;
+    if (type === 'quarterly') return sum + 24;
+    if (type === 'half_yearly') return sum + 48;
+    if (type === 'yearly') return sum + 96;
+    return sum;
   }, 0);
 
   const handleEnrollmentSubmit = async () => {
@@ -250,6 +266,7 @@ const EnrollmentForm: React.FC<EnrollmentFormProps> = ({ students, batches, inst
         await apiPost('/api/payments', {
           student_id: String(enrollmentData.student_id),
           amount: totalAmount,
+          class_credits: totalCredits,
           payment_method: paymentForm.method,
           payment_for: 'tuition',
           notes: paymentForm.notes,
@@ -341,11 +358,10 @@ const EnrollmentForm: React.FC<EnrollmentFormProps> = ({ students, batches, inst
                     key={branch.id}
                     type="button"
                     onClick={() => handleBranchChange(branch.id)}
-                    className={`px-5 py-2.5 rounded-lg border-2 font-semibold text-sm transition ${
-                      selectedBranchId === branch.id
-                        ? 'border-indigo-500 bg-indigo-600 text-white'
-                        : 'border-slate-300 bg-white text-slate-700 hover:border-indigo-400'
-                    }`}
+                    className={`px-5 py-2.5 rounded-lg border-2 font-semibold text-sm transition ${selectedBranchId === branch.id
+                      ? 'border-indigo-500 bg-indigo-600 text-white'
+                      : 'border-slate-300 bg-white text-slate-700 hover:border-indigo-400'
+                      }`}
                   >
                     {branch.name}
                   </button>
@@ -453,14 +469,14 @@ const EnrollmentForm: React.FC<EnrollmentFormProps> = ({ students, batches, inst
                       const isPbel = branches.find(b => b.id === selectedBranchId)?.code === 'pbel';
                       const packageOptions: Array<{ type: PaymentType; label: string; sub: string }> = isPbel
                         ? [
-                            { type: 'trial',  label: 'Trial Session',    sub: '4 classes · 2 weeks' },
-                            { type: 'pbel_4', label: '4-Class Package',  sub: '4 classes · ₹1,600' },
-                            { type: 'pbel_8', label: '8-Class Package',  sub: '8 classes · ₹2,990' },
-                          ]
+                          { type: 'trial', label: 'Trial Session', sub: '4 classes · 2 weeks' },
+                          { type: 'pbel_4', label: '4-Class Package', sub: '4 classes · ₹1,600' },
+                          { type: 'pbel_8', label: '8-Class Package', sub: '8 classes · ₹2,990' },
+                        ]
                         : [
-                            { type: 'trial',     label: 'Trial Session',      sub: '4 classes · 2 weeks' },
-                            { type: 'quarterly', label: 'Quarterly Package',   sub: '24 classes · 3 months' },
-                          ];
+                          { type: 'trial', label: 'Trial Session', sub: '4 classes · 2 weeks' },
+                          { type: 'quarterly', label: 'Quarterly Package', sub: '24 classes · 3 months' },
+                        ];
                       return (
                         <div className="flex gap-3 flex-wrap">
                           {packageOptions.map(({ type: pt, label, sub }) => (
@@ -468,11 +484,10 @@ const EnrollmentForm: React.FC<EnrollmentFormProps> = ({ students, batches, inst
                               key={pt}
                               type="button"
                               onClick={() => handlePayTypeChange(instrument.id, pt)}
-                              className={`px-4 py-3 rounded-xl border-2 font-semibold text-sm transition flex flex-col items-start gap-0.5 min-w-[140px] ${
-                                currentPayType === pt
-                                  ? 'border-indigo-500 bg-indigo-600 text-white shadow-md'
-                                  : 'border-slate-300 bg-white text-slate-700 hover:border-indigo-400'
-                              }`}
+                              className={`px-4 py-3 rounded-xl border-2 font-semibold text-sm transition flex flex-col items-start gap-0.5 min-w-[140px] ${currentPayType === pt
+                                ? 'border-indigo-500 bg-indigo-600 text-white shadow-md'
+                                : 'border-slate-300 bg-white text-slate-700 hover:border-indigo-400'
+                                }`}
                             >
                               <span>{label}</span>
                               <span className={`text-xs font-normal ${currentPayType === pt ? 'text-indigo-100' : 'text-slate-400'}`}>
@@ -617,8 +632,8 @@ const EnrollmentForm: React.FC<EnrollmentFormProps> = ({ students, batches, inst
                         <p className="text-sm text-indigo-600 font-semibold mt-1">
                           {enrollment.payment_type === 'trial' ? 'Trial Session (4 classes)'
                             : enrollment.payment_type === 'pbel_4' ? '4-Class Package (PBEL)'
-                            : enrollment.payment_type === 'pbel_8' ? '8-Class Package (PBEL)'
-                            : 'Quarterly Package (24 classes)'}
+                              : enrollment.payment_type === 'pbel_8' ? '8-Class Package (PBEL)'
+                                : 'Quarterly Package (24 classes)'}
                         </p>
                       </div>
                       <div className="text-right">
@@ -686,8 +701,8 @@ const EnrollmentForm: React.FC<EnrollmentFormProps> = ({ students, batches, inst
                     <span className="ml-2 text-xs text-slate-500">
                       {enrollment.payment_type === 'trial' ? 'Trial (4 cls)'
                         : enrollment.payment_type === 'pbel_4' ? 'PBEL (4 cls)'
-                        : enrollment.payment_type === 'pbel_8' ? 'PBEL (8 cls)'
-                        : 'Quarterly (24 cls)'}
+                          : enrollment.payment_type === 'pbel_8' ? 'PBEL (8 cls)'
+                            : 'Quarterly (24 cls)'}
                       {batch ? ` · ${batch.day_of_week}` : ''}
                     </span>
                   </div>
@@ -739,11 +754,10 @@ const EnrollmentForm: React.FC<EnrollmentFormProps> = ({ students, batches, inst
                       key={m}
                       type="button"
                       onClick={() => setPaymentForm({ ...paymentForm, method: m })}
-                      className={`px-5 py-2 rounded-lg border-2 font-semibold text-sm transition ${
-                        paymentForm.method === m
-                          ? 'border-indigo-500 bg-indigo-600 text-white'
-                          : 'border-slate-300 bg-white text-slate-700 hover:border-indigo-400'
-                      }`}
+                      className={`px-5 py-2 rounded-lg border-2 font-semibold text-sm transition ${paymentForm.method === m
+                        ? 'border-indigo-500 bg-indigo-600 text-white'
+                        : 'border-slate-300 bg-white text-slate-700 hover:border-indigo-400'
+                        }`}
                     >
                       {m === 'cash' ? 'Cash' : m === 'upi' ? 'UPI' : 'Bank Transfer'}
                     </button>

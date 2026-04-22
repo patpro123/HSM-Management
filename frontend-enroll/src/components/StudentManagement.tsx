@@ -51,7 +51,7 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students: propStu
   const [searchTerm, setSearchTerm] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingStudent, setEditingStudent] = useState<Student | null>(null);
-  const [paymentStep, setPaymentStep] = useState<{ studentId: string; studentName: string; amount: number } | null>(null);
+  const [paymentStep, setPaymentStep] = useState<{ studentId: string; studentName: string; amount: number; credits?: number } | null>(null);
   const [paymentForm, setPaymentForm] = useState({ method: 'cash', notes: '', skipPayment: false, skipReason: '' });
   const [savingPayment, setSavingPayment] = useState(false);
   const [viewMode, setViewMode] = useState<'card' | 'table'>('card');
@@ -184,6 +184,7 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students: propStu
         await apiPost('/api/payments', {
           student_id: paymentStep.studentId,
           amount: paymentStep.amount,
+          class_credits: paymentStep.credits,
           payment_method: paymentForm.method,
           payment_for: 'tuition',
           notes: paymentForm.notes,
@@ -214,7 +215,7 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students: propStu
     setShowAddModal(true);
   };
 
-  const handleSaveStudent = async (formData: any, selectedBatches: EnrollmentSelection[], prospectId?: string, feeTotal?: number) => {
+  const handleSaveStudent = async (formData: any, selectedBatches: EnrollmentSelection[], prospectId?: string, feeTotal?: number, creditsTotal?: number) => {
     if (!editingStudent && selectedBatches.length === 0) {
       setErrorBanner('Please select at least one batch. A student must be enrolled in a batch.');
       setTimeout(() => setErrorBanner(''), 3000);
@@ -285,7 +286,7 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students: propStu
         onRefresh();
         if (!editingStudent && savedId && (feeTotal || 0) > 0) {
           // New enrollment — show payment step
-          setPaymentStep({ studentId: savedId, studentName: savedName, amount: feeTotal || 0 });
+          setPaymentStep({ studentId: savedId, studentName: savedName, amount: feeTotal || 0, credits: creditsTotal });
           setPaymentForm({ method: 'cash', notes: '', skipPayment: false, skipReason: '' });
         } else {
           setSuccessBanner('Student saved successfully!');
