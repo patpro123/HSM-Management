@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { apiGet, apiPut } from '../api';
+import { apiGet, apiPut, apiPost } from '../api';
 
 interface Teacher {
   id: string;
@@ -42,7 +42,11 @@ interface MigrationRecord {
   payment: PaymentInfo | null;
 }
 
-export default function MigrationTools() {
+interface MigrationToolsProps {
+  onRefresh?: () => void;
+}
+
+export default function MigrationTools({ onRefresh }: MigrationToolsProps) {
   const [teachers, setTeachers] = useState<Teacher[]>([]);
   const [selectedTeacherId, setSelectedTeacherId] = useState('');
   const [records, setRecords] = useState<MigrationRecord[]>([]);
@@ -63,12 +67,7 @@ export default function MigrationTools() {
   const [paymentDateVal, setPaymentDateVal] = useState('');
 
   const [editingClasses, setEditingClasses] = useState<string | null>(null);
-  // carry-forward formula fields
-  const [carryForward, setCarryForward] = useState('');
-  const [newClassesBought, setNewClassesBought] = useState('');
-
-  // Set when non-backfill record needs overwrite confirmation
-  const [confirmingOverwrite, setConfirmingOverwrite] = useState<string | null>(null);
+  const [creditsBoughtVal, setCreditsBoughtVal] = useState('');
 
   const showMessage = (type: 'success' | 'error', text: string) => {
     setMessage({ type, text });
@@ -104,7 +103,6 @@ export default function MigrationTools() {
     if (!rec.payment) return;
     setEditingPayment(editKey(rec));
     setEditingClasses(null);
-    setConfirmingOverwrite(null);
     setPaymentDateVal(new Date(rec.payment.payment_date).toISOString().split('T')[0]);
   };
 
@@ -120,6 +118,7 @@ export default function MigrationTools() {
       showMessage('success', 'Payment date updated');
       setEditingPayment(null);
       fetchData();
+      onRefresh?.();
     } catch (err: unknown) {
       showMessage('error', err instanceof Error ? err.message : 'Failed to update payment date');
     }
@@ -128,49 +127,41 @@ export default function MigrationTools() {
   const startEditClasses = (rec: MigrationRecord) => {
     setEditingClasses(editKey(rec));
     setEditingPayment(null);
-    setConfirmingOverwrite(null);
-    setCarryForward('0');
-    setNewClassesBought(rec.package_classes_count !== null ? String(rec.package_classes_count) : '');
+    const existing = rec.payment?.metadata?.credits_bought;
+    setCreditsBoughtVal(
+      existing !== undefined ? String(existing) :
+      rec.package_classes_count !== null ? String(rec.package_classes_count) :
+      ''
+    );
   };
 
   const cancelEditClasses = () => {
     setEditingClasses(null);
-    setCarryForward('');
-    setNewClassesBought('');
-    setConfirmingOverwrite(null);
+    setCreditsBoughtVal('');
   };
 
-  const computedCredits = (rec: MigrationRecord): number | null => {
-    const cf = parseInt(carryForward, 10);
-    const nb = parseInt(newClassesBought, 10);
-    if (isNaN(cf) || isNaN(nb)) return null;
-    return Math.max(0, cf + nb - rec.attended_since_payment);
-  };
-
-  const saveClasses = async (rec: MigrationRecord, force = false) => {
-    const val = computedCredits(rec);
-    if (val === null || val < 0) {
-      showMessage('error', 'Enter valid carry-forward and new classes values');
-      return;
-    }
-    // If not backfill and not yet force-confirmed, show inline warning
-    if (!rec.payment?.is_backfill && !force) {
-      setConfirmingOverwrite(editKey(rec));
+  const saveCredits = async (rec: MigrationRecord) => {
+    const val = parseInt(creditsBoughtVal, 10);
+    if (isNaN(val) || val < 0) {
+      showMessage('error', 'Enter a valid non-negative number');
       return;
     }
     try {
-      await apiPut('/api/migration/classes', {
-        student_id: rec.student_id,
-        instrument_id: rec.instrument_id,
-        classes_remaining: val,
-        force: true,
-      });
-      showMessage('success', 'Classes remaining updated');
+      if (rec.payment) {
+        await apiPut(`/api/migration/payment/${rec.payment.id}/credits`, { credits_bought: val });
+      } else {
+        await apiPost('/api/migration/credits', {
+          student_id: rec.student_id,
+          instrument_id: rec.instrument_id,
+          credits_bought: val,
+        });
+      }
+      showMessage('success', 'Credits updated');
       setEditingClasses(null);
-      setConfirmingOverwrite(null);
       fetchData();
+      onRefresh?.();
     } catch (err: unknown) {
-      showMessage('error', err instanceof Error ? err.message : 'Failed to update classes remaining');
+      showMessage('error', err instanceof Error ? err.message : 'Failed to update credits');
     }
   };
 
@@ -226,14 +217,14 @@ export default function MigrationTools() {
                 <th className="px-4 py-3 border-b">Payment Date</th>
                 <th className="px-4 py-3 border-b">Period</th>
                 <th className="px-4 py-3 border-b">Amount</th>
-                <th className="px-4 py-3 border-b">Classes Remaining</th>
+                <th className="px-4 py-3 border-b">Credits Bought</th>
+                <th className="px-4 py-3 border-b">Available Credits</th>
                 <th className="px-4 py-3 border-b">Batch Slots</th>
               </tr>
             </thead>
             <tbody>
               {records.map((rec) => {
                 const key = editKey(rec);
-                const isConfirming = confirmingOverwrite === key;
                 return (
                   <tr key={key} className="border-b hover:bg-gray-50">
                     <td className="px-4 py-3 font-medium text-gray-800">
@@ -308,87 +299,41 @@ export default function MigrationTools() {
                       {rec.payment ? `₹${Number(rec.payment.amount).toLocaleString('en-IN')}` : '—'}
                     </td>
 
-                    {/* Classes Remaining */}
+                    {/* Credits Bought */}
                     <td className="px-4 py-3">
                       {editingClasses === key ? (
-                        <div className="space-y-2 min-w-[260px]">
-                          {/* Formula inputs */}
-                          <div className="bg-gray-50 border border-gray-200 rounded p-3 space-y-2 text-xs">
-                            <div className="flex items-center gap-2">
-                              <span className="text-gray-500 w-36">Carry-forward (prev. quarter)</span>
-                              <input
-                                type="number"
-                                min={0}
-                                value={carryForward}
-                                onChange={(e) => setCarryForward(e.target.value)}
-                                className="border border-gray-300 rounded px-2 py-1 w-16 text-sm"
-                              />
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <span className="text-gray-500 w-36">New classes bought</span>
-                              <input
-                                type="number"
-                                min={0}
-                                value={newClassesBought}
-                                onChange={(e) => setNewClassesBought(e.target.value)}
-                                className="border border-gray-300 rounded px-2 py-1 w-16 text-sm"
-                              />
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <span className="text-gray-500 w-36">Attended since payment</span>
-                              <span className="font-medium text-gray-700">{rec.attended_since_payment}</span>
-                            </div>
-                            <div className="border-t border-gray-200 pt-2 flex items-center gap-2">
-                              <span className="text-gray-700 font-semibold w-36">= Credits remaining</span>
-                              <span className={`text-base font-bold ${
-                                computedCredits(rec) === null ? 'text-gray-400' :
-                                computedCredits(rec)! < 4 ? 'text-red-600' : 'text-green-700'
-                              }`}>
-                                {computedCredits(rec) === null ? '—' : computedCredits(rec)}
-                              </span>
-                            </div>
-                          </div>
-                          <div className="flex gap-2">
-                            <button
-                              onClick={() => saveClasses(rec)}
-                              disabled={computedCredits(rec) === null}
-                              className="text-xs bg-blue-600 text-white px-3 py-1.5 rounded hover:bg-blue-700 disabled:opacity-40"
-                            >
-                              Save
-                            </button>
-                            <button
-                              onClick={cancelEditClasses}
-                              className="text-xs text-gray-500 hover:text-gray-700"
-                            >
-                              Cancel
-                            </button>
-                          </div>
-                          {isConfirming && (
-                            <div className="bg-yellow-50 border border-yellow-300 rounded p-2 text-xs text-yellow-800 max-w-xs">
-                              <p className="font-medium mb-1">
-                                This is a live student record (not a backfill). Overwriting will change active class credits.
-                              </p>
-                              <div className="flex gap-2 mt-1">
-                                <button
-                                  onClick={() => saveClasses(rec, true)}
-                                  className="bg-yellow-600 text-white px-2 py-1 rounded hover:bg-yellow-700"
-                                >
-                                  Yes, overwrite
-                                </button>
-                                <button
-                                  onClick={cancelEditClasses}
-                                  className="text-gray-600 hover:text-gray-800 underline"
-                                >
-                                  Cancel
-                                </button>
-                              </div>
-                            </div>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="number"
+                            min={0}
+                            value={creditsBoughtVal}
+                            onChange={(e) => setCreditsBoughtVal(e.target.value)}
+                            className="border border-gray-300 rounded px-2 py-1 w-20 text-sm"
+                          />
+                          <button
+                            onClick={() => saveCredits(rec)}
+                            className="text-xs bg-blue-600 text-white px-3 py-1.5 rounded hover:bg-blue-700"
+                          >
+                            Save
+                          </button>
+                          <button
+                            onClick={cancelEditClasses}
+                            className="text-xs text-gray-500 hover:text-gray-700"
+                          >
+                            Cancel
+                          </button>
+                          {!rec.payment && (
+                            <span className="text-xs text-slate-400 italic">will create new record</span>
                           )}
                         </div>
                       ) : (
                         <div className="flex items-center gap-2">
                           <span className="text-sm font-semibold text-gray-800">
-                            {rec.classes_remaining}
+                            {rec.payment?.metadata?.credits_bought !== undefined
+                              ? String(rec.payment.metadata.credits_bought)
+                              : rec.package_classes_count !== null
+                                ? rec.package_classes_count
+                                : '—'}
                           </span>
                           <button
                             onClick={() => startEditClasses(rec)}
@@ -398,6 +343,13 @@ export default function MigrationTools() {
                           </button>
                         </div>
                       )}
+                    </td>
+
+                    {/* Available Credits — dynamic: credits_bought - total_attendance */}
+                    <td className="px-4 py-3">
+                      <span className={`text-sm font-semibold ${rec.classes_remaining <= 2 ? 'text-red-600' : 'text-green-700'}`}>
+                        {rec.classes_remaining}
+                      </span>
                     </td>
 
                     {/* Batch Slots — read-only */}

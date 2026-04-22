@@ -88,8 +88,9 @@ router.get('/data', authenticateJWT, authorizeRole(['admin']), async (req, res) 
         });
       }
 
-      // For each instrument, find the most recent payment + attendance since that payment
+      // For each instrument, compute dynamic credits and find most recent payment
       for (const instrData of Object.values(instrumentMap)) {
+        // Most recent payment: package-based OR package-less with metadata.instrument_id
         const paymentResult = await db.query(`
           SELECT
             p.id,
@@ -99,15 +100,55 @@ router.get('/data', authenticateJWT, authorizeRole(['admin']), async (req, res) 
             pkg.classes_count AS package_classes_count,
             COALESCE((p.metadata->>'backfill')::boolean, false) AS is_backfill
           FROM payments p
-          JOIN packages pkg ON pkg.id = p.package_id
-          WHERE p.student_id = $1 AND pkg.instrument_id = $2
+          LEFT JOIN packages pkg ON pkg.id = p.package_id
+          WHERE p.student_id = $1
+            AND (
+              pkg.instrument_id = $2
+              OR (p.package_id IS NULL AND (p.metadata->>'instrument_id')::uuid = $2)
+            )
           ORDER BY p.timestamp DESC
           LIMIT 1
         `, [student.student_id, instrData.instrument_id]);
 
         const payment = paymentResult.rows[0] || null;
 
-        // Count present attendance for this student+instrument since payment date
+        // Total credits from ALL payments for this student+instrument (both package-based and manual)
+        const totalCreditsResult = await db.query(`
+          SELECT COALESCE(SUM(
+            CASE
+              WHEN (p.metadata->>'credits_bought') IS NOT NULL
+                   AND (p.metadata->>'credits_bought')::int > 0
+                THEN (p.metadata->>'credits_bought')::int
+              WHEN pkg.classes_count IS NOT NULL
+                THEN pkg.classes_count
+              ELSE 0
+            END
+          ), 0) AS total_credits
+          FROM payments p
+          LEFT JOIN packages pkg ON pkg.id = p.package_id
+          WHERE p.student_id = $1
+            AND (
+              pkg.instrument_id = $2
+              OR (p.package_id IS NULL AND (p.metadata->>'instrument_id')::uuid = $2)
+            )
+        `, [student.student_id, instrData.instrument_id]);
+
+        // Total present attendance for this student+instrument (lifetime)
+        const totalAttendedResult = await db.query(`
+          SELECT COUNT(*) AS cnt
+          FROM attendance_records ar
+          JOIN batches b ON b.id = ar.batch_id
+          WHERE ar.student_id = $1
+            AND b.instrument_id = $2
+            AND ar.status = 'present'
+            AND ar.is_extra = false
+        `, [student.student_id, instrData.instrument_id]);
+
+        const totalCredits = parseInt(totalCreditsResult.rows[0].total_credits) || 0;
+        const totalAttended = parseInt(totalAttendedResult.rows[0].cnt) || 0;
+        const dynamicAvailable = Math.max(0, totalCredits - totalAttended);
+
+        // Attendance since most recent payment (for display context)
         let attended_since_payment = 0;
         if (payment) {
           const attendanceResult = await db.query(`
@@ -128,7 +169,7 @@ router.get('/data', authenticateJWT, authorizeRole(['admin']), async (req, res) 
           student_name: student.student_name,
           instrument_id: instrData.instrument_id,
           instrument_name: instrData.instrument_name,
-          classes_remaining: instrData.classes_remaining,
+          classes_remaining: dynamicAvailable,
           package_classes_count: payment ? parseInt(payment.package_classes_count) || null : null,
           attended_since_payment,
           batches: instrData.batches,
@@ -266,6 +307,82 @@ router.put('/classes', authenticateJWT, authorizeRole(['admin']), async (req, re
     res.status(500).json({ error: err.message });
   } finally {
     client.release();
+  }
+});
+
+// POST /api/migration/credits
+// Body: { student_id, instrument_id, credits_bought }
+// Creates a backfill payment record (no package) carrying credits_bought + instrument_id in metadata.
+// Used when no payment record exists yet for a student/instrument.
+router.post('/credits', authenticateJWT, authorizeRole(['admin']), async (req, res) => {
+  const { student_id, instrument_id, credits_bought } = req.body;
+
+  if (!student_id || !instrument_id) {
+    return res.status(400).json({ error: 'student_id and instrument_id are required' });
+  }
+  const credits = parseInt(credits_bought, 10);
+  if (isNaN(credits) || credits < 0) {
+    return res.status(400).json({ error: 'credits_bought must be a non-negative integer' });
+  }
+
+  try {
+    const instrRes = await db.query('SELECT name FROM instruments WHERE id = $1', [instrument_id]);
+    const instrument_name = instrRes.rows[0]?.name || '';
+
+    const result = await db.query(
+      `INSERT INTO payments (student_id, package_id, amount, method, metadata, timestamp)
+       VALUES ($1, NULL, 0, 'manual', $2::jsonb, now())
+       RETURNING id, metadata`,
+      [student_id, JSON.stringify({
+        backfill: true,
+        credits_bought: credits,
+        instrument_id,
+        instrument_name,
+        notes: 'Credit adjustment added via Migration Tool',
+        adjusted_at: new Date().toISOString(),
+      })]
+    );
+    res.status(201).json({ success: true, payment: result.rows[0] });
+  } catch (err) {
+    console.error('POST /api/migration/credits error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PUT /api/migration/payment/:paymentId/credits
+// Updates credits_bought on an existing payment record's metadata.
+// This adjusts the dynamic classes_remaining calculation for that student/instrument.
+router.put('/payment/:paymentId/credits', authenticateJWT, authorizeRole(['admin']), async (req, res) => {
+  const { paymentId } = req.params;
+  const { credits_bought } = req.body;
+
+  if (credits_bought === undefined || credits_bought === null || isNaN(parseInt(credits_bought))) {
+    return res.status(400).json({ error: 'credits_bought is required and must be a number' });
+  }
+
+  try {
+    const result = await db.query(
+      `UPDATE payments
+       SET metadata = COALESCE(metadata, '{}'::jsonb)
+         || jsonb_build_object(
+              'credits_bought', $1::int,
+              'migration_adjusted', true,
+              'migration_note', 'Credits overridden via Migration Tool',
+              'migration_adjusted_at', to_char(now(), 'YYYY-MM-DD"T"HH24:MI:SS"Z"')
+            )
+       WHERE id = $2
+       RETURNING id, metadata`,
+      [parseInt(credits_bought), paymentId]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: 'Payment not found' });
+    }
+
+    res.json({ success: true, payment: result.rows[0] });
+  } catch (err) {
+    console.error('PUT /api/migration/payment/:id/credits error:', err);
+    res.status(500).json({ error: err.message });
   }
 });
 

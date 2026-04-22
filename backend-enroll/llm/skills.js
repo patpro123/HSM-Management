@@ -2,6 +2,7 @@
 
 const pool = require('../db');
 const emailService = require('../services/emailService');
+const { computeClassesRemaining } = require('../utils/credits');
 
 const makeResponse = (type, text, suggestions = [], card = null) =>
   ({ type, text, suggestions, card });
@@ -75,22 +76,16 @@ const skills = {
   'student.credits': async ({ params, userId, userRole }) => {
     const studentId = await resolveStudentId(params, userId, userRole);
     if (!studentId) return makeResponse('text', 'Which student? Please provide their name.', ['Search for a student']);
-    const [creditsRes, nameRes] = await Promise.all([
-      pool.query(
-        `SELECT i.name AS instrument, eb.classes_remaining, b.recurrence
-         FROM enrollment_batches eb
-         JOIN batches b ON eb.batch_id = b.id
-         JOIN instruments i ON b.instrument_id = i.id
-         JOIN enrollments e ON eb.enrollment_id = e.id
-         WHERE e.student_id = $1 AND e.status = 'active'`,
-        [studentId]
-      ),
+    const [{ byInstrument }, nameRes] = await Promise.all([
+      computeClassesRemaining(pool, studentId),
       pool.query(`SELECT name FROM students WHERE id = $1`, [studentId]),
     ]);
-    const rows = creditsRes.rows;
-    if (!rows.length) return makeResponse('text', 'No active enrollment found.', ['Enroll in a course']);
     const studentName = nameRes.rows[0]?.name ?? 'Student';
-    return makeResponse('card', `Classes remaining — ${studentName}`, ['Add classes', 'View schedule'], { credits: rows });
+    const credits = Object.entries(byInstrument).map(([instrument, classes_remaining]) => ({
+      instrument, classes_remaining,
+    }));
+    if (!credits.length) return makeResponse('text', 'No active enrollment found.', ['Enroll in a course']);
+    return makeResponse('card', `Classes remaining — ${studentName}`, ['Add classes', 'View schedule'], { credits });
   },
 
   'student.profile': async ({ params, userId, userRole }) => {
@@ -114,10 +109,45 @@ const skills = {
     const batch_id = await resolveBatchId(params);
     if (!batch_id) return makeResponse('text', 'Which batch? Please specify the instrument and time, e.g. "Guitar Tuesday 5pm".', ['List all batches']);
     const rows = (await pool.query(
-      `SELECT s.id, s.name, s.phone, eb.classes_remaining
+      `WITH batch_instrument AS (
+         SELECT instrument_id FROM batches WHERE id = $1
+       ),
+       raw_credits AS (
+         SELECT p.student_id,
+           CASE
+             WHEN (p.metadata->>'credits_bought') IS NOT NULL AND (p.metadata->>'credits_bought')::int > 0
+               THEN (p.metadata->>'credits_bought')::int
+             WHEN pkg.classes_count IS NOT NULL THEN pkg.classes_count
+             ELSE 0 END AS credits
+         FROM payments p
+         JOIN packages pkg ON p.package_id = pkg.id
+         WHERE pkg.instrument_id = (SELECT instrument_id FROM batch_instrument)
+         UNION ALL
+         SELECT p.student_id, (p.metadata->>'credits_bought')::int AS credits
+         FROM payments p
+         WHERE p.package_id IS NULL
+           AND (p.metadata->>'instrument_id')::uuid = (SELECT instrument_id FROM batch_instrument)
+           AND (p.metadata->>'credits_bought') IS NOT NULL
+           AND (p.metadata->>'credits_bought')::int > 0
+       ),
+       instr_credits AS (
+         SELECT student_id, SUM(credits) AS credits FROM raw_credits GROUP BY student_id
+       ),
+       instr_attended AS (
+         SELECT ar.student_id, COUNT(*) AS attended
+         FROM attendance_records ar
+         JOIN batches b ON ar.batch_id = b.id
+         WHERE b.instrument_id = (SELECT instrument_id FROM batch_instrument)
+           AND ar.status = 'present'
+         GROUP BY ar.student_id
+       )
+       SELECT s.id, s.name, s.phone,
+         GREATEST(0, COALESCE(ic.credits, 0) - COALESCE(ia.attended, 0)) AS classes_remaining
        FROM enrollment_batches eb
        JOIN enrollments e ON eb.enrollment_id = e.id
-       JOIN students    s ON e.student_id = s.id
+       JOIN students s ON e.student_id = s.id
+       LEFT JOIN instr_credits ic ON ic.student_id = s.id
+       LEFT JOIN instr_attended ia ON ia.student_id = s.id
        WHERE eb.batch_id = $1 AND e.status = 'active'
        ORDER BY s.name`,
       [batch_id]
@@ -505,14 +535,51 @@ const skills = {
   'reminder.payment': async ({ params }) => {
     const threshold = params.threshold || 2;
     const rows = (await pool.query(
-      `SELECT DISTINCT ON (s.id, i.id) s.name, s.phone, i.name AS instrument, eb.classes_remaining
-       FROM enrollment_batches eb
-       JOIN enrollments e ON eb.enrollment_id = e.id
-       JOIN students    s ON e.student_id = s.id
-       JOIN batches     b ON eb.batch_id = b.id
-       JOIN instruments i ON b.instrument_id = i.id
-       WHERE e.status = 'active' AND eb.classes_remaining <= $1
-       ORDER BY s.id, i.id, eb.classes_remaining ASC
+      `WITH raw_credits AS (
+         SELECT p.student_id, pkg.instrument_id,
+           CASE
+             WHEN (p.metadata->>'credits_bought') IS NOT NULL AND (p.metadata->>'credits_bought')::int > 0
+               THEN (p.metadata->>'credits_bought')::int
+             WHEN pkg.classes_count IS NOT NULL THEN pkg.classes_count
+             ELSE 0 END AS credits
+         FROM payments p
+         JOIN packages pkg ON p.package_id = pkg.id
+         UNION ALL
+         SELECT p.student_id,
+           (p.metadata->>'instrument_id')::uuid AS instrument_id,
+           (p.metadata->>'credits_bought')::int AS credits
+         FROM payments p
+         WHERE p.package_id IS NULL
+           AND (p.metadata->>'instrument_id') IS NOT NULL
+           AND (p.metadata->>'credits_bought') IS NOT NULL
+           AND (p.metadata->>'credits_bought')::int > 0
+       ),
+       instr_credits AS (
+         SELECT student_id, instrument_id, SUM(credits) AS credits
+         FROM raw_credits GROUP BY student_id, instrument_id
+       ),
+       instr_attended AS (
+         SELECT ar.student_id, b.instrument_id, COUNT(*) AS attended
+         FROM attendance_records ar
+         JOIN batches b ON ar.batch_id = b.id
+         WHERE ar.status = 'present'
+         GROUP BY ar.student_id, b.instrument_id
+       ),
+       student_instr_remaining AS (
+         SELECT DISTINCT s.id, s.name, s.phone, i.name AS instrument,
+           GREATEST(0, COALESCE(ic.credits, 0) - COALESCE(ia.attended, 0)) AS classes_remaining
+         FROM students s
+         JOIN enrollments e ON s.id = e.student_id AND e.status = 'active'
+         JOIN enrollment_batches eb ON e.id = eb.enrollment_id
+         JOIN batches b ON eb.batch_id = b.id
+         JOIN instruments i ON b.instrument_id = i.id
+         LEFT JOIN instr_credits ic ON ic.student_id = s.id AND ic.instrument_id = i.id
+         LEFT JOIN instr_attended ia ON ia.student_id = s.id AND ia.instrument_id = i.id
+       )
+       SELECT name, phone, instrument, classes_remaining
+       FROM student_instr_remaining
+       WHERE classes_remaining <= $1
+       ORDER BY classes_remaining ASC, name
        LIMIT 20`,
       [threshold]
     )).rows;
@@ -561,15 +628,39 @@ const skills = {
 
   'stats.students': async () => {
     const row = (await pool.query(
-      `SELECT
-         COUNT(DISTINCT s.id)                                             AS total_active,
-         COUNT(DISTINCT CASE WHEN e.status = 'active' THEN s.id END)     AS enrolled,
-         COUNT(DISTINCT CASE WHEN eb.classes_remaining <= 0 THEN s.id END) AS zero_credits,
-         COUNT(DISTINCT CASE WHEN eb.classes_remaining <= 2
-                              AND eb.classes_remaining > 0 THEN s.id END) AS low_credits
+      `WITH student_credits AS (
+         SELECT p.student_id,
+           SUM(CASE
+             WHEN (p.metadata->>'credits_bought') IS NOT NULL AND (p.metadata->>'credits_bought')::int > 0
+               THEN (p.metadata->>'credits_bought')::int
+             WHEN pkg.classes_count IS NOT NULL THEN pkg.classes_count
+             ELSE 0 END) AS total
+         FROM payments p
+         LEFT JOIN packages pkg ON p.package_id = pkg.id
+         GROUP BY p.student_id
+       ),
+       student_attended AS (
+         SELECT student_id, COUNT(*) AS total
+         FROM attendance_records WHERE status = 'present'
+         GROUP BY student_id
+       ),
+       student_remaining AS (
+         SELECT s.id,
+           GREATEST(0, COALESCE(sc.total, 0) - COALESCE(sa.total, 0)) AS classes_remaining
+         FROM students s
+         LEFT JOIN student_credits sc ON sc.student_id = s.id
+         LEFT JOIN student_attended sa ON sa.student_id = s.id
+         WHERE (s.student_type = 'permanent' OR s.student_type IS NULL)
+       )
+       SELECT
+         COUNT(DISTINCT s.id)                                                    AS total_active,
+         COUNT(DISTINCT CASE WHEN e.status = 'active' THEN s.id END)            AS enrolled,
+         COUNT(DISTINCT CASE WHEN sr.classes_remaining <= 0 THEN s.id END)      AS zero_credits,
+         COUNT(DISTINCT CASE WHEN sr.classes_remaining <= 2
+                              AND sr.classes_remaining > 0 THEN s.id END)       AS low_credits
        FROM students s
        LEFT JOIN enrollments e ON s.id = e.student_id
-       LEFT JOIN enrollment_batches eb ON e.id = eb.enrollment_id
+       LEFT JOIN student_remaining sr ON sr.id = s.id
        WHERE (s.student_type = 'permanent' OR s.student_type IS NULL)`
     )).rows[0];
     const text = `Active students: ${row.total_active} | Enrolled: ${row.enrolled} | Zero credits: ${row.zero_credits} | Low credits (≤2): ${row.low_credits}`;
@@ -585,14 +676,48 @@ const skills = {
 
   'stats.unpaid': async () => {
     const rows = (await pool.query(
-      `SELECT DISTINCT ON (s.id) s.name, s.phone,
-              i.name AS instrument, eb.classes_remaining
+      `WITH raw_credits AS (
+         SELECT p.student_id, pkg.instrument_id,
+           CASE
+             WHEN (p.metadata->>'credits_bought') IS NOT NULL AND (p.metadata->>'credits_bought')::int > 0
+               THEN (p.metadata->>'credits_bought')::int
+             WHEN pkg.classes_count IS NOT NULL THEN pkg.classes_count
+             ELSE 0 END AS credits
+         FROM payments p
+         JOIN packages pkg ON p.package_id = pkg.id
+         UNION ALL
+         SELECT p.student_id,
+           (p.metadata->>'instrument_id')::uuid AS instrument_id,
+           (p.metadata->>'credits_bought')::int AS credits
+         FROM payments p
+         WHERE p.package_id IS NULL
+           AND (p.metadata->>'instrument_id') IS NOT NULL
+           AND (p.metadata->>'credits_bought') IS NOT NULL
+           AND (p.metadata->>'credits_bought')::int > 0
+       ),
+       instr_credits AS (
+         SELECT student_id, instrument_id, SUM(credits) AS credits
+         FROM raw_credits GROUP BY student_id, instrument_id
+       ),
+       instr_attended AS (
+         SELECT ar.student_id, b.instrument_id, COUNT(*) AS attended
+         FROM attendance_records ar
+         JOIN batches b ON ar.batch_id = b.id
+         WHERE ar.status = 'present'
+         GROUP BY ar.student_id, b.instrument_id
+       )
+       SELECT DISTINCT ON (s.id) s.name, s.phone,
+         i.name AS instrument,
+         GREATEST(0, COALESCE(ic.credits, 0) - COALESCE(ia.attended, 0)) AS classes_remaining
        FROM students s
        JOIN enrollments e ON e.student_id = s.id AND e.status = 'active'
        JOIN enrollment_batches eb ON eb.enrollment_id = e.id
        JOIN batches b ON eb.batch_id = b.id
        JOIN instruments i ON b.instrument_id = i.id
-       WHERE s.is_active = true AND eb.classes_remaining <= 0
+       LEFT JOIN instr_credits ic ON ic.student_id = s.id AND ic.instrument_id = i.id
+       LEFT JOIN instr_attended ia ON ia.student_id = s.id AND ia.instrument_id = i.id
+       WHERE s.is_active = true
+         AND GREATEST(0, COALESCE(ic.credits, 0) - COALESCE(ia.attended, 0)) <= 0
        ORDER BY s.id, s.name`
     )).rows;
     if (!rows.length) return makeResponse('text', 'No students with zero classes — everyone is paid up.', ['Check low credits']);
@@ -644,13 +769,46 @@ const skills = {
     }
     if (!teacher_id) return makeResponse('text', 'Which teacher? Please provide the name.', []);
     const rows = (await pool.query(
-      `SELECT DISTINCT ON (s.id) s.name, s.phone,
-              i.name AS instrument, eb.classes_remaining
+      `WITH raw_credits AS (
+         SELECT p.student_id, pkg.instrument_id,
+           CASE
+             WHEN (p.metadata->>'credits_bought') IS NOT NULL AND (p.metadata->>'credits_bought')::int > 0
+               THEN (p.metadata->>'credits_bought')::int
+             WHEN pkg.classes_count IS NOT NULL THEN pkg.classes_count
+             ELSE 0 END AS credits
+         FROM payments p
+         JOIN packages pkg ON p.package_id = pkg.id
+         UNION ALL
+         SELECT p.student_id,
+           (p.metadata->>'instrument_id')::uuid AS instrument_id,
+           (p.metadata->>'credits_bought')::int AS credits
+         FROM payments p
+         WHERE p.package_id IS NULL
+           AND (p.metadata->>'instrument_id') IS NOT NULL
+           AND (p.metadata->>'credits_bought') IS NOT NULL
+           AND (p.metadata->>'credits_bought')::int > 0
+       ),
+       instr_credits AS (
+         SELECT student_id, instrument_id, SUM(credits) AS credits
+         FROM raw_credits GROUP BY student_id, instrument_id
+       ),
+       instr_attended AS (
+         SELECT ar.student_id, b2.instrument_id, COUNT(*) AS attended
+         FROM attendance_records ar
+         JOIN batches b2 ON ar.batch_id = b2.id
+         WHERE ar.status = 'present'
+         GROUP BY ar.student_id, b2.instrument_id
+       )
+       SELECT DISTINCT ON (s.id) s.name, s.phone,
+         i.name AS instrument,
+         GREATEST(0, COALESCE(ic.credits, 0) - COALESCE(ia.attended, 0)) AS classes_remaining
        FROM batches b
        JOIN enrollment_batches eb ON eb.batch_id = b.id
        JOIN enrollments e ON eb.enrollment_id = e.id AND e.status = 'active'
        JOIN students s ON e.student_id = s.id
        JOIN instruments i ON b.instrument_id = i.id
+       LEFT JOIN instr_credits ic ON ic.student_id = s.id AND ic.instrument_id = i.id
+       LEFT JOIN instr_attended ia ON ia.student_id = s.id AND ia.instrument_id = i.id
        WHERE b.teacher_id = $1
          AND (s.student_type = 'permanent' OR s.student_type IS NULL)
        ORDER BY s.id, s.name`,

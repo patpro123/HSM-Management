@@ -327,7 +327,7 @@ const Student360View: React.FC<Student360ViewProps> = ({ email, studentId, onClo
                   <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
                     <div className="text-sm text-blue-600 font-medium">Total Credits Bought</div>
                     <div className="text-2xl font-bold text-blue-800 mt-1">
-                      {data.payment.summary.total_credits ?? (data.payment.summary.classes_attended + data.payment.summary.classes_remaining + data.payment.summary.classes_missed)}
+                      {data.payment.summary.total_credits ?? 0}
                     </div>
                   </div>
                   <div className="bg-green-50 p-4 rounded-lg border border-green-100">
@@ -356,33 +356,54 @@ const Student360View: React.FC<Student360ViewProps> = ({ email, studentId, onClo
                       <thead className="bg-gray-50">
                         <tr>
                           <th className="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-gray-900">Date</th>
+                          <th className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Stream</th>
+                          <th className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Location</th>
                           <th className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Package</th>
+                          <th className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Credits</th>
                           <th className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Amount</th>
-                          <th className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Status</th>
+                          <th className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Method</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-200 bg-white">
-                        {data.payment.history.map((p) => (
-                          <tr key={p.id}>
-                            <td className="whitespace-nowrap py-4 pl-4 pr-3 text-sm text-gray-500">
-                              {new Date(p.timestamp).toLocaleDateString()}
-                            </td>
-                            <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-900">
-                              {p.package_name || 'Custom Payment'}
-                            </td>
-                            <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-900">
-                              ₹{p.amount}
-                            </td>
-                            <td className="whitespace-nowrap px-3 py-4 text-sm">
-                              <span className="inline-flex items-center rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800 capitalize">
-                                {p.method}
-                              </span>
-                            </td>
-                          </tr>
-                        ))}
+                        {data.payment.history.map((p) => {
+                          const meta = (p as any).metadata || {};
+                          const credits = meta.credits_bought
+                            ? parseInt(String(meta.credits_bought))
+                            : (p as any).classes_count
+                              ? parseInt(String((p as any).classes_count))
+                              : null;
+                          const locationLabel = meta.location === 'pbel' ? 'PBEL City' : meta.location === 'hsm' ? 'HSM' : '—';
+                          return (
+                            <tr key={p.id}>
+                              <td className="whitespace-nowrap py-4 pl-4 pr-3 text-sm text-gray-500">
+                                {new Date(p.timestamp).toLocaleDateString()}
+                              </td>
+                              <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-700">
+                                {(p as any).instrument_name || '—'}
+                              </td>
+                              <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
+                                {locationLabel}
+                              </td>
+                              <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-900">
+                                {(p as any).package_name || '—'}
+                              </td>
+                              <td className="whitespace-nowrap px-3 py-4 text-sm font-medium text-indigo-700">
+                                {credits !== null ? credits : '—'}
+                              </td>
+                              <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-900">
+                                ₹{p.amount}
+                              </td>
+                              <td className="whitespace-nowrap px-3 py-4 text-sm">
+                                <span className="inline-flex items-center rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800 capitalize">
+                                  {p.method}
+                                </span>
+                              </td>
+                            </tr>
+                          );
+                        })}
                         {data.payment.history.length === 0 && (
                           <tr>
-                            <td colSpan={4} className="px-6 py-4 text-center text-sm text-gray-500">No payment history found.</td>
+                            <td colSpan={7} className="px-6 py-4 text-center text-sm text-gray-500">No payment history found.</td>
                           </tr>
                         )}
                       </tbody>

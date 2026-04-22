@@ -410,7 +410,7 @@ const App: React.FC = () => {
                 <UserManagement />
               )}
               {activeTab === 'migration' && (
-                <MigrationTools />
+                <MigrationTools onRefresh={fetchData} />
               )}
               {activeTab === 'enrollment' && (
                 <EnrollmentForm

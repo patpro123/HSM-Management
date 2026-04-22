@@ -1,7 +1,8 @@
 const express = require('express');
 const router = express.Router();
-const pool = require('../db'); // Adjust path to your db configuration
+const pool = require('../db');
 const { authenticateJWT } = require('../auth/jwtMiddleware');
+const { computeClassesRemaining } = require('../utils/credits');
 
 const fetchStudent360Data = async (studentId) => {
     // 1. Fetch Personal Details
@@ -13,79 +14,39 @@ const fetchStudent360Data = async (studentId) => {
     }
     const student = studentRes.rows[0];
 
-    // 2. Fetch Payment History (Moved up to determine cycle)
+    // 2. Fetch Payment History
     const paymentsQuery = `
-      SELECT p.id, p.amount, p.timestamp, p.method, p.package_id, p.metadata, pkg.classes_count
+      SELECT p.id, p.amount, p.timestamp, p.method, p.package_id, p.metadata,
+             pkg.classes_count, pkg.name AS package_name,
+             i.name AS instrument_name
       FROM payments p
       LEFT JOIN packages pkg ON p.package_id = pkg.id
+      LEFT JOIN instruments i ON pkg.instrument_id = i.id
       WHERE p.student_id = $1
       ORDER BY p.timestamp DESC
     `;
     const paymentsRes = await pool.query(paymentsQuery, [studentId]);
     const payments = paymentsRes.rows;
 
-    // Determine credit calculation basis (Cycle vs Lifetime)
-    let lastPaymentDate = null;
-    let creditsBought = 0;
-    let isCycleBased = false;
-
-    if (payments.length > 0) {
-      const lastPayment = payments[0];
-      // Check if this payment bought credits
-      if (lastPayment.metadata && lastPayment.metadata.credits_bought) {
-        creditsBought = parseInt(lastPayment.metadata.credits_bought);
-        lastPaymentDate = lastPayment.timestamp;
-        isCycleBased = true;
-      } else if (lastPayment.classes_count) {
-        creditsBought = lastPayment.classes_count;
-        lastPaymentDate = lastPayment.timestamp;
-        isCycleBased = true;
-      } else {
-        // Try to infer from frequency in metadata
-        const freq = lastPayment.metadata?.payment_frequency || '';
-        if (freq) {
-           if (freq.includes('monthly')) creditsBought = 8;
-           else if (freq.includes('quarterly')) creditsBought = 24;
-           else if (freq.includes('half')) creditsBought = 48;
-           else if (freq.includes('yearly')) creditsBought = 96;
-           
-           if (creditsBought > 0) {
-             lastPaymentDate = lastPayment.timestamp;
-             isCycleBased = true;
-           }
-        }
-      }
-    }
-
-    // 3. Fetch Attendance Summary
-    let attendanceQuery = `
-      SELECT 
-        COUNT(*) FILTER (WHERE status = 'present') as present,
-        COUNT(*) FILTER (WHERE status = 'absent') as absent,
-        COUNT(*) FILTER (WHERE status = 'excused') as excused
-      FROM attendance_records 
-      WHERE student_id = $1
-    `;
-    const attendanceParams = [studentId];
-
-    if (isCycleBased && lastPaymentDate) {
-      // Filter attendance after last payment (inclusive of the payment day)
-      attendanceQuery += ` AND session_date >= $2::date`;
-      attendanceParams.push(lastPaymentDate);
-    }
-
-    const attendanceRes = await pool.query(attendanceQuery, attendanceParams);
+    // 3. Fetch Attendance Summary (lifetime)
+    const attendanceRes = await pool.query(
+      `SELECT
+         COUNT(*) FILTER (WHERE status = 'present') as present,
+         COUNT(*) FILTER (WHERE status = 'absent') as absent,
+         COUNT(*) FILTER (WHERE status = 'excused') as excused
+       FROM attendance_records
+       WHERE student_id = $1`,
+      [studentId]
+    );
     const attendance = attendanceRes.rows[0];
 
-    // 4. Fetch Academic Batches
-    // Joining enrollments -> enrollment_batches -> batches -> instruments/teachers
+    // 4. Fetch Academic Batches (structural info only — classes_remaining computed dynamically below)
     const batchesQuery = `
-      SELECT 
+      SELECT
         b.id,
         i.name as instrument,
         b.recurrence,
-        t.name as teacher,
-        eb.classes_remaining
+        t.name as teacher
       FROM enrollments e
       JOIN enrollment_batches eb ON e.id = eb.enrollment_id
       JOIN batches b ON eb.batch_id = b.id
@@ -101,43 +62,41 @@ const fetchStudent360Data = async (studentId) => {
       const inst = row.instrument || 'Unknown';
       if (!instrumentGroups[inst]) {
         instrumentGroups[inst] = {
-          id: row.id, // Use first batch ID as key
+          id: row.id,
           instrument: inst,
           teachers: new Set(),
           recurrences: [],
-          classes_remaining: 0
         };
       }
-      // Accumulate classes_remaining across all slots for this instrument
-      instrumentGroups[inst].classes_remaining += parseInt(row.classes_remaining) || 0;
       if (row.teacher) instrumentGroups[inst].teachers.add(row.teacher);
       if (row.recurrence) instrumentGroups[inst].recurrences.push(row.recurrence);
     });
+
+    // 5. Dynamic classes_remaining: credits_bought - present_attendances (no carryforward)
+    const { total: dynamicTotal, byInstrument: dynamicByInstrument } = await computeClassesRemaining(pool, studentId);
 
     const groupedBatches = Object.values(instrumentGroups).map(g => ({
       id: g.id,
       instrument: g.instrument,
       teacher: Array.from(g.teachers).join(', '),
       recurrence: g.recurrences.join(' & '),
-      classes_remaining: g.classes_remaining
+      classes_remaining: dynamicByInstrument[g.instrument] ?? 0,
     }));
 
     // Calculate Payment Summary
     const classesAttended = parseInt(attendance.present || 0);
     const classesMissed = parseInt(attendance.absent || 0);
     const classesExcused = parseInt(attendance.excused || 0);
-    
-    let totalCredits = 0;
-    // Always derive classesRemaining from the active batches to ensure sync with Academic tab
-    let classesRemaining = groupedBatches.reduce((sum, b) => sum + (b.classes_remaining || 0), 0);
 
-    if (isCycleBased) {
-      totalCredits = creditsBought;
-    } else if (student.metadata && student.metadata.total_credits !== undefined) {
-      totalCredits = parseInt(student.metadata.total_credits);
-    } else {
-      totalCredits = classesRemaining + classesAttended + classesMissed;
-    }
+    const classesRemaining = dynamicTotal;
+
+    // Total credits = sum from actual payment records only (no heuristics)
+    const totalCredits = payments.reduce((sum, p) => {
+      const fromMeta = p.metadata?.credits_bought ? parseInt(p.metadata.credits_bought) : 0;
+      if (fromMeta > 0) return sum + fromMeta;
+      if (p.classes_count) return sum + parseInt(p.classes_count);
+      return sum;
+    }, 0);
 
     return {
       personal: {

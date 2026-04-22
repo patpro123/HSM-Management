@@ -137,17 +137,52 @@ router.get('/:id/students', async (req, res) => {
   const teacherId = req.params.id;
   try {
     const result = await pool.query(
-      `SELECT DISTINCT
+      `WITH raw_credits AS (
+         SELECT p.student_id, pkg.instrument_id,
+           CASE
+             WHEN (p.metadata->>'credits_bought') IS NOT NULL
+                  AND (p.metadata->>'credits_bought')::int > 0
+               THEN (p.metadata->>'credits_bought')::int
+             WHEN pkg.classes_count IS NOT NULL THEN pkg.classes_count
+             ELSE 0
+           END AS credits
+         FROM payments p
+         JOIN packages pkg ON p.package_id = pkg.id
+         UNION ALL
+         SELECT p.student_id,
+           (p.metadata->>'instrument_id')::uuid AS instrument_id,
+           (p.metadata->>'credits_bought')::int AS credits
+         FROM payments p
+         WHERE p.package_id IS NULL
+           AND (p.metadata->>'instrument_id') IS NOT NULL
+           AND (p.metadata->>'credits_bought') IS NOT NULL
+           AND (p.metadata->>'credits_bought')::int > 0
+       ),
+       student_credits AS (
+         SELECT student_id, instrument_id, SUM(credits) AS credits
+         FROM raw_credits
+         GROUP BY student_id, instrument_id
+       ),
+       student_attended AS (
+         SELECT ar.student_id, b2.instrument_id, COUNT(*) AS attended
+         FROM attendance_records ar
+         JOIN batches b2 ON ar.batch_id = b2.id
+         WHERE ar.status = 'present'
+         GROUP BY ar.student_id, b2.instrument_id
+       )
+       SELECT DISTINCT
          s.id, s.name, s.phone, s.guardian_contact,
          i.name AS instrument,
          b.id AS batch_id, b.recurrence,
          e.status AS enrollment_status,
-         eb.classes_remaining
+         GREATEST(0, COALESCE(sc.credits, 0) - COALESCE(sa.attended, 0)) AS classes_remaining
        FROM students s
        JOIN enrollments e ON s.id = e.student_id
        JOIN enrollment_batches eb ON e.id = eb.enrollment_id
        JOIN batches b ON eb.batch_id = b.id
        JOIN instruments i ON b.instrument_id = i.id
+       LEFT JOIN student_credits sc ON sc.student_id = s.id AND sc.instrument_id = i.id
+       LEFT JOIN student_attended sa ON sa.student_id = s.id AND sa.instrument_id = i.id
        WHERE b.teacher_id = $1
          AND e.status = 'active'
          AND b.is_makeup = false

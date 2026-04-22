@@ -1,6 +1,15 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { apiPost, apiPut, apiGet } from '../api';
-import { Student, PaymentRecord, PaymentFrequency, Batch, Instrument } from '../types';
+import { Student, PaymentRecord, Batch, Instrument } from '../types';
+
+interface Package {
+  id: string;
+  name: string;
+  classes_count: number;
+  price: number;
+  instrument_id: string;
+  instrument_name: string;
+}
 
 const PAGE_SIZE = 10;
 
@@ -21,11 +30,15 @@ const PaymentModule: React.FC<PaymentModuleProps> = ({ students, payments, onRef
     payment_method: 'cash',
     payment_for: 'tuition',
     notes: '',
-    payment_frequency: 'monthly' as PaymentFrequency,
+    location: 'hsm',
     payment_date: new Date().toISOString().split('T')[0]
   });
   const [paymentBatchId, setPaymentBatchId] = useState<string>('');
-  const [studentBatches, setStudentBatches] = useState<Array<{ batch_id: string; instrument: string; recurrence: string }>>([]);
+  const [studentBatches, setStudentBatches] = useState<Array<{ batch_id: string; instrument: string; instrument_id: string; recurrence: string }>>([]);
+  const [selectedInstrumentId, setSelectedInstrumentId] = useState('');
+  const [availablePackages, setAvailablePackages] = useState<Package[]>([]);
+  const [selectedPackageId, setSelectedPackageId] = useState('');
+  const [packageLoading, setPackageLoading] = useState(false);
 
   // Filters
   const [searchName, setSearchName] = useState('');
@@ -117,16 +130,21 @@ const PaymentModule: React.FC<PaymentModuleProps> = ({ students, payments, onRef
           const studentEnrollmentBatches = (studentEnrollment?.batches || []).map((b: any) => ({
             batch_id: b.batch_id,
             instrument: b.instrument || 'Unknown',
+            instrument_id: b.instrument_id || '',
             recurrence: b.batch_recurrence || ''
           }));
           setStudentBatches(studentEnrollmentBatches);
 
-          // Auto-select batch if only one
+          // Auto-select instrument if only one
           if (studentEnrollmentBatches.length === 1) {
             setPaymentBatchId(studentEnrollmentBatches[0].batch_id);
+            setSelectedInstrumentId(studentEnrollmentBatches[0].instrument_id);
           } else {
             setPaymentBatchId('');
+            setSelectedInstrumentId('');
           }
+          setSelectedPackageId('');
+          setAvailablePackages([]);
         } catch (error) {
           console.error('Error fetching payment status:', error);
         } finally {
@@ -138,20 +156,27 @@ const PaymentModule: React.FC<PaymentModuleProps> = ({ students, payments, onRef
       setPaymentStatus(null);
       setStudentBatches([]);
       setPaymentBatchId('');
+      setSelectedInstrumentId('');
+      setSelectedPackageId('');
+      setAvailablePackages([]);
     }
   }, [formData.student_id]);
 
+  useEffect(() => {
+    if (!selectedInstrumentId) {
+      setAvailablePackages([]);
+      setSelectedPackageId('');
+      return;
+    }
+    setPackageLoading(true);
+    apiGet(`/api/packages?instrument_id=${selectedInstrumentId}`)
+      .then((d: { packages: Package[] }) => setAvailablePackages(d.packages || []))
+      .catch(() => setAvailablePackages([]))
+      .finally(() => setPackageLoading(false));
+  }, [selectedInstrumentId]);
+
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
-  };
-
-  const calculateClassCredits = (frequency: string | PaymentFrequency): number => {
-    const lower = (frequency || '').toLowerCase();
-    if (lower.includes('monthly')) return 8;
-    if (lower.includes('quarterly')) return 24;
-    if (lower.includes('half')) return 48;
-    if (lower.includes('yearly')) return 96;
-    return 0;
   };
 
   const handleEdit = (payment: PaymentRecord) => {
@@ -163,9 +188,12 @@ const PaymentModule: React.FC<PaymentModuleProps> = ({ students, payments, onRef
       payment_method: (payment as any).method || 'cash',
       payment_for: meta.payment_for || 'tuition',
       notes: meta.notes || (payment as any).notes || '',
-      payment_frequency: meta.payment_frequency || 'monthly',
+      location: meta.location || 'hsm',
       payment_date: new Date(payment.timestamp).toISOString().split('T')[0]
     });
+    setSelectedInstrumentId('');
+    setSelectedPackageId('');
+    setAvailablePackages([]);
     setShowAddModal(true);
   };
 
@@ -187,12 +215,18 @@ const PaymentModule: React.FC<PaymentModuleProps> = ({ students, payments, onRef
         });
         alert('Payment updated successfully!');
       } else {
-        const classCredits = calculateClassCredits(formData.payment_frequency);
-        
+        const selectedPkg = availablePackages.find(p => p.id === selectedPackageId);
+        const classCredits = selectedPkg?.classes_count ?? 0;
+
         await apiPost('/api/payments', {
-          ...formData,
           student_id: formData.student_id,
           amount: parseFloat(formData.amount),
+          payment_method: formData.payment_method,
+          payment_for: formData.payment_for,
+          notes: formData.notes,
+          payment_date: formData.payment_date,
+          package_id: selectedPackageId || undefined,
+          location: formData.location,
           class_credits: classCredits,
           batch_id: paymentBatchId || undefined
         });
@@ -207,9 +241,12 @@ const PaymentModule: React.FC<PaymentModuleProps> = ({ students, payments, onRef
         payment_method: 'cash',
         payment_for: 'tuition',
         notes: '',
-        payment_frequency: 'monthly' as PaymentFrequency,
+        location: 'hsm',
         payment_date: new Date().toISOString().split('T')[0]
       });
+      setSelectedInstrumentId('');
+      setSelectedPackageId('');
+      setAvailablePackages([]);
       onRefresh();
     } catch (error) {
       console.error('Error saving payment:', error);
@@ -383,18 +420,12 @@ const PaymentModule: React.FC<PaymentModuleProps> = ({ students, payments, onRef
                 paginatedPayments.map(payment => {
                   const sid = String(payment.student_id);
                   const meta = (payment as any).metadata || {};
-                  const frequency = meta.payment_frequency || meta.payment_type || '';
-                  const classesCount = calculateClassCredits(frequency);
-                  const instrList = studentInstrumentMap[sid] || (meta.instrument ? [meta.instrument] : []);
+                  const creditsFromMeta = meta.credits_bought ? parseInt(String(meta.credits_bought)) : 0;
+                  const instrList = meta.instrument_name
+                    ? [meta.instrument_name]
+                    : studentInstrumentMap[sid] || (meta.instrument ? [meta.instrument] : []);
                   const teacherList = studentTeacherMap[sid] || [];
-
-                  let dueDate = '-';
-                  if (classesCount > 0) {
-                    const weeks = classesCount / 2;
-                    const date = new Date(payment.timestamp);
-                    date.setDate(date.getDate() + (weeks * 7));
-                    dueDate = date.toLocaleDateString();
-                  }
+                  const locationLabel = meta.location === 'pbel' ? 'PBEL City' : meta.location === 'hsm' ? 'HSM' : null;
 
                   return (
                     <tr key={payment.id} className="hover:bg-slate-50 transition">
@@ -412,6 +443,7 @@ const PaymentModule: React.FC<PaymentModuleProps> = ({ students, payments, onRef
                           {teacherList.length > 0
                             ? teacherList.map(t => <span key={t} className="block text-xs text-slate-500">{t}</span>)
                             : null}
+                          {locationLabel && <span className="block text-xs text-slate-400">{locationLabel}</span>}
                         </div>
                       </td>
                       <td className="px-6 py-4">
@@ -419,10 +451,9 @@ const PaymentModule: React.FC<PaymentModuleProps> = ({ students, payments, onRef
                         <p className="text-xs text-slate-400 capitalize">{meta.payment_for || 'tuition'}</p>
                       </td>
                       <td className="px-6 py-4">
-                        <div className="text-sm">
-                          <span className="font-semibold text-indigo-700">{classesCount > 0 ? `${classesCount} classes` : '-'}</span>
-                          <div className="text-xs text-slate-500">Due: {dueDate}</div>
-                        </div>
+                        <span className="font-semibold text-indigo-700 text-sm">
+                          {creditsFromMeta > 0 ? `${creditsFromMeta} classes` : '-'}
+                        </span>
                       </td>
                       <td className="px-6 py-4 text-slate-500 text-sm max-w-[180px] truncate">{meta.notes || payment.notes || '-'}</td>
                       <td className="px-6 py-4">
@@ -511,24 +542,77 @@ const PaymentModule: React.FC<PaymentModuleProps> = ({ students, payments, onRef
                 </select>
               </div>
 
-              {!editingPayment && formData.student_id && studentBatches.length > 1 && (
-                <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-2">
-                    Instrument (credits go to which instrument?)
-                  </label>
-                  <select
-                    value={paymentBatchId}
-                    onChange={e => setPaymentBatchId(e.target.value)}
-                    className="w-full px-4 py-2 rounded-lg border border-slate-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none"
-                  >
-                    <option value="">-- Select instrument --</option>
-                    {studentBatches.map(b => (
-                      <option key={b.batch_id} value={b.batch_id}>
-                        {b.instrument}{b.recurrence ? ` (${b.recurrence})` : ''}
-                      </option>
-                    ))}
-                  </select>
-                  <p className="text-xs text-slate-400 mt-1">Credits will be added to the selected instrument's balance.</p>
+              {!editingPayment && formData.student_id && (
+                <div className="space-y-4">
+                  {/* Stream selector */}
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-700 mb-2">Stream *</label>
+                    <select
+                      value={paymentBatchId}
+                      onChange={e => {
+                        const batch = studentBatches.find(b => b.batch_id === e.target.value);
+                        setPaymentBatchId(e.target.value);
+                        setSelectedInstrumentId(batch?.instrument_id ?? '');
+                        setSelectedPackageId('');
+                      }}
+                      required={!editingPayment}
+                      className="w-full px-4 py-2 rounded-lg border border-slate-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none"
+                    >
+                      <option value="">-- Select stream --</option>
+                      {studentBatches.map(b => (
+                        <option key={b.batch_id} value={b.batch_id}>
+                          {b.instrument}{b.recurrence ? ` (${b.recurrence})` : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Location selector */}
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-700 mb-2">Location *</label>
+                    <select
+                      name="location"
+                      value={formData.location}
+                      onChange={handleInputChange}
+                      className="w-full px-4 py-2 rounded-lg border border-slate-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none"
+                    >
+                      <option value="hsm">HSM Main</option>
+                      <option value="pbel">PBEL City</option>
+                    </select>
+                  </div>
+
+                  {/* Package selector */}
+                  {selectedInstrumentId && (
+                    <div>
+                      <label className="block text-sm font-semibold text-slate-700 mb-2">Package *</label>
+                      {packageLoading ? (
+                        <p className="text-sm text-slate-400">Loading packages...</p>
+                      ) : (
+                        <select
+                          value={selectedPackageId}
+                          onChange={e => {
+                            setSelectedPackageId(e.target.value);
+                            const pkg = availablePackages.find(p => p.id === e.target.value);
+                            if (pkg) setFormData(prev => ({ ...prev, amount: String(pkg.price) }));
+                          }}
+                          required={!editingPayment}
+                          className="w-full px-4 py-2 rounded-lg border border-slate-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none"
+                        >
+                          <option value="">-- Select package --</option>
+                          {availablePackages.map(pkg => (
+                            <option key={pkg.id} value={pkg.id}>
+                              {pkg.name} — {pkg.classes_count} classes · ₹{pkg.price}
+                            </option>
+                          ))}
+                        </select>
+                      )}
+                      {selectedPackageId && availablePackages.find(p => p.id === selectedPackageId) && (
+                        <div className="mt-2 bg-indigo-50 border border-indigo-200 rounded-lg px-3 py-2 text-sm text-indigo-800">
+                          <strong>{availablePackages.find(p => p.id === selectedPackageId)!.classes_count} classes</strong> will be credited
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -639,30 +723,7 @@ const PaymentModule: React.FC<PaymentModuleProps> = ({ students, payments, onRef
                   </select>
                 </div>
 
-                <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-2">Payment Frequency</label>
-                  <select
-                    name="payment_frequency"
-                    value={formData.payment_frequency}
-                    onChange={handleInputChange}
-                    disabled={!!editingPayment}
-                    className="w-full px-4 py-2 rounded-lg border border-slate-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none"
-                  >
-                    <option value="monthly">Monthly (8 classes)</option>
-                    <option value="quarterly">Quarterly (24 classes)</option>
-                    <option value="half_yearly">Half-Yearly (48 classes)</option>
-                    <option value="yearly">Yearly (96 classes)</option>
-                  </select>
-                </div>
               </div>
-
-              {!editingPayment && (
-                <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-4">
-                  <p className="text-sm text-indigo-800">
-                    <strong>Class Credits:</strong> {calculateClassCredits(formData.payment_frequency as PaymentFrequency)} classes will be added
-                  </p>
-                </div>
-              )}
 
               <div>
                 <label className="block text-sm font-semibold text-slate-700 mb-2">Notes</label>

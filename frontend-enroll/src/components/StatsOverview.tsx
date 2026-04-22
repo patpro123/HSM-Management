@@ -30,7 +30,8 @@ const StatCard: React.FC<{
 );
 
 const StatsOverview: React.FC<StatsProps> = ({ students, prospectsCount, attendance, payments, onNavigate }) => {
-  const totalRevenue = payments.reduce((acc, p) => acc + parseFloat(String(p.amount || '0')), 0);
+  const realPayments = payments.filter(p => !(p as any).metadata?.backfill);
+  const totalRevenue = realPayments.reduce((acc, p) => acc + parseFloat(String(p.amount || '0')), 0);
   const activeStudents = students.length;
 
   // Count students with an active enrollment status
@@ -144,11 +145,11 @@ const StatsOverview: React.FC<StatsProps> = ({ students, prospectsCount, attenda
             </button>
           </div>
           <div className="space-y-4">
-            {payments.length === 0 ? (
+            {realPayments.length === 0 ? (
               <p className="text-slate-400 text-center py-10">No payments recorded yet.</p>
             ) : (
-              payments.slice(0, 5).map((p) => {
-                const student = students.find(s => s.id === p.student_id);
+              realPayments.slice(0, 5).map((p) => {
+                const student = students.find(s => s.id === p.student_id || (s as any).student_id === p.student_id);
                 return (
                   <div key={p.id} className="flex items-center justify-between p-3 bg-white rounded-lg shadow-sm border border-slate-100">
                     <div className="flex items-center gap-3">

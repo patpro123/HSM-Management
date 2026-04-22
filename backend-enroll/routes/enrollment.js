@@ -178,6 +178,26 @@ router.get('/enrollments', rbac.filterTeacherData, async (req, res) => {
     }
 
     const result = await pool.query(`
+      WITH student_credits AS (
+        SELECT p.student_id,
+          SUM(
+            CASE
+              WHEN (p.metadata->>'credits_bought') IS NOT NULL
+                   AND (p.metadata->>'credits_bought')::int > 0
+                THEN (p.metadata->>'credits_bought')::int
+              WHEN pkg.classes_count IS NOT NULL THEN pkg.classes_count
+              ELSE 0
+            END
+          ) AS total_credits
+        FROM payments p
+        LEFT JOIN packages pkg ON p.package_id = pkg.id
+        GROUP BY p.student_id
+      ),
+      student_attended AS (
+        SELECT student_id, COUNT(*) AS total
+        FROM attendance_records WHERE status = 'present'
+        GROUP BY student_id
+      )
       SELECT
         s.id as student_id,
         s.name,
@@ -188,7 +208,7 @@ router.get('/enrollments', rbac.filterTeacherData, async (req, res) => {
         s.is_active,
         e.id as enrollment_id,
         e.status,
-        e.classes_remaining,
+        GREATEST(0, COALESCE(sc.total_credits, 0) - COALESCE(sa.total, 0)) AS classes_remaining,
         e.enrolled_on,
         COALESCE(
           json_agg(
@@ -202,7 +222,6 @@ router.get('/enrollments', rbac.filterTeacherData, async (req, res) => {
               'start_time', b.start_time,
               'end_time', b.end_time,
               'payment_frequency', eb.payment_frequency,
-              'classes_remaining', eb.classes_remaining,
               'enrolled_on', COALESCE(eb.enrolled_on, e.enrolled_on)
             )
             ORDER BY i.name, b.recurrence
@@ -216,8 +235,10 @@ router.get('/enrollments', rbac.filterTeacherData, async (req, res) => {
       LEFT JOIN batches b ON eb.batch_id = b.id
       LEFT JOIN instruments i ON b.instrument_id = i.id
       LEFT JOIN teachers t ON b.teacher_id = t.id
+      LEFT JOIN student_credits sc ON sc.student_id = s.id
+      LEFT JOIN student_attended sa ON sa.student_id = s.id
       WHERE (s.student_type = 'permanent' OR s.student_type IS NULL) ${teacherFilter}
-      GROUP BY s.id, s.name, s.dob, s.phone, s.guardian_contact, s.metadata, s.is_active, e.id, e.status, e.classes_remaining, e.enrolled_on
+      GROUP BY s.id, s.name, s.dob, s.phone, s.guardian_contact, s.metadata, s.is_active, e.id, e.status, sc.total_credits, sa.total, e.enrolled_on
       ORDER BY s.name ASC
     `, queryArgs);
     res.json({ enrollments: result.rows });

@@ -45,33 +45,56 @@ router.get('/status/:studentId', async (req, res) => {
     const lastPaymentRes = await pool.query(paymentQuery, params);
     const lastPayment = lastPaymentRes.rows[0] || null;
 
-    // 2. Fetch Classes Remaining (total + per-instrument breakdown)
-    let classesRemaining = 0;
-    const breakdownRes = await pool.query(`
-      SELECT i.name as instrument, SUM(eb.classes_remaining) as remaining
-      FROM enrollment_batches eb
-      JOIN enrollments e ON eb.enrollment_id = e.id
-      JOIN batches b ON eb.batch_id = b.id
-      JOIN instruments i ON b.instrument_id = i.id
-      WHERE e.student_id = $1
-      GROUP BY i.name
-      ORDER BY i.name
-    `, [studentId]);
-    const instrumentBreakdown = Object.fromEntries(
-      breakdownRes.rows.map(r => [r.instrument, parseInt(r.remaining) || 0])
-    );
-    classesRemaining = Object.values(instrumentBreakdown).reduce((sum, v) => sum + v, 0);
+    // 2. Fetch Classes Remaining — computed dynamically: credits_bought - present_attendances
+    const [creditsRes, attendedRes] = await Promise.all([
+      pool.query(`
+        WITH raw_credits AS (
+          SELECT i.name AS instrument,
+            CASE
+              WHEN (p.metadata->>'credits_bought') IS NOT NULL
+                   AND (p.metadata->>'credits_bought')::int > 0
+                THEN (p.metadata->>'credits_bought')::int
+              WHEN pkg.classes_count IS NOT NULL THEN pkg.classes_count
+              ELSE 0
+            END AS credits
+          FROM payments p
+          JOIN packages pkg ON p.package_id = pkg.id
+          JOIN instruments i ON pkg.instrument_id = i.id
+          WHERE p.student_id = $1
+          UNION ALL
+          SELECT i.name AS instrument,
+            (p.metadata->>'credits_bought')::int AS credits
+          FROM payments p
+          JOIN instruments i ON i.id = (p.metadata->>'instrument_id')::uuid
+          WHERE p.student_id = $1
+            AND p.package_id IS NULL
+            AND (p.metadata->>'instrument_id') IS NOT NULL
+            AND (p.metadata->>'credits_bought') IS NOT NULL
+            AND (p.metadata->>'credits_bought')::int > 0
+        )
+        SELECT instrument, SUM(credits) AS credits
+        FROM raw_credits
+        GROUP BY instrument
+        ORDER BY instrument
+      `, [studentId]),
+      pool.query(`
+        SELECT i.name AS instrument, COUNT(*) AS attended
+        FROM attendance_records ar
+        JOIN batches b ON ar.batch_id = b.id
+        JOIN instruments i ON b.instrument_id = i.id
+        WHERE ar.student_id = $1 AND ar.status = 'present'
+        GROUP BY i.name
+      `, [studentId]),
+    ]);
 
-    // If batch_id provided and breakdown is empty (edge case), fall back to direct lookup
-    if (batch_id && breakdownRes.rows.length === 0) {
-      const creditRes = await pool.query(`
-        SELECT eb.classes_remaining
-        FROM enrollment_batches eb
-        JOIN enrollments e ON eb.enrollment_id = e.id
-        WHERE e.student_id = $1 AND eb.batch_id = $2
-      `, [studentId, batch_id]);
-      if (creditRes.rows.length > 0) classesRemaining = creditRes.rows[0].classes_remaining;
-    }
+    const attendedMap = Object.fromEntries(attendedRes.rows.map(r => [r.instrument, parseInt(r.attended) || 0]));
+    const instrumentBreakdown = Object.fromEntries(
+      creditsRes.rows.map(r => [
+        r.instrument,
+        Math.max(0, (parseInt(r.credits) || 0) - (attendedMap[r.instrument] || 0)),
+      ])
+    );
+    const classesRemaining = Object.values(instrumentBreakdown).reduce((sum, v) => sum + v, 0);
 
     // 3. Calculate Dates
     let expectedStartDate = null;
@@ -117,8 +140,8 @@ router.get('/status/:studentId', async (req, res) => {
 
 // POST /api/payments - Record a new payment
 router.post('/', async (req, res) => {
-  const { student_id, batch_id, amount, payment_method, payment_for, notes, class_credits, payment_frequency, payment_date } = req.body;
-  
+  const { student_id, batch_id, amount, payment_method, payment_for, notes, class_credits, payment_frequency, payment_date, package_id, location } = req.body;
+
   if (!student_id || !amount) {
     return res.status(400).json({ error: 'Student and amount are required' });
   }
@@ -135,7 +158,8 @@ router.post('/', async (req, res) => {
       payment_for,
       notes,
       payment_frequency,
-      credits_bought: creditsToAdd
+      credits_bought: creditsToAdd,
+      ...(location ? { location } : {}),
     };
 
     // Auto-detect batch if not provided and we have credits to add
@@ -153,11 +177,12 @@ router.post('/', async (req, res) => {
       }
     }
 
+    const resolvedPackageId = package_id || null;
     const paymentRes = await client.query(
-      `INSERT INTO payments (student_id, amount, method, metadata, timestamp)
-       VALUES ($1, $2, $3, $4, $5)
+      `INSERT INTO payments (student_id, package_id, amount, method, metadata, timestamp)
+       VALUES ($1, $2, $3, $4, $5, $6)
        RETURNING *`,
-      [student_id, amount, payment_method, JSON.stringify(metadata), payment_date || new Date()]
+      [student_id, resolvedPackageId, amount, payment_method, JSON.stringify(metadata), payment_date || new Date()]
     );
 
     // 2. Update Student Credits (add purchased credits to total)
@@ -333,20 +358,55 @@ router.get('/credit-report', async (req, res) => {
       const classesAttended = parseInt(attendanceRes.rows[0]?.attended || 0);
       const classesMissed = parseInt(attendanceRes.rows[0]?.missed || 0);
 
-      // 3. Classes remaining per instrument
-      const creditsRes = await pool.query(
-        `SELECT i.name AS instrument, SUM(eb.classes_remaining) AS remaining
-         FROM enrollment_batches eb
-         JOIN enrollments e ON eb.enrollment_id = e.id
-         JOIN batches b ON eb.batch_id = b.id
-         JOIN instruments i ON b.instrument_id = i.id
-         WHERE e.student_id = $1 AND e.status = 'active'
-         GROUP BY i.name
-         ORDER BY i.name`,
-        [sid]
-      );
+      // 3. Classes remaining per instrument — dynamic: credits_bought - present_attendances
+      const [dynCreditsRes, dynAttendedRes] = await Promise.all([
+        pool.query(
+          `WITH raw_credits AS (
+             SELECT i.name AS instrument,
+               CASE
+                 WHEN (p.metadata->>'credits_bought') IS NOT NULL
+                      AND (p.metadata->>'credits_bought')::int > 0
+                   THEN (p.metadata->>'credits_bought')::int
+                 WHEN pkg.classes_count IS NOT NULL THEN pkg.classes_count
+                 ELSE 0
+               END AS credits
+             FROM payments p
+             JOIN packages pkg ON p.package_id = pkg.id
+             JOIN instruments i ON pkg.instrument_id = i.id
+             WHERE p.student_id = $1
+             UNION ALL
+             SELECT i.name AS instrument,
+               (p.metadata->>'credits_bought')::int AS credits
+             FROM payments p
+             JOIN instruments i ON i.id = (p.metadata->>'instrument_id')::uuid
+             WHERE p.student_id = $1
+               AND p.package_id IS NULL
+               AND (p.metadata->>'instrument_id') IS NOT NULL
+               AND (p.metadata->>'credits_bought') IS NOT NULL
+               AND (p.metadata->>'credits_bought')::int > 0
+           )
+           SELECT instrument, SUM(credits) AS credits
+           FROM raw_credits
+           GROUP BY instrument
+           ORDER BY instrument`,
+          [sid]
+        ),
+        pool.query(
+          `SELECT i.name AS instrument, COUNT(*) AS attended
+           FROM attendance_records ar
+           JOIN batches b ON ar.batch_id = b.id
+           JOIN instruments i ON b.instrument_id = i.id
+           WHERE ar.student_id = $1 AND ar.status = 'present'
+           GROUP BY i.name`,
+          [sid]
+        ),
+      ]);
+      const dynAttendedMap = Object.fromEntries(dynAttendedRes.rows.map(r => [r.instrument, parseInt(r.attended) || 0]));
       const instrumentCredits = Object.fromEntries(
-        creditsRes.rows.map(r => [r.instrument, parseInt(r.remaining) || 0])
+        dynCreditsRes.rows.map(r => [
+          r.instrument,
+          Math.max(0, (parseInt(r.credits) || 0) - (dynAttendedMap[r.instrument] || 0)),
+        ])
       );
       const creditsRemaining = Object.values(instrumentCredits).reduce((sum, v) => sum + v, 0);
 

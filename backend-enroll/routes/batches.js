@@ -55,7 +55,46 @@ router.get('/:batchId/students', async (req, res) => {
   const { date } = req.query;
 
   try {
-    let query = `
+    // Dynamic classes_remaining: credits bought for this instrument - attendances in this instrument
+    const cte = `
+      WITH batch_instrument AS (
+        SELECT instrument_id FROM batches WHERE id = $1
+      ),
+      raw_credits AS (
+        SELECT p.student_id,
+          CASE
+            WHEN (p.metadata->>'credits_bought') IS NOT NULL
+                 AND (p.metadata->>'credits_bought')::int > 0
+              THEN (p.metadata->>'credits_bought')::int
+            WHEN pkg.classes_count IS NOT NULL THEN pkg.classes_count
+            ELSE 0
+          END AS credits
+        FROM payments p
+        JOIN packages pkg ON p.package_id = pkg.id
+        WHERE pkg.instrument_id = (SELECT instrument_id FROM batch_instrument)
+        UNION ALL
+        SELECT p.student_id,
+          (p.metadata->>'credits_bought')::int AS credits
+        FROM payments p
+        WHERE p.package_id IS NULL
+          AND (p.metadata->>'instrument_id')::uuid = (SELECT instrument_id FROM batch_instrument)
+          AND (p.metadata->>'credits_bought') IS NOT NULL
+          AND (p.metadata->>'credits_bought')::int > 0
+      ),
+      instr_credits AS (
+        SELECT student_id, SUM(credits) AS credits FROM raw_credits GROUP BY student_id
+      ),
+      instr_attended AS (
+        SELECT ar.student_id, COUNT(*) AS attended
+        FROM attendance_records ar
+        JOIN batches b ON ar.batch_id = b.id
+        WHERE b.instrument_id = (SELECT instrument_id FROM batch_instrument)
+          AND ar.status = 'present'
+        GROUP BY ar.student_id
+      )
+    `;
+
+    let query = cte + `
       SELECT
         s.id as student_id,
         s.name as student_name,
@@ -63,7 +102,7 @@ router.get('/:batchId/students', async (req, res) => {
         s.guardian_contact,
         s.metadata->>'phone' as meta_phone,
         s.metadata->>'guardian_phone' as guardian_phone,
-        eb.classes_remaining
+        GREATEST(0, COALESCE(ic.credits, 0) - COALESCE(ia.attended, 0)) AS classes_remaining
     `;
     const params = [batchId];
 
@@ -75,6 +114,8 @@ router.get('/:batchId/students', async (req, res) => {
       FROM students s
       JOIN enrollments e ON s.id = e.student_id
       JOIN enrollment_batches eb ON e.id = eb.enrollment_id
+      LEFT JOIN instr_credits ic ON ic.student_id = s.id
+      LEFT JOIN instr_attended ia ON ia.student_id = s.id
     `;
 
     if (date) {
@@ -101,6 +142,37 @@ router.get('/instrument/:instrumentId/board', authenticateJWT, rbac.authorizeRol
   }
   try {
     const result = await pool.query(`
+      WITH raw_credits AS (
+        SELECT p.student_id,
+          CASE
+            WHEN (p.metadata->>'credits_bought') IS NOT NULL
+                 AND (p.metadata->>'credits_bought')::int > 0
+              THEN (p.metadata->>'credits_bought')::int
+            WHEN pkg.classes_count IS NOT NULL THEN pkg.classes_count
+            ELSE 0
+          END AS credits
+        FROM payments p
+        JOIN packages pkg ON p.package_id = pkg.id
+        WHERE pkg.instrument_id = $1
+        UNION ALL
+        SELECT p.student_id,
+          (p.metadata->>'credits_bought')::int AS credits
+        FROM payments p
+        WHERE p.package_id IS NULL
+          AND (p.metadata->>'instrument_id')::uuid = $1
+          AND (p.metadata->>'credits_bought') IS NOT NULL
+          AND (p.metadata->>'credits_bought')::int > 0
+      ),
+      instr_credits AS (
+        SELECT student_id, SUM(credits) AS credits FROM raw_credits GROUP BY student_id
+      ),
+      instr_attended AS (
+        SELECT ar.student_id, COUNT(*) AS attended
+        FROM attendance_records ar
+        JOIN batches b2 ON ar.batch_id = b2.id
+        WHERE b2.instrument_id = $1 AND ar.status = 'present'
+        GROUP BY ar.student_id
+      )
       SELECT
         b.id AS batch_id,
         b.recurrence,
@@ -114,12 +186,14 @@ router.get('/instrument/:instrumentId/board', authenticateJWT, rbac.authorizeRol
         COALESCE(s.phone, s.metadata->>'phone') AS phone,
         s.guardian_contact,
         eb.id AS enrollment_batch_id,
-        eb.classes_remaining
+        GREATEST(0, COALESCE(ic.credits, 0) - COALESCE(ia.attended, 0)) AS classes_remaining
       FROM batches b
       LEFT JOIN teachers t ON b.teacher_id = t.id
       LEFT JOIN enrollment_batches eb ON eb.batch_id = b.id
       LEFT JOIN enrollments e ON e.id = eb.enrollment_id AND e.status = 'active'
       LEFT JOIN students s ON s.id = e.student_id
+      LEFT JOIN instr_credits ic ON ic.student_id = s.id
+      LEFT JOIN instr_attended ia ON ia.student_id = s.id
       WHERE b.instrument_id = $1 AND b.is_makeup = false
       ORDER BY b.recurrence, s.name
     `, [instrumentId]);
