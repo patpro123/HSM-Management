@@ -1,15 +1,15 @@
 'use strict';
 
 const express = require('express');
-const router  = express.Router();
-const pool    = require('../db');
+const router = express.Router();
+const pool = require('../db');
 const { authenticateJWT } = require('../auth/jwtMiddleware');
-const { callLLM }         = require('../llm/client');
+const { callLLM } = require('../llm/client');
 const { skills, TOOL_DEFINITIONS, ACTION_SKILLS } = require('../llm/skills');
-const { getPrompt }       = require('../llm/prompts');
+const { getPrompt } = require('../llm/prompts');
 const { checkRateLimit, getCached, setCached } = require('../llm/rateLimit');
 
-const SESSION_TTL_DAYS     = 7;
+const SESSION_TTL_DAYS = 7;
 const MAX_HISTORY_MESSAGES = 20;
 
 // POST /api/chat
@@ -23,7 +23,7 @@ router.post('/', authenticateJWT, async (req, res) => {
     return res.status(400).json({ error: 'message too long (max 500 chars)' });
   }
 
-  const userId   = req.user.id;
+  const userId = req.user.id;
   const userName = req.user.name || null;
   const userRole = (req.user.roles || []).find(r => ['admin', 'teacher', 'student', 'parent'].includes(r)) || 'parent';
   const provider = process.env.LLM_PROVIDER || 'groq';
@@ -77,15 +77,15 @@ router.post('/', authenticateJWT, async (req, res) => {
     const trimmed = history.slice(-MAX_HISTORY_MESSAGES);
 
     const systemPrompt = getPrompt(userRole, new Date(), userName);
-    const llmMessages  = [
-      { role: 'system',    content: systemPrompt },
+    const llmMessages = [
+      { role: 'system', content: systemPrompt },
       ...trimmed,
-      { role: 'user',      content: message.trim() },
+      { role: 'user', content: message.trim() },
     ];
 
     // Cache hit for identical lookup requests
     const cacheKey = `${userId}:${message.trim().toLowerCase()}`;
-    const cached   = getCached(cacheKey);
+    const cached = getCached(cacheKey);
     if (cached) {
       return res.json({ session_id: session.session_id, ...cached });
     }
@@ -95,7 +95,7 @@ router.post('/', authenticateJWT, async (req, res) => {
     let botResponse = null;
 
     if (llmResponse.tool_calls && llmResponse.tool_calls.length > 0) {
-      const toolCall  = llmResponse.tool_calls[0];
+      const toolCall = llmResponse.tool_calls[0];
       const skillName = toolCall.function.name;
 
       let skillParams;
@@ -103,6 +103,7 @@ router.post('/', authenticateJWT, async (req, res) => {
         skillParams = typeof toolCall.function.arguments === 'string'
           ? JSON.parse(toolCall.function.arguments)
           : toolCall.function.arguments;
+        skillParams = skillParams || {};
       } catch (e) {
         skillParams = {};
       }
@@ -138,7 +139,7 @@ router.post('/', authenticateJWT, async (req, res) => {
     // Persist updated message history
     const updatedMessages = [
       ...trimmed,
-      { role: 'user',      content: message.trim() },
+      { role: 'user', content: message.trim() },
       { role: 'assistant', content: JSON.stringify(botResponse) },
     ].slice(-MAX_HISTORY_MESSAGES);
 

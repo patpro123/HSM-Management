@@ -328,7 +328,7 @@ const skills = {
 
     // Fuzzy-match exception names → student IDs
     const exceptionIds = new Set();
-    const unmatched    = [];
+    const unmatched = [];
     for (const exName of exceptionNames) {
       const match = students.find(s => {
         const sn = s.name.toLowerCase();
@@ -340,8 +340,8 @@ const skills = {
 
     // Build per-student attendance map
     const attendanceMap = students.map(s => ({
-      id:     s.id,
-      name:   s.name,
+      id: s.id,
+      name: s.name,
       status: exceptionIds.has(s.id) ? oppStatus : defStatus,
     }));
 
@@ -416,7 +416,7 @@ const skills = {
     }
 
     const presentCount = attendanceMap.filter(s => s.status === 'present').length;
-    const absentCount  = attendanceMap.filter(s => s.status === 'absent').length;
+    const absentCount = attendanceMap.filter(s => s.status === 'absent').length;
 
     let summaryText = `Attendance saved — ${batchRow.instrument} (${date}): ${presentCount} present, ${absentCount} absent.`;
     if (unmatched.length) {
@@ -427,7 +427,7 @@ const skills = {
       ['Send absence notifications', 'View batch roster', 'Mark another batch'],
       {
         students: attendanceMap.map(s => ({
-          name:  s.name,
+          name: s.name,
           label: s.status.charAt(0).toUpperCase() + s.status.slice(1),
           value: s.name,
         })),
@@ -437,9 +437,9 @@ const skills = {
 
   'attendance.mark': async ({ params }) => {
     let { batch_id, student_id, status, session_date } = params;
-    if (!isUUID(batch_id))   batch_id   = (await resolveBatchId(params));
+    if (!isUUID(batch_id)) batch_id = (await resolveBatchId(params));
     if (!isUUID(student_id)) student_id = null; // must be explicit for writes
-    if (!batch_id)   return makeResponse('text', 'Which batch? Please specify the instrument and time.', []);
+    if (!batch_id) return makeResponse('text', 'Which batch? Please specify the instrument and time.', []);
     if (!student_id) return makeResponse('text', 'Which student? Please provide their name to mark attendance.', []);
     const date = session_date || new Date().toISOString().split('T')[0];
     await pool.query(
@@ -486,12 +486,12 @@ const skills = {
   'student.update': async ({ params }) => {
     const { student_id, phone, guardian_contact, email } = params;
     const updates = [];
-    const values  = [];
+    const values = [];
     let idx = 1;
-    if (phone)            { updates.push(`phone = $${idx++}`); values.push(phone); }
+    if (phone) { updates.push(`phone = $${idx++}`); values.push(phone); }
     if (guardian_contact) { updates.push(`guardian_contact = $${idx++}`); values.push(guardian_contact); }
-    if (email)            { updates.push(`metadata = jsonb_set(metadata, '{email}', to_jsonb($${idx++}::text))`); values.push(email); }
-    if (!updates.length)  return makeResponse('error', 'No fields provided to update.', []);
+    if (email) { updates.push(`metadata = jsonb_set(metadata, '{email}', to_jsonb($${idx++}::text))`); values.push(email); }
+    if (!updates.length) return makeResponse('error', 'No fields provided to update.', []);
     values.push(student_id);
     await pool.query(`UPDATE students SET ${updates.join(', ')} WHERE id = $${idx}`, values);
     return makeResponse('text', 'Student details updated.', ['View profile']);
@@ -532,7 +532,7 @@ const skills = {
       guardianEmail,
       studentName: student.name,
       sessionDate: session_date,
-      batchName:   batch_name,
+      batchName: batch_name,
     });
 
     return makeResponse('text', `Absence notification sent to guardian of ${student.name}.`, ['View attendance record']);
@@ -575,7 +575,7 @@ const skills = {
            (p.metadata->>'credits_bought')::int AS credits
          FROM payments p
          JOIN (
-           SELECT e2.student_id, MAX(b2.instrument_id) AS instrument_id
+           SELECT e2.student_id, MAX(b2.instrument_id::text)::uuid AS instrument_id
            FROM enrollment_batches eb2
            JOIN enrollments e2 ON e2.id = eb2.enrollment_id AND e2.status = 'active'
            JOIN batches b2 ON b2.id = eb2.batch_id
@@ -700,10 +700,10 @@ const skills = {
     const text = `Active students: ${row.total_active} | Enrolled: ${row.enrolled} | Zero credits: ${row.zero_credits} | Low credits (≤2): ${row.low_credits}`;
     return makeResponse('card', text, ['View unpaid list', 'View low credits'], {
       student: {
-        total_active:  row.total_active,
-        enrolled:      row.enrolled,
-        zero_credits:  row.zero_credits,
-        low_credits:   row.low_credits,
+        total_active: row.total_active,
+        enrolled: row.enrolled,
+        zero_credits: row.zero_credits,
+        low_credits: row.low_credits,
       },
     });
   },
@@ -733,7 +733,7 @@ const skills = {
            (p.metadata->>'credits_bought')::int AS credits
          FROM payments p
          JOIN (
-           SELECT e2.student_id, MAX(b2.instrument_id) AS instrument_id
+           SELECT e2.student_id, MAX(b2.instrument_id::text)::uuid AS instrument_id
            FROM enrollment_batches eb2
            JOIN enrollments e2 ON e2.id = eb2.enrollment_id AND e2.status = 'active'
            JOIN batches b2 ON b2.id = eb2.batch_id
@@ -801,10 +801,10 @@ const skills = {
     const text = `Attendance ${label}: ${row.present} present, ${row.absent} absent, ${row.excused} excused (${row.unique_students} unique students).`;
     return makeResponse('card', text, ['View by batch', 'Mark attendance'], {
       student: {
-        period:          label,
-        present:         row.present,
-        absent:          row.absent,
-        excused:         row.excused,
+        period: label,
+        present: row.present,
+        absent: row.absent,
+        excused: row.excused,
         unique_students: row.unique_students,
       },
     });
@@ -843,7 +843,7 @@ const skills = {
            (p.metadata->>'credits_bought')::int AS credits
          FROM payments p
          JOIN (
-           SELECT e2.student_id, MAX(b2.instrument_id) AS instrument_id
+           SELECT e2.student_id, MAX(b2.instrument_id::text)::uuid AS instrument_id
            FROM enrollment_batches eb2
            JOIN enrollments e2 ON e2.id = eb2.enrollment_id AND e2.status = 'active'
            JOIN batches b2 ON b2.id = eb2.batch_id
@@ -890,7 +890,7 @@ const skills = {
   // ── Charts ────────────────────────────────────────────────────────────────
 
   'chart.attendance': async ({ params }) => {
-    const period    = (params.period     || 'month').toLowerCase();
+    const period = (params.period || 'month').toLowerCase();
     const chartType = (params.chart_type || 'bar').toLowerCase();
     let dateFilter, label;
     if (period === 'week') {
@@ -917,7 +917,7 @@ const skills = {
         xKey: 'label',
         series: [
           { key: 'present', color: '#4caf50', label: 'Present' },
-          { key: 'absent',  color: '#f44336', label: 'Absent'  },
+          { key: 'absent', color: '#f44336', label: 'Absent' },
         ],
       },
     });
@@ -985,20 +985,20 @@ const skills = {
       pool.query(`SELECT COUNT(DISTINCT prospect_id)::int AS followed_up FROM prospect_notes`),
     ]);
     const s = summaryRes.rows[0];
-    const followedUp   = noteRes.rows[0].followed_up ?? 0;
+    const followedUp = noteRes.rows[0].followed_up ?? 0;
     const notFollowedUp = Math.max(0, Number(s.active) - Number(followedUp));
     return makeResponse('card',
       `Prospects — ${s.active} active of ${s.total} total`,
       ['View aging', 'Who needs follow-up?', 'Prospects by instrument'],
       {
         student: {
-          total_prospects:  s.total,
+          total_prospects: s.total,
           active_prospects: s.active,
-          status_new:       s.status_new,
+          status_new: s.status_new,
           status_contacted: s.status_contacted,
-          status_enrolled:  s.status_enrolled,
-          followed_up:      followedUp,
-          not_followed_up:  notFollowedUp,
+          status_enrolled: s.status_enrolled,
+          followed_up: followedUp,
+          not_followed_up: notFollowedUp,
         },
       }
     );
@@ -1015,10 +1015,10 @@ const skills = {
     }
     if (aging) {
       const agingSQL = {
-        fresh:    `s.created_at >= NOW() - INTERVAL '7 days'`,
+        fresh: `s.created_at >= NOW() - INTERVAL '7 days'`,
         followup: `s.created_at < NOW() - INTERVAL '7 days'  AND s.created_at >= NOW() - INTERVAL '14 days'`,
-        warm:     `s.created_at < NOW() - INTERVAL '14 days' AND s.created_at >= NOW() - INTERVAL '30 days'`,
-        cold:     `s.created_at < NOW() - INTERVAL '30 days'`,
+        warm: `s.created_at < NOW() - INTERVAL '14 days' AND s.created_at >= NOW() - INTERVAL '30 days'`,
+        cold: `s.created_at < NOW() - INTERVAL '30 days'`,
       };
       const clause = agingSQL[aging.toLowerCase()];
       if (clause) wheres.push(clause);
@@ -1046,9 +1046,9 @@ const skills = {
     if (!rows.length) return makeResponse('text', 'No prospects found for those filters.', ['View all prospects', 'View aging summary']);
 
     const label = [
-      aging     ? `aging: ${aging}`           : '',
-      status    ? `status: ${status}`         : '',
-      instrument? `instrument: ${instrument}` : '',
+      aging ? `aging: ${aging}` : '',
+      status ? `status: ${status}` : '',
+      instrument ? `instrument: ${instrument}` : '',
     ].filter(Boolean).join(', ') || 'all active';
 
     return makeResponse('list',
@@ -1056,7 +1056,7 @@ const skills = {
       ['View aging', 'Who needs follow-up?'],
       {
         students: rows.map(r => ({
-          name:  r.name,
+          name: r.name,
           phone: r.phone,
           label: `${r.instrument || 'Unknown'} · ${r.age_days}d old · ${r.note_count ? r.note_count + ' note(s)' : 'no follow-up'}`,
           value: r.name,
@@ -1084,11 +1084,11 @@ const skills = {
       ['Show cold prospects', 'Show fresh prospects', 'View as chart'],
       {
         student: {
-          'fresh (0–7d)':      row.fresh,
+          'fresh (0–7d)': row.fresh,
           'follow-up (8–14d)': row.followup,
-          'warm (15–30d)':     row.warm,
-          'cold (30d+)':       row.cold,
-          total:               total,
+          'warm (15–30d)': row.warm,
+          'cold (30d+)': row.cold,
+          total: total,
         },
       }
     );
@@ -1121,7 +1121,7 @@ const skills = {
       hasnotes ? ['View aging', 'View pending follow-ups'] : ['View aging', 'View followed-up list'],
       {
         students: rows.map(r => ({
-          name:  r.name,
+          name: r.name,
           phone: r.phone,
           label: `${r.instrument || 'Unknown'} · ${r.age_days}d old · status: ${r.status || 'new'}`,
           value: r.name,
@@ -1133,7 +1133,7 @@ const skills = {
   // ── Prospect chart ────────────────────────────────────────────────────────
 
   'chart.prospects': async ({ params }) => {
-    const by        = (params.by         || 'aging').toLowerCase();
+    const by = (params.by || 'aging').toLowerCase();
     const chartType = (params.chart_type || 'pie').toLowerCase();
 
     let rows, title;
@@ -1161,10 +1161,10 @@ const skills = {
     } else {
       // aging (default)
       rows = [
-        { label: 'Fresh (0–7d)',    value: 0 },
+        { label: 'Fresh (0–7d)', value: 0 },
         { label: 'Follow-up (8–14d)', value: 0 },
-        { label: 'Warm (15–30d)',   value: 0 },
-        { label: 'Cold (30d+)',     value: 0 },
+        { label: 'Warm (15–30d)', value: 0 },
+        { label: 'Cold (30d+)', value: 0 },
       ];
       const res = (await pool.query(`
         SELECT
@@ -1204,7 +1204,7 @@ const skills = {
     const monthStr = params.month || new Date().toISOString().slice(0, 7); // YYYY-MM
     const [year, month] = monthStr.split('-');
     const periodStart = `${year}-${month}-01`;
-    const periodEnd   = new Date(Number(year), Number(month), 0).toISOString().slice(0, 10);
+    const periodEnd = new Date(Number(year), Number(month), 0).toISOString().slice(0, 10);
 
     const [revenueRes, expenseRes, payoutRes, budgetRes] = await Promise.all([
       pool.query(
@@ -1234,26 +1234,26 @@ const skills = {
       ),
     ]);
 
-    const revenue    = Number(revenueRes.rows[0].total);
-    const expenses   = Number(expenseRes.rows[0].total);
-    const payouts    = Number(payoutRes.rows[0].total);
+    const revenue = Number(revenueRes.rows[0].total);
+    const expenses = Number(expenseRes.rows[0].total);
+    const payouts = Number(payoutRes.rows[0].total);
     const totalCosts = expenses + payouts;
-    const net        = revenue - totalCosts;
-    const budget     = budgetRes.rows[0];
-    const target     = budget ? Number(budget.revenue_target) : null;
-    const vsTarget   = target ? `₹${revenue} of ₹${target} target (${Math.round((revenue / target) * 100)}%)` : 'No target set';
+    const net = revenue - totalCosts;
+    const budget = budgetRes.rows[0];
+    const target = budget ? Number(budget.revenue_target) : null;
+    const vsTarget = target ? `₹${revenue} of ₹${target} target (${Math.round((revenue / target) * 100)}%)` : 'No target set';
 
     return makeResponse('card',
       `Finance summary — ${monthStr}`,
       ['Show expense breakdown', 'Show payment details', 'Revenue vs expenses chart'],
       {
         student: {
-          period:           monthStr,
-          revenue:          `₹${revenue} (${revenueRes.rows[0].count} payments)`,
-          expenses:         `₹${expenses} (${expenseRes.rows[0].count} entries)`,
-          teacher_payouts:  `₹${payouts}`,
-          net_income:       `₹${net}`,
-          vs_target:        vsTarget,
+          period: monthStr,
+          revenue: `₹${revenue} (${revenueRes.rows[0].count} payments)`,
+          expenses: `₹${expenses} (${expenseRes.rows[0].count} entries)`,
+          teacher_payouts: `₹${payouts}`,
+          net_income: `₹${net}`,
+          vs_target: vsTarget,
         },
       }
     );
@@ -1327,11 +1327,11 @@ const skills = {
       ['View by instrument chart', 'Show P&L', 'Show expenses'],
       {
         student: {
-          period:        label,
+          period: label,
           total_revenue: `₹${t.total}`,
           payment_count: t.count,
-          avg_payment:   `₹${t.avg_payment}`,
-          by_method:     methodLines || 'N/A',
+          avg_payment: `₹${t.avg_payment}`,
+          by_method: methodLines || 'N/A',
           by_instrument: instrumentLines || 'N/A',
         },
       }
@@ -1346,15 +1346,15 @@ const skills = {
     if (period === 'last_month') {
       const d = new Date(now.getFullYear(), now.getMonth() - 1, 1);
       start = d.toISOString().slice(0, 10);
-      end   = new Date(now.getFullYear(), now.getMonth(), 0).toISOString().slice(0, 10);
+      end = new Date(now.getFullYear(), now.getMonth(), 0).toISOString().slice(0, 10);
       label = 'last month';
     } else if (period === 'this_year') {
       start = `${now.getFullYear()}-01-01`;
-      end   = now.toISOString().slice(0, 10);
+      end = now.toISOString().slice(0, 10);
       label = 'this year';
     } else {
       start = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
-      end   = now.toISOString().slice(0, 10);
+      end = now.toISOString().slice(0, 10);
       label = 'this month';
     }
 
@@ -1384,7 +1384,7 @@ const skills = {
       ['Show P&L', 'Show revenue', 'Expenses chart'],
       {
         students: categoryRes.rows.map(r => ({
-          name:  r.label,
+          name: r.label,
           label: `₹${r.total} · ${r.count} item(s)`,
           value: r.label,
         })),
@@ -1396,7 +1396,7 @@ const skills = {
     const monthStr = params.month || new Date().toISOString().slice(0, 7);
     const [year, month] = monthStr.split('-');
     const start = `${year}-${month}-01`;
-    const end   = new Date(Number(year), Number(month), 0).toISOString().slice(0, 10);
+    const end = new Date(Number(year), Number(month), 0).toISOString().slice(0, 10);
 
     const [revenueRes, expenseRes, payoutRes, prevRevenueRes] = await Promise.all([
       pool.query(
@@ -1425,28 +1425,28 @@ const skills = {
       ),
     ]);
 
-    const revenue   = Number(revenueRes.rows[0].total);
-    const expenses  = Number(expenseRes.rows[0].total);
-    const payouts   = Number(payoutRes.rows[0].total);
+    const revenue = Number(revenueRes.rows[0].total);
+    const expenses = Number(expenseRes.rows[0].total);
+    const payouts = Number(payoutRes.rows[0].total);
     const totalCost = expenses + payouts;
-    const net       = revenue - totalCost;
-    const margin    = revenue > 0 ? Math.round((net / revenue) * 100) : 0;
-    const prevRev   = Number(prevRevenueRes.rows[0].total);
-    const growth    = prevRev > 0 ? `${revenue >= prevRev ? '+' : ''}${Math.round(((revenue - prevRev) / prevRev) * 100)}% vs last month` : 'N/A';
+    const net = revenue - totalCost;
+    const margin = revenue > 0 ? Math.round((net / revenue) * 100) : 0;
+    const prevRev = Number(prevRevenueRes.rows[0].total);
+    const growth = prevRev > 0 ? `${revenue >= prevRev ? '+' : ''}${Math.round(((revenue - prevRev) / prevRev) * 100)}% vs last month` : 'N/A';
 
     return makeResponse('card',
       `P&L — ${monthStr}: Net ₹${net} (${margin}% margin)`,
       ['Show revenue details', 'Show expenses', 'Revenue vs expenses chart'],
       {
         student: {
-          month:            monthStr,
-          revenue:          `₹${revenue} (${revenueRes.rows[0].count} payments)`,
-          expenses:         `₹${expenses}`,
-          teacher_payouts:  `₹${payouts}`,
-          total_costs:      `₹${totalCost}`,
-          net_income:       `₹${net}`,
-          margin:           `${margin}%`,
-          vs_last_month:    growth,
+          month: monthStr,
+          revenue: `₹${revenue} (${revenueRes.rows[0].count} payments)`,
+          expenses: `₹${expenses}`,
+          teacher_payouts: `₹${payouts}`,
+          total_costs: `₹${totalCost}`,
+          net_income: `₹${net}`,
+          margin: `${margin}%`,
+          vs_last_month: growth,
         },
       }
     );
@@ -1460,15 +1460,15 @@ const skills = {
     if (period === 'last_month') {
       const d = new Date(now.getFullYear(), now.getMonth() - 1, 1);
       start = d.toISOString().slice(0, 10);
-      end   = new Date(now.getFullYear(), now.getMonth(), 0).toISOString().slice(0, 10);
+      end = new Date(now.getFullYear(), now.getMonth(), 0).toISOString().slice(0, 10);
       label = 'last month';
     } else if (period === 'this_year') {
       start = `${now.getFullYear()}-01-01`;
-      end   = now.toISOString().slice(0, 10);
+      end = now.toISOString().slice(0, 10);
       label = 'this year';
     } else {
       start = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
-      end   = now.toISOString().slice(0, 10);
+      end = now.toISOString().slice(0, 10);
       label = 'this month';
     }
 
@@ -1499,7 +1499,7 @@ const skills = {
       ['Show P&L', 'Show expenses'],
       {
         students: perTeacherRes.rows.map(r => ({
-          name:  r.label,
+          name: r.label,
           label: `₹${r.total}`,
           value: r.label,
         })),
@@ -1508,7 +1508,7 @@ const skills = {
   },
 
   'chart.finance': async ({ params }) => {
-    const view      = (params.view       || 'revenue_vs_expenses').toLowerCase();
+    const view = (params.view || 'revenue_vs_expenses').toLowerCase();
     const chartType = (params.chart_type || 'bar').toLowerCase();
     let rows, title;
 
@@ -1570,9 +1570,9 @@ const skills = {
         series: isSingle
           ? [{ key: 'value', label: title.split('—')[0].trim() }]
           : [
-              { key: 'revenue',  color: '#4a90d9', label: 'Revenue'  },
-              { key: 'expenses', color: '#e74c3c', label: 'Expenses' },
-            ],
+            { key: 'revenue', color: '#4a90d9', label: 'Revenue' },
+            { key: 'expenses', color: '#e74c3c', label: 'Expenses' },
+          ],
       },
     });
   },
@@ -1580,18 +1580,18 @@ const skills = {
   'school.locations': async () => {
     const locations = [
       {
-        name:        'Main Campus — Bandlaguda',
-        address:     'Flat No 1, 3rd Floor, House No 7-214, Abhyudaya Nagar, Kishan Nagar Colony, Bandlaguda Jagir-Kismatpura, Hyderabad — 500086',
-        landmark:    'Opposite Kritunga Restaurant, near Bandlaguda / Rajendranagar',
+        name: 'Main Campus — Bandlaguda',
+        address: 'Flat No 1, 3rd Floor, House No 7-214, Abhyudaya Nagar, Kishan Nagar Colony, Bandlaguda Jagir-Kismatpura, Hyderabad — 500086',
+        landmark: 'Opposite Kritunga Restaurant, near Bandlaguda / Rajendranagar',
         instruments: 'All instruments and vocal streams',
-        status:      'open',
+        status: 'open',
       },
       {
-        name:        'PBEL City Campus (New)',
-        address:     'PBEL City, Hyderabad',
-        landmark:    '',
+        name: 'PBEL City Campus (New)',
+        address: 'PBEL City, Hyderabad',
+        landmark: '',
         instruments: 'Hindustani Vocals & Carnatic Vocals — open now. Guitar, Keyboard, Piano, Drums and other instruments coming soon.',
-        status:      'partial',
+        status: 'partial',
       },
     ];
     const lines = locations.map(l =>
@@ -1601,7 +1601,7 @@ const skills = {
       ['Get directions', 'Which instruments at PBEL City?', 'Working hours'],
       {
         students: locations.map(l => ({
-          name:  l.name,
+          name: l.name,
           label: l.instruments,
           value: l.status,
         })),
@@ -1641,9 +1641,9 @@ const skills = {
       ['Record payout', 'View payout history'],
       {
         student: {
-          teacher:         row.name,
-          payout_type:     row.payout_type,
-          rate:            `₹${row.rate}`,
+          teacher: row.name,
+          payout_type: row.payout_type,
+          rate: `₹${row.rate}`,
           active_students: row.active_students,
           estimated_payout: `₹${estimated}`,
         },
@@ -1652,14 +1652,17 @@ const skills = {
   },
 };
 
-const T = (name, desc, props = {}, req = []) => ({
-  type: 'function',
-  function: {
-    name,
-    description: desc,
-    parameters: { type: 'object', properties: props, required: req },
-  },
-});
+function T(name, desc, props = {}, req = []) {
+  const schema = { type: 'object', properties: props };
+  if (req && req.length > 0) schema.required = req;
+  return {
+    type: 'function',
+    function: {
+      name, description: desc,
+      parameters: schema
+    }
+  };
+}
 const S = (desc) => ({ type: 'string', description: desc });
 const I = (desc) => ({ type: 'integer', description: desc });
 
@@ -1667,64 +1670,64 @@ const TOOL_DEFINITIONS = [
   // School info
   T('school.locations', 'List all HSM campus locations, which instruments are available at each, and which are coming soon', {}),
   // Lookups
-  T('student.lookup',    'Search students by name or phone',                 { query: S('name or phone') }, ['query']),
-  T('student.credits',   'Classes remaining per instrument for a student',   { student_id: S('name or UUID') }),
-  T('student.profile',   'Full profile for a student',                       { student_id: S('name or UUID') }),
-  T('student.list',      'List all active students',                         {}),
-  T('teacher.list',      'List all teachers with batch and student counts',  {}),
-  T('teacher.profile',   'Profile and student count for a teacher',          { teacher_id: S('name or UUID') }),
-  T('batch.roster',      'Students enrolled in a batch',                     { batch_id: S('instrument name or UUID') }),
-  T('batch.schedule',    'Schedule and timings for a batch',                 { batch_id: S('instrument name or UUID') }),
-  T('payment.status',    'Recent payment history for a specific student',    { student_id: S('name or UUID') }),
-  T('fee.query',         'Fee packages and prices for an instrument',        { instrument: S('instrument name') }, ['instrument']),
-  T('reminder.payment',  'All students with low/zero classes (overdue/renewal list)', { threshold: I('max classes remaining, default 2') }),
-  T('report.attendance', 'Attendance report for a batch over a date range',  { batch_id: S('UUID'), from_date: S('YYYY-MM-DD'), to_date: S('YYYY-MM-DD') }, ['from_date', 'to_date']),
-  T('report.revenue',    'Total fee revenue in a date range',                { from_date: S('YYYY-MM-DD'), to_date: S('YYYY-MM-DD') }, ['from_date', 'to_date']),
-  T('report.lowcredits', 'Students near zero classes needing renewal',       { threshold: I('default 2') }),
+  T('student.lookup', 'Search students by name or phone', { query: S('name or phone') }, ['query']),
+  T('student.credits', 'Classes remaining per instrument for a student', { student_id: S('name or UUID') }),
+  T('student.profile', 'Full profile for a student', { student_id: S('name or UUID') }),
+  T('student.list', 'List all active students', {}),
+  T('teacher.list', 'List all teachers with batch and student counts', {}),
+  T('teacher.profile', 'Profile and student count for a teacher', { teacher_id: S('name or UUID') }),
+  T('batch.roster', 'Students enrolled in a batch', { batch_id: S('instrument name or UUID') }),
+  T('batch.schedule', 'Schedule and timings for a batch', { batch_id: S('instrument name or UUID') }),
+  T('payment.status', 'Recent payment history for a specific student', { student_id: S('name or UUID') }),
+  T('fee.query', 'Fee packages and prices for an instrument', { instrument: S('instrument name') }, ['instrument']),
+  T('reminder.payment', 'All students with low/zero classes (overdue/renewal list)', { threshold: I('max classes remaining, default 2') }),
+  T('report.attendance', 'Attendance report for a batch over a date range', { batch_id: S('UUID'), from_date: S('YYYY-MM-DD'), to_date: S('YYYY-MM-DD') }, ['from_date', 'to_date']),
+  T('report.revenue', 'Total fee revenue in a date range', { from_date: S('YYYY-MM-DD'), to_date: S('YYYY-MM-DD') }, ['from_date', 'to_date']),
+  T('report.lowcredits', 'Students near zero classes needing renewal', { threshold: I('default 2') }),
   // Student analytics
-  T('stats.students',    'Count of active/enrolled/low-credit students',     {}),
-  T('stats.unpaid',      'List of students with zero classes remaining (need to pay)', {}),
-  T('stats.attendance',  'Present/absent counts for today, this week, or this month', { period: S('today | week | month') }),
+  T('stats.students', 'Count of active/enrolled/low-credit students', {}),
+  T('stats.unpaid', 'List of students with zero classes remaining (need to pay)', {}),
+  T('stats.attendance', 'Present/absent counts for today, this week, or this month', { period: S('today | week | month') }),
   // Teacher analytics
-  T('teacher.students',  'List and count of students under a specific teacher', { teacher_id: S('name or UUID') }),
-  T('teacher.payout',    'Estimated monthly payout for a teacher based on their rate and student count', { teacher_id: S('name or UUID') }),
+  T('teacher.students', 'List and count of students under a specific teacher', { teacher_id: S('name or UUID') }),
+  T('teacher.payout', 'Estimated monthly payout for a teacher based on their rate and student count', { teacher_id: S('name or UUID') }),
   // Prospect analytics
-  T('prospect.summary',  'Overview of all prospects: total, active, by status, and follow-up counts', {}),
-  T('prospect.list',     'List prospects with optional filters by status, aging bucket, or instrument', { status: S('new | contacted | enrolled'), aging: S('fresh | followup | warm | cold'), instrument: S('instrument name') }),
-  T('prospect.aging',    'Breakdown of active prospects by age: fresh(0-7d), follow-up(8-14d), warm(15-30d), cold(30+d)', {}),
+  T('prospect.summary', 'Overview of all prospects: total, active, by status, and follow-up counts', {}),
+  T('prospect.list', 'List prospects with optional filters by status, aging bucket, or instrument', { status: S('new | contacted | enrolled'), aging: S('fresh | followup | warm | cold'), instrument: S('instrument name') }),
+  T('prospect.aging', 'Breakdown of active prospects by age: fresh(0-7d), follow-up(8-14d), warm(15-30d), cold(30+d)', {}),
   T('prospect.followup', 'Prospects who have or have not been followed up (have notes)', { mode: S('pending (no notes) | done (has notes)') }),
   // Charts
-  T('chart.attendance',  'Chart of daily present/absent. Use chart_type=line for trend view.',         { period: S('week | month'), chart_type: S('bar | line') }),
-  T('chart.students',    'Chart of students per instrument. Defaults to pie; use bar if requested.',   { chart_type: S('pie | bar') }),
-  T('chart.revenue',     'Chart of monthly revenue last 6 months. Use chart_type=line for trend.',     { chart_type: S('bar | line') }),
-  T('chart.prospects',   'Chart of prospects. by=aging|instrument|status. Defaults to pie.',           { by: S('aging | instrument | status'), chart_type: S('pie | bar') }),
+  T('chart.attendance', 'Chart of daily present/absent. Use chart_type=line for trend view.', { period: S('week | month'), chart_type: S('bar | line') }),
+  T('chart.students', 'Chart of students per instrument. Defaults to pie; use bar if requested.', { chart_type: S('pie | bar') }),
+  T('chart.revenue', 'Chart of monthly revenue last 6 months. Use chart_type=line for trend.', { chart_type: S('bar | line') }),
+  T('chart.prospects', 'Chart of prospects. by=aging|instrument|status. Defaults to pie.', { by: S('aging | instrument | status'), chart_type: S('pie | bar') }),
   // Finance analytics
-  T('finance.summary',  'Finance snapshot for a month: revenue, expenses, teacher payouts, net income, vs target', { month: S('YYYY-MM, defaults to current month') }),
-  T('finance.revenue',  'Total revenue, payment count, avg payment, breakdown by method and instrument', { period: S('this_month | last_month | last_3_months | this_year') }),
+  T('finance.summary', 'Finance snapshot for a month: revenue, expenses, teacher payouts, net income, vs target', { month: S('YYYY-MM, defaults to current month') }),
+  T('finance.revenue', 'Total revenue, payment count, avg payment, breakdown by method and instrument', { period: S('this_month | last_month | last_3_months | this_year') }),
   T('finance.expenses', 'Total expenses and breakdown by category for a period', { period: S('this_month | last_month | this_year') }),
-  T('finance.pnl',      'Profit & Loss: revenue minus expenses and teacher payouts, margin, vs last month', { month: S('YYYY-MM, defaults to current month') }),
-  T('finance.payouts',  'Total teacher payouts and per-teacher breakdown for a period', { period: S('this_month | last_month | this_year') }),
-  T('chart.finance',    'Finance chart. view=revenue_vs_expenses|expenses_by_category|revenue_by_instrument', { view: S('revenue_vs_expenses | expenses_by_category | revenue_by_instrument'), chart_type: S('bar | line') }),
+  T('finance.pnl', 'Profit & Loss: revenue minus expenses and teacher payouts, margin, vs last month', { month: S('YYYY-MM, defaults to current month') }),
+  T('finance.payouts', 'Total teacher payouts and per-teacher breakdown for a period', { period: S('this_month | last_month | this_year') }),
+  T('chart.finance', 'Finance chart. view=revenue_vs_expenses|expenses_by_category|revenue_by_instrument', { view: S('revenue_vs_expenses | expenses_by_category | revenue_by_instrument'), chart_type: S('bar | line') }),
   // Actions
   T('attendance.mark_batch',
     'Mark attendance for ALL students in a batch at once. ' +
     'Set default_status (usually present) then list exceptions by name to mark them the opposite. ' +
     '"Mark all present except John and Mary" → default_status=present, exceptions=["John","Mary"].',
     {
-      batch_id:       S('instrument name, batch time, or UUID'),
+      batch_id: S('instrument name, batch time, or UUID'),
       default_status: { type: 'string', enum: ['present', 'absent'], description: 'Status for all students (default: present)' },
-      exceptions:     { type: 'array', items: { type: 'string' }, description: 'Names of students to mark with the OPPOSITE status' },
-      session_date:   S('YYYY-MM-DD, defaults to today'),
+      exceptions: { type: 'array', items: { type: 'string' }, description: 'Names of students to mark with the OPPOSITE status' },
+      session_date: S('YYYY-MM-DD, defaults to today'),
     }
   ),
-  T('attendance.mark',   'Mark a SINGLE student present/absent/excused for a session',      { batch_id: S('UUID'), student_id: S('name or UUID'), status: { type: 'string', enum: ['present', 'absent', 'excused'] }, session_date: S('YYYY-MM-DD') }, ['status']),
-  T('payment.record',    'Record a fee payment from a student',              { student_id: S('name or UUID'), package_id: S('UUID'), amount: { type: 'number' }, method: S('cash/UPI/bank') }, ['amount', 'method']),
-  T('enroll.student',    'Start new student enrollment',                     { name: S('student name'), instrument: S('instrument name') }),
-  T('student.update',    'Update student contact details',                   { student_id: S('name or UUID'), phone: S(''), guardian_contact: S(''), email: S('') }),
-  T('batch.move',        'Move student from one batch to another',           { enrollment_id: S('UUID'), from_batch_id: S('UUID'), to_batch_id: S('UUID') }, ['enrollment_id', 'from_batch_id', 'to_batch_id']),
-  T('payout.record',     'Record teacher salary payout',                     { teacher_id: S('name or UUID'), amount: { type: 'number' }, method: S(''), period_start: S('YYYY-MM-DD'), period_end: S('YYYY-MM-DD') }, ['amount', 'method', 'period_start', 'period_end']),
-  T('notify.parent',     'Send absence notification to student guardian',    { student_id: S('name or UUID'), session_date: S('YYYY-MM-DD'), batch_name: S('') }, ['session_date', 'batch_name']),
-  T('notify.batch',      'Get WhatsApp group link for a batch',              { batch_id: S('UUID') }),
+  T('attendance.mark', 'Mark a SINGLE student present/absent/excused for a session', { batch_id: S('UUID'), student_id: S('name or UUID'), status: { type: 'string', enum: ['present', 'absent', 'excused'] }, session_date: S('YYYY-MM-DD') }, ['status']),
+  T('payment.record', 'Record a fee payment from a student', { student_id: S('name or UUID'), package_id: S('UUID'), amount: { type: 'number' }, method: S('cash/UPI/bank') }, ['amount', 'method']),
+  T('enroll.student', 'Start new student enrollment', { name: S('student name'), instrument: S('instrument name') }),
+  T('student.update', 'Update student contact details', { student_id: S('name or UUID'), phone: S(''), guardian_contact: S(''), email: S('') }),
+  T('batch.move', 'Move student from one batch to another', { enrollment_id: S('UUID'), from_batch_id: S('UUID'), to_batch_id: S('UUID') }, ['enrollment_id', 'from_batch_id', 'to_batch_id']),
+  T('payout.record', 'Record teacher salary payout', { teacher_id: S('name or UUID'), amount: { type: 'number' }, method: S(''), period_start: S('YYYY-MM-DD'), period_end: S('YYYY-MM-DD') }, ['amount', 'method', 'period_start', 'period_end']),
+  T('notify.parent', 'Send absence notification to student guardian', { student_id: S('name or UUID'), session_date: S('YYYY-MM-DD'), batch_name: S('') }, ['session_date', 'batch_name']),
+  T('notify.batch', 'Get WhatsApp group link for a batch', { batch_id: S('UUID') }),
 ];
 
 const ACTION_SKILLS = new Set(['attendance.mark', 'attendance.mark_batch', 'payment.record', 'enroll.student', 'student.update', 'batch.move', 'payout.record']);
