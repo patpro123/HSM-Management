@@ -18,9 +18,9 @@ router.get('/', async (req, res) => {
 router.post('/', authenticateJWT, authorizeRole(['admin']), async (req, res) => {
   console.log('[POST /api/students] Incoming body:', req.body);
   const { first_name, last_name, email, dob, phone, guardian_name, guardian_phone, address, batches, payment, metadata } = req.body;
-  if (!first_name || !last_name || !email) {
+  if (!first_name || !last_name) {
     console.warn('[POST /api/students] Missing required fields:', req.body);
-    return res.status(400).json({ error: 'Missing required fields' });
+    return res.status(400).json({ error: 'Missing required fields (first_name, last_name)' });
   }
   const client = await pool.connect();
   try {
