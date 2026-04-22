@@ -80,6 +80,24 @@ router.get('/:batchId/students', async (req, res) => {
           AND (p.metadata->>'instrument_id')::uuid = (SELECT instrument_id FROM batch_instrument)
           AND (p.metadata->>'credits_bought') IS NOT NULL
           AND (p.metadata->>'credits_bought')::int > 0
+        UNION ALL
+        SELECT p.student_id,
+          (p.metadata->>'credits_bought')::int AS credits
+        FROM payments p
+        JOIN (
+          SELECT e2.student_id
+          FROM enrollment_batches eb2
+          JOIN enrollments e2 ON e2.id = eb2.enrollment_id AND e2.status = 'active'
+          JOIN batches b2 ON b2.id = eb2.batch_id
+          WHERE b2.is_makeup = false
+          GROUP BY e2.student_id
+          HAVING COUNT(DISTINCT b2.instrument_id) = 1
+            AND bool_and(b2.instrument_id = (SELECT instrument_id FROM batch_instrument))
+        ) single_instr ON single_instr.student_id = p.student_id
+        WHERE p.package_id IS NULL
+          AND (p.metadata->>'instrument_id') IS NULL
+          AND (p.metadata->>'credits_bought') IS NOT NULL
+          AND (p.metadata->>'credits_bought')::int > 0
       ),
       instr_credits AS (
         SELECT student_id, SUM(credits) AS credits FROM raw_credits GROUP BY student_id
@@ -160,6 +178,24 @@ router.get('/instrument/:instrumentId/board', authenticateJWT, rbac.authorizeRol
         FROM payments p
         WHERE p.package_id IS NULL
           AND (p.metadata->>'instrument_id')::uuid = $1
+          AND (p.metadata->>'credits_bought') IS NOT NULL
+          AND (p.metadata->>'credits_bought')::int > 0
+        UNION ALL
+        SELECT p.student_id,
+          (p.metadata->>'credits_bought')::int AS credits
+        FROM payments p
+        JOIN (
+          SELECT e2.student_id
+          FROM enrollment_batches eb2
+          JOIN enrollments e2 ON e2.id = eb2.enrollment_id AND e2.status = 'active'
+          JOIN batches b2 ON b2.id = eb2.batch_id
+          WHERE b2.is_makeup = false
+          GROUP BY e2.student_id
+          HAVING COUNT(DISTINCT b2.instrument_id) = 1
+            AND bool_and(b2.instrument_id = $1)
+        ) single_instr ON single_instr.student_id = p.student_id
+        WHERE p.package_id IS NULL
+          AND (p.metadata->>'instrument_id') IS NULL
           AND (p.metadata->>'credits_bought') IS NOT NULL
           AND (p.metadata->>'credits_bought')::int > 0
       ),

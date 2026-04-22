@@ -144,8 +144,24 @@ router.get('/data', authenticateJWT, authorizeRole(['admin']), async (req, res) 
             AND ar.is_extra = false
         `, [student.student_id, instrData.instrument_id]);
 
-        const totalCredits = parseInt(totalCreditsResult.rows[0].total_credits) || 0;
+        let totalCredits = parseInt(totalCreditsResult.rows[0].total_credits) || 0;
         const totalAttended = parseInt(totalAttendedResult.rows[0].cnt) || 0;
+
+        // Include unattributed credits (old payments with no package_id / instrument_id)
+        // only when this student has exactly one instrument enrolled.
+        if (Object.keys(instrumentMap).length === 1) {
+          const unattribResult = await db.query(`
+            SELECT COALESCE(SUM((p.metadata->>'credits_bought')::int), 0) AS credits
+            FROM payments p
+            WHERE p.student_id = $1
+              AND p.package_id IS NULL
+              AND (p.metadata->>'instrument_id') IS NULL
+              AND (p.metadata->>'credits_bought') IS NOT NULL
+              AND (p.metadata->>'credits_bought')::int > 0
+          `, [student.student_id]);
+          totalCredits += parseInt(unattribResult.rows[0]?.credits) || 0;
+        }
+
         const dynamicAvailable = Math.max(0, totalCredits - totalAttended);
 
         // Attendance since most recent payment (for display context)

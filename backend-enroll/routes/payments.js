@@ -46,7 +46,7 @@ router.get('/status/:studentId', async (req, res) => {
     const lastPayment = lastPaymentRes.rows[0] || null;
 
     // 2. Fetch Classes Remaining — computed dynamically: credits_bought - present_attendances
-    const [creditsRes, attendedRes] = await Promise.all([
+    const [creditsRes, attendedRes, unattributedRes] = await Promise.all([
       pool.query(`
         WITH raw_credits AS (
           SELECT i.name AS instrument,
@@ -85,14 +85,31 @@ router.get('/status/:studentId', async (req, res) => {
         WHERE ar.student_id = $1 AND ar.status = 'present'
         GROUP BY i.name
       `, [studentId]),
+      pool.query(`
+        SELECT COALESCE(SUM((p.metadata->>'credits_bought')::int), 0) AS credits
+        FROM payments p
+        WHERE p.student_id = $1
+          AND p.package_id IS NULL
+          AND (p.metadata->>'instrument_id') IS NULL
+          AND (p.metadata->>'credits_bought') IS NOT NULL
+          AND (p.metadata->>'credits_bought')::int > 0
+      `, [studentId]),
     ]);
 
+    const creditsMap = Object.fromEntries(creditsRes.rows.map(r => [r.instrument, parseInt(r.credits) || 0]));
     const attendedMap = Object.fromEntries(attendedRes.rows.map(r => [r.instrument, parseInt(r.attended) || 0]));
+    const unattributed = parseInt(unattributedRes.rows[0]?.credits) || 0;
+
+    if (unattributed > 0) {
+      const allNames = [...new Set([...Object.keys(creditsMap), ...Object.keys(attendedMap)])];
+      if (allNames.length === 1) {
+        creditsMap[allNames[0]] = (creditsMap[allNames[0]] || 0) + unattributed;
+      }
+    }
+
+    const allInstrNames = [...new Set([...Object.keys(creditsMap), ...Object.keys(attendedMap)])];
     const instrumentBreakdown = Object.fromEntries(
-      creditsRes.rows.map(r => [
-        r.instrument,
-        Math.max(0, (parseInt(r.credits) || 0) - (attendedMap[r.instrument] || 0)),
-      ])
+      allInstrNames.map(name => [name, Math.max(0, (creditsMap[name] || 0) - (attendedMap[name] || 0))])
     );
     const classesRemaining = Object.values(instrumentBreakdown).reduce((sum, v) => sum + v, 0);
 
@@ -359,7 +376,7 @@ router.get('/credit-report', async (req, res) => {
       const classesMissed = parseInt(attendanceRes.rows[0]?.missed || 0);
 
       // 3. Classes remaining per instrument — dynamic: credits_bought - present_attendances
-      const [dynCreditsRes, dynAttendedRes] = await Promise.all([
+      const [dynCreditsRes, dynAttendedRes, dynUnattributedRes] = await Promise.all([
         pool.query(
           `WITH raw_credits AS (
              SELECT i.name AS instrument,
@@ -400,13 +417,31 @@ router.get('/credit-report', async (req, res) => {
            GROUP BY i.name`,
           [sid]
         ),
+        pool.query(
+          `SELECT COALESCE(SUM((p.metadata->>'credits_bought')::int), 0) AS credits
+           FROM payments p
+           WHERE p.student_id = $1
+             AND p.package_id IS NULL
+             AND (p.metadata->>'instrument_id') IS NULL
+             AND (p.metadata->>'credits_bought') IS NOT NULL
+             AND (p.metadata->>'credits_bought')::int > 0`,
+          [sid]
+        ),
       ]);
+      const dynCreditsMap = Object.fromEntries(dynCreditsRes.rows.map(r => [r.instrument, parseInt(r.credits) || 0]));
       const dynAttendedMap = Object.fromEntries(dynAttendedRes.rows.map(r => [r.instrument, parseInt(r.attended) || 0]));
+      const dynUnattributed = parseInt(dynUnattributedRes.rows[0]?.credits) || 0;
+
+      if (dynUnattributed > 0) {
+        const allNames = [...new Set([...Object.keys(dynCreditsMap), ...Object.keys(dynAttendedMap)])];
+        if (allNames.length === 1) {
+          dynCreditsMap[allNames[0]] = (dynCreditsMap[allNames[0]] || 0) + dynUnattributed;
+        }
+      }
+
+      const dynAllNames = [...new Set([...Object.keys(dynCreditsMap), ...Object.keys(dynAttendedMap)])];
       const instrumentCredits = Object.fromEntries(
-        dynCreditsRes.rows.map(r => [
-          r.instrument,
-          Math.max(0, (parseInt(r.credits) || 0) - (dynAttendedMap[r.instrument] || 0)),
-        ])
+        dynAllNames.map(name => [name, Math.max(0, (dynCreditsMap[name] || 0) - (dynAttendedMap[name] || 0))])
       );
       const creditsRemaining = Object.values(instrumentCredits).reduce((sum, v) => sum + v, 0);
 
