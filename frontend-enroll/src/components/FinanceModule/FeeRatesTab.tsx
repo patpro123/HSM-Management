@@ -32,6 +32,7 @@ interface InstrumentFees {
   // Pbel uses 4-class and 8-class instead of monthly/quarterly
   pbel4: number;
   pbel8: number;
+  effectiveFrom: string; // The reference date for upserts
 }
 
 interface GradeFee {
@@ -67,9 +68,15 @@ function groupFeeRows(rows: FeeRow[], isPbel: boolean): InstrumentFees[] {
         grades: TRINITY_GRADES.map(g => ({ grade: g, monthly: 0, quarterly: 0 })),
         pbel4: 0,
         pbel8: 0,
+        effectiveFrom: row.effective_from,
       });
     }
     const inst = map.get(row.instrument_id)!;
+
+    // Track the most recent effective date found in this set of rows
+    if (new Date(row.effective_from) > new Date(inst.effectiveFrom)) {
+      inst.effectiveFrom = row.effective_from;
+    }
 
     if (row.is_trial) {
       inst.trialFee = row.fee_amount;
@@ -143,6 +150,7 @@ function flattenEdits(
 
     if (inst.isVocal) {
       const monthly = instEdits['Fixed_8'] !== undefined ? instEdits['Fixed_8'] : inst.grades[0].monthly;
+
       rates.push({
         instrument_id: inst.instrument_id,
         trinity_grade: 'Fixed',
@@ -233,29 +241,29 @@ function InstrumentCard({ inst, edits, editing, isPast, onEdit, onCancel, onSave
         {/* Pbel: 4-class + 8-class */}
         {inst.isPbel ? (
           <div className="overflow-x-auto -mx-5 px-5">
-          <table className="w-full text-sm min-w-[220px]">
-            <thead>
-              <tr className="text-slate-500 text-xs uppercase">
-                <th className="text-left py-1 font-medium">Package</th>
-                <th className="text-right py-1 font-medium w-32">Fee</th>
-              </tr>
-            </thead>
-            <tbody>
-              {[{ label: '4 Classes', key: 'pbel4', val: inst.pbel4 }, { label: '8 Classes', key: 'pbel8', val: inst.pbel8 }].map(pkg => (
-                <tr key={pkg.key} className="border-t border-slate-100">
-                  <td className="py-1.5 text-slate-700">{pkg.label}</td>
-                  <td className="py-1.5 text-right">
-                    {editing ? (
-                      <input type="number" value={val(pkg.key, pkg.val)} onChange={e => onChange(pkg.key, parseFloat(e.target.value) || 0)}
-                        className="w-28 border border-slate-300 rounded px-2 py-0.5 text-sm text-right" />
-                    ) : (
-                      <span className="text-slate-800">{fmt(pkg.val)}</span>
-                    )}
-                  </td>
+            <table className="w-full text-sm min-w-[220px]">
+              <thead>
+                <tr className="text-slate-500 text-xs uppercase">
+                  <th className="text-left py-1 font-medium">Package</th>
+                  <th className="text-right py-1 font-medium w-32">Fee</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {[{ label: '4 Classes', key: 'pbel4', val: inst.pbel4 }, { label: '8 Classes', key: 'pbel8', val: inst.pbel8 }].map(pkg => (
+                  <tr key={pkg.key} className="border-t border-slate-100">
+                    <td className="py-1.5 text-slate-700">{pkg.label}</td>
+                    <td className="py-1.5 text-right">
+                      {editing ? (
+                        <input type="number" value={val(pkg.key, pkg.val)} onChange={e => onChange(pkg.key, parseFloat(e.target.value) || 0)}
+                          className="w-28 border border-slate-300 rounded px-2 py-0.5 text-sm text-right" />
+                      ) : (
+                        <span className="text-slate-800">{fmt(pkg.val)}</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         ) : inst.isVocal ? (
           /* Vocal: single monthly rate */
@@ -272,42 +280,42 @@ function InstrumentCard({ inst, edits, editing, isPast, onEdit, onCancel, onSave
         ) : (
           /* Standard: grade × monthly/quarterly table — scrollable on mobile */
           <div className="overflow-x-auto -mx-5 px-5">
-          <table className="w-full text-sm min-w-[280px]">
-            <thead>
-              <tr className="text-slate-500 text-xs uppercase">
-                <th className="text-left py-1 font-medium">Grade</th>
-                <th className="text-right py-1 font-medium w-32">Monthly (8)</th>
-                {!inst.isViolin && <th className="text-right py-1 font-medium w-32">Quarterly (24)</th>}
-              </tr>
-            </thead>
-            <tbody>
-              {inst.grades.map((g, i) => (
-                <tr key={g.grade} className={`border-t border-slate-100 ${i % 2 === 0 ? '' : 'bg-slate-50'}`}>
-                  <td className="py-1.5 text-slate-700">{g.grade}</td>
-                  <td className="py-1.5 text-right">
-                    {editing ? (
-                      <input type="number" value={val(`${g.grade}_8`, g.monthly)}
-                        onChange={e => onChange(`${g.grade}_8`, parseFloat(e.target.value) || 0)}
-                        className="w-28 border border-slate-300 rounded px-2 py-0.5 text-sm text-right" />
-                    ) : (
-                      <span className="text-slate-800">{fmt(g.monthly)}</span>
-                    )}
-                  </td>
-                  {!inst.isViolin && (
+            <table className="w-full text-sm min-w-[280px]">
+              <thead>
+                <tr className="text-slate-500 text-xs uppercase">
+                  <th className="text-left py-1 font-medium">Grade</th>
+                  <th className="text-right py-1 font-medium w-32">Monthly (8)</th>
+                  {!inst.isViolin && <th className="text-right py-1 font-medium w-32">Quarterly (24)</th>}
+                </tr>
+              </thead>
+              <tbody>
+                {inst.grades.map((g, i) => (
+                  <tr key={g.grade} className={`border-t border-slate-100 ${i % 2 === 0 ? '' : 'bg-slate-50'}`}>
+                    <td className="py-1.5 text-slate-700">{g.grade}</td>
                     <td className="py-1.5 text-right">
                       {editing ? (
-                        <input type="number" value={val(`${g.grade}_24`, g.quarterly)}
-                          onChange={e => onChange(`${g.grade}_24`, parseFloat(e.target.value) || 0)}
+                        <input type="number" value={val(`${g.grade}_8`, g.monthly)}
+                          onChange={e => onChange(`${g.grade}_8`, parseFloat(e.target.value) || 0)}
                           className="w-28 border border-slate-300 rounded px-2 py-0.5 text-sm text-right" />
                       ) : (
-                        <span className="text-slate-800">{fmt(g.quarterly)}</span>
+                        <span className="text-slate-800">{fmt(g.monthly)}</span>
                       )}
                     </td>
-                  )}
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                    {!inst.isViolin && (
+                      <td className="py-1.5 text-right">
+                        {editing ? (
+                          <input type="number" value={val(`${g.grade}_24`, g.quarterly)}
+                            onChange={e => onChange(`${g.grade}_24`, parseFloat(e.target.value) || 0)}
+                            className="w-28 border border-slate-300 rounded px-2 py-0.5 text-sm text-right" />
+                        ) : (
+                          <span className="text-slate-800">{fmt(g.quarterly)}</span>
+                        )}
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
       </div>
@@ -359,7 +367,7 @@ const FeeRatesTab: React.FC = () => {
         setYears(yr);
         setSelectedYear(yr[0] ?? currentYear);
       })
-      .catch(() => {});
+      .catch(() => { });
   }, [selectedBranch]);
 
   // Load fee rows when branch or year changes
@@ -393,7 +401,9 @@ const FeeRatesTab: React.FC = () => {
     setSaving(true);
     setError(null);
     try {
-      const effectiveFrom = `${selectedYear}-01-01`;
+      // Use the existing effective date to ensure we overwrite the correct revision
+      const effectiveFrom = inst.effectiveFrom ? inst.effectiveFrom.split('T')[0] : `${selectedYear}-01-01`;
+
       const rates = flattenEdits(
         { [inst.instrument_id]: edits[inst.instrument_id] || {} },
         [inst],
@@ -458,11 +468,10 @@ const FeeRatesTab: React.FC = () => {
               <button
                 key={b.id}
                 onClick={() => setSelectedBranch(b)}
-                className={`px-3 py-2 rounded-md text-sm font-medium whitespace-nowrap transition ${
-                  selectedBranch?.id === b.id
-                    ? 'bg-white text-indigo-600 shadow-sm'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
+                className={`px-3 py-2 rounded-md text-sm font-medium whitespace-nowrap transition ${selectedBranch?.id === b.id
+                  ? 'bg-white text-indigo-600 shadow-sm'
+                  : 'text-slate-600 hover:text-slate-900'
+                  }`}
               >
                 {b.name}
               </button>
@@ -487,11 +496,10 @@ const FeeRatesTab: React.FC = () => {
               <button
                 key={y}
                 onClick={() => setSelectedYear(y)}
-                className={`px-3 py-1 rounded-full text-sm font-medium whitespace-nowrap transition ${
-                  selectedYear === y
-                    ? 'bg-indigo-600 text-white'
-                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                }`}
+                className={`px-3 py-1 rounded-full text-sm font-medium whitespace-nowrap transition ${selectedYear === y
+                  ? 'bg-indigo-600 text-white'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
               >
                 {y}
               </button>
