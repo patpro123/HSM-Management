@@ -1,6 +1,7 @@
 const express = require('express')
 const router = express.Router()
 const pool = require('../db')
+const { authenticateJWT } = require('../auth/jwtMiddleware')
 const { authorizeRole } = require('../auth/rbacMiddleware')
 
 // GET /api/branches
@@ -133,7 +134,7 @@ router.get('/resolve', async (req, res) => {
 // POST /api/fee-structures/bulk  (admin only)
 // Upserts a batch of fee rates. Each row must include a new effective_from date.
 // Body: { effective_from: 'YYYY-MM-DD', branch_id: uuid, rates: [{ instrument_id, trinity_grade, classes_count, fee_amount, is_trial }] }
-router.post('/bulk', authorizeRole(['admin']), async (req, res) => {
+router.post('/bulk', authenticateJWT, authorizeRole(['admin']), async (req, res) => {
   const { effective_from, branch_id, rates } = req.body
 
   if (!effective_from || !branch_id || !Array.isArray(rates) || rates.length === 0) {
