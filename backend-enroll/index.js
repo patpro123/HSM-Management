@@ -26,7 +26,7 @@ let currentDevProfile = process.env.DEV_PROFILE || 'admin'
 let currentDevOverride = null
 
 const DEV_DEFAULTS = {
-  admin:   { id: '11111111-1111-1111-1111-111111111111', email: 'admin@local.dev',   name: 'Local Admin',   roles: ['admin'] },
+  admin: { id: '11111111-1111-1111-1111-111111111111', email: 'admin@local.dev', name: 'Local Admin', roles: ['admin'] },
   teacher: { id: '22222222-2222-2222-2222-222222222222', email: 'teacher@local.dev', name: 'Local Teacher', roles: ['teacher'] },
   student: { id: '33333333-3333-3333-3333-333333333333', email: 'student@local.dev', name: 'Local Student', roles: ['student'] },
 }
@@ -104,7 +104,7 @@ async function resolveDevUser(userRef) {
       // This simulates what googleStrategy.js does on first real login.
       const crypto = require('crypto')
       const hash = crypto.createHash('sha256').update(p.email).digest('hex')
-      const devId = [hash.slice(0,8), hash.slice(8,12), '4'+hash.slice(12,15), '8'+hash.slice(15,18), hash.slice(18,30)].join('-')
+      const devId = [hash.slice(0, 8), hash.slice(8, 12), '4' + hash.slice(12, 15), '8' + hash.slice(15, 18), hash.slice(18, 30)].join('-')
 
       const client = await pool.connect()
       try {
@@ -210,57 +210,98 @@ if (DISABLE_AUTH) {
 // -----------------------------------------
 
 // Route registrations
-app.use('/api/auth',         require('./routes/auth'));
-app.use('/api/instruments',  require('./routes/instruments'));
-app.use('/api/batches',      require('./routes/batches'));
-app.use('/api/attendance',   require('./routes/attendance'));
-app.use('/api',              require('./routes/enrollment'));
-app.use('/api/agent',        require('./routes/agent'));
-app.use('/api/portal',       require('./routes/portal'));
-app.use('/api/students',     require('./routes/students'));
+app.use('/api/auth', require('./routes/auth'));
+app.use('/api/instruments', require('./routes/instruments'));
+app.use('/api/batches', require('./routes/batches'));
+app.use('/api/attendance', require('./routes/attendance'));
+app.use('/api', require('./routes/enrollment'));
+app.use('/api/agent', require('./routes/agent'));
+app.use('/api/portal', require('./routes/portal'));
+app.use('/api/students', require('./routes/students'));
 const { router: student360Router } = require('./routes/student360');
-app.use('/api/students',     student360Router);
-app.use('/api/teachers',     require('./routes/teachers'));
-app.use('/api/teachers',     require('./routes/teacher360'));
-app.use('/api/payments',     require('./routes/payments'));
-app.use('/api/users',        require('./routes/users'));
-app.use('/api/finance',      require('./routes/finance'));
-app.use('/api/finance',      require('./routes/payouts'));
+app.use('/api/students', student360Router);
+app.use('/api/teachers', require('./routes/teachers'));
+app.use('/api/teachers', require('./routes/teacher360'));
+app.use('/api/payments', require('./routes/payments'));
+app.use('/api/users', require('./routes/users'));
+app.use('/api/finance', require('./routes/finance'));
+app.use('/api/finance', require('./routes/payouts'));
 app.use('/api/fee-structures', require('./routes/fee-structures'));
-app.use('/api/notifications',require('./routes/notifications'));
-app.use('/api/chat',         require('./routes/chat'));
+app.use('/api/notifications', require('./routes/notifications'));
+app.use('/api/chat', require('./routes/chat'));
 app.use('/api/public/chat', require('./routes/publicChat'));
-app.use('/api/prospects',    require('./routes/prospects'));
-app.use('/api/migration',    require('./routes/migration'));
-app.use('/api',              require('./routes/documents'));
+app.use('/api/prospects', require('./routes/prospects'));
+app.use('/api/migration', require('./routes/migration'));
+app.use('/api', require('./routes/documents'));
 
 // GET /api/packages — list all packages, optionally filtered by instrument_id and location
 app.get('/api/packages', async (req, res) => {
   const { instrument_id, location } = req.query;
   try {
-    let query = `
-      SELECT p.id, p.name, p.classes_count, p.price, p.instrument_id, p.location,
-             i.name AS instrument_name
-      FROM packages p
-      JOIN instruments i ON p.instrument_id = i.id
-    `;
-    const params = [];
-    const conditions = [];
-
-    if (instrument_id) {
-      params.push(instrument_id);
-      conditions.push(`p.instrument_id = $${params.length}`);
-    }
+    let branchId = null;
     if (location) {
-      params.push(location);
-      conditions.push(`(p.location = $${params.length} OR p.location IS NULL)`);
+      // Map 'hsm' to 'main' branch code
+      const lookupCode = location.toLowerCase() === 'hsm' ? 'main' : location.toLowerCase();
+      const branchRes = await pool.query('SELECT id FROM branches WHERE code = $1', [lookupCode]);
+      if (branchRes.rows.length > 0) branchId = branchRes.rows[0].id;
     }
-    if (conditions.length > 0) {
-      query += ' WHERE ' + conditions.join(' AND ');
+
+    let results = [];
+
+    // 1. Try to fetch from fee_structures first (Modern Way)
+    if (instrument_id && branchId) {
+      const fsRes = await pool.query(`
+        SELECT DISTINCT ON (fs.classes_count, fs.trinity_grade, fs.is_trial)
+          fs.id, fs.trinity_grade, fs.classes_count, fs.fee_amount AS price, fs.is_trial,
+          i.name AS instrument_name
+        FROM fee_structures fs
+        JOIN instruments i ON fs.instrument_id = i.id
+        WHERE fs.instrument_id = $1 
+          AND fs.branch_id = $2 
+          AND fs.effective_from <= CURRENT_DATE
+        ORDER BY fs.classes_count, fs.trinity_grade, fs.is_trial, fs.effective_from DESC
+      `, [instrument_id, branchId]);
+
+      if (fsRes.rows.length > 0) {
+        results = fsRes.rows.map(r => ({
+          id: r.id,
+          name: `${r.trinity_grade}${r.is_trial ? ' (Trial)' : ''}`,
+          classes_count: r.classes_count,
+          price: r.price,
+          instrument_id: instrument_id,
+          instrument_name: r.instrument_name
+        }));
+      }
     }
-    query += ' ORDER BY i.name, p.classes_count';
-    const result = await pool.query(query, params);
-    res.json({ packages: result.rows });
+
+    // 2. Fallback to legacy packages table (Legacy Way)
+    if (results.length === 0) {
+      let query = `
+        SELECT p.id, p.name, p.classes_count, p.price, p.instrument_id, p.location,
+               i.name AS instrument_name
+        FROM packages p
+        JOIN instruments i ON p.instrument_id = i.id
+      `;
+      const params = [];
+      const conditions = [];
+
+      if (instrument_id) {
+        params.push(instrument_id);
+        conditions.push(`p.instrument_id = $${params.length}`);
+      }
+      if (location) {
+        params.push(location);
+        conditions.push(`(p.location = $${params.length} OR p.location IS NULL)`);
+      }
+      if (conditions.length > 0) {
+        query += ' WHERE ' + conditions.join(' AND ');
+      }
+      query += ' ORDER BY i.name, p.classes_count';
+      const result = await pool.query(query, params);
+      results = result.rows;
+    }
+
+    res.json({ packages: results });
   } catch (err) {
     console.error('Packages fetch error:', err);
     res.status(500).json({ error: 'Failed to fetch packages' });
