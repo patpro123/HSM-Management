@@ -7,17 +7,26 @@ const formatDate = (iso: string | null) => {
   return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
 };
 
+const calcTentativeDate = (credits: number): Date | null => {
+  if (credits <= 0) return null;
+  const daysLeft = Math.ceil(credits * 3.5); // 2 classes per week = 3.5 days per class
+  const d = new Date();
+  d.setDate(d.getDate() + daysLeft);
+  return d;
+};
+
 const buildWhatsAppMessage = (r: CreditReport): string => {
   const creditsLine =
     Object.keys(r.instrument_credits).length > 1
       ? Object.entries(r.instrument_credits)
-          .map(([inst, n]) => `${inst} - ${n} class${n !== 1 ? 'es' : ''}`)
-          .join(', ')
+        .map(([inst, n]) => `${inst} - ${n} class${n !== 1 ? 'es' : ''}`)
+        .join(', ')
       : `${r.credits_remaining} class${r.credits_remaining !== 1 ? 'es' : ''}`;
 
-  const nextPaymentLine = r.next_payment_date
-    ? formatDate(r.next_payment_date) + (r.is_overdue ? ' (overdue)' : '')
-    : 'Not available';
+  const tentativeDate = calcTentativeDate(r.credits_remaining);
+  const nextPaymentLine = tentativeDate
+    ? formatDate(tentativeDate.toISOString())
+    : 'Due immediately (Credits exhausted)';
 
   return (
     `Hi! Sharing a quick update on ${r.student_name}'s music classes at Hyderabad School of Music.\n\n` +
@@ -25,7 +34,7 @@ const buildWhatsAppMessage = (r: CreditReport): string => {
     `Classes missed: ${r.classes_missed}\n` +
     `Credits purchased: ${r.total_credits_bought} class${r.total_credits_bought !== 1 ? 'es' : ''}${r.last_credit_date ? ` (paid on ${formatDate(r.last_credit_date)})` : ''}\n` +
     `Credits remaining: ${creditsLine}\n` +
-    `Next payment due: ${nextPaymentLine}\n\n` +
+    `Tentative Next Payment Date: ${nextPaymentLine}\n\n` +
     `Feel free to reach out if you have any questions. Looking forward to seeing ${r.student_name} at class!\n\n` +
     `- HSM Team`
   );
@@ -214,8 +223,8 @@ const CreditReportTab: React.FC<CreditReportTabProps> = ({
                   const creditsCell =
                     Object.keys(r.instrument_credits).length > 1
                       ? Object.entries(r.instrument_credits)
-                          .map(([inst, n]) => `${inst}: ${n}`)
-                          .join(' / ')
+                        .map(([inst, n]) => `${inst}: ${n}`)
+                        .join(' / ')
                       : String(r.credits_remaining);
 
                   return (
@@ -230,9 +239,9 @@ const CreditReportTab: React.FC<CreditReportTabProps> = ({
                         {formatDate(r.last_credit_date)}
                       </td>
                       <td className="px-4 py-3 text-slate-700 whitespace-nowrap">{creditsCell}</td>
-                      <td className={`px-4 py-3 text-center font-medium whitespace-nowrap ${r.is_overdue ? 'text-red-600' : 'text-slate-700'}`}>
-                        {r.next_payment_date ? formatDate(r.next_payment_date) : '—'}
-                        {r.is_overdue && <span className="ml-1 text-xs">(overdue)</span>}
+                      <td className={`px-4 py-3 text-center font-medium whitespace-nowrap ${r.credits_remaining <= 0 ? 'text-red-600' : 'text-slate-700'}`}>
+                        {calcTentativeDate(r.credits_remaining) ? formatDate(calcTentativeDate(r.credits_remaining)!.toISOString()) : 'Immediately'}
+                        {r.credits_remaining <= 0 && <span className="ml-1 text-xs">(overdue)</span>}
                       </td>
                       <td className="px-4 py-3 text-center">
                         <button
