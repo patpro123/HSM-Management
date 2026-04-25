@@ -154,10 +154,11 @@ router.get('/:id/students', async (req, res) => {
       [teacherId]
     );
 
-    const students = await Promise.all(result.rows.map(async (student) => {
+    const students = [];
+    for (const student of result.rows) {
       const { byInstrument } = await computeClassesRemaining(pool, student.id);
-      return { ...student, classes_remaining: byInstrument[student.instrument] ?? 0 };
-    }));
+      students.push({ ...student, classes_remaining: byInstrument[student.instrument] ?? 0 });
+    }
 
     res.json({ students });
   } catch (err) {
