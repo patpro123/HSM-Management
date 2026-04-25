@@ -137,17 +137,18 @@ router.get('/:id/students', async (req, res) => {
   const teacherId = req.params.id;
   try {
     const result = await pool.query(
-      `SELECT DISTINCT
+      `SELECT
          s.id, s.name, s.phone, s.guardian_contact,
          i.name AS instrument,
-         b.id AS batch_id, b.recurrence,
+         STRING_AGG(b.recurrence, ', ' ORDER BY b.recurrence) AS recurrence,
          e.status AS enrollment_status,
-         eb.classes_remaining
+         SUM(eb.classes_remaining) AS classes_remaining
        FROM students s
        JOIN enrollments e ON s.id = e.student_id AND e.status = 'active'
        JOIN enrollment_batches eb ON e.id = eb.enrollment_id
        JOIN batches b ON eb.batch_id = b.id AND b.teacher_id = $1 AND b.is_makeup = false
        JOIN instruments i ON b.instrument_id = i.id
+       GROUP BY s.id, s.name, s.phone, s.guardian_contact, i.name, e.status
        ORDER BY s.name`,
       [teacherId]
     );
