@@ -104,23 +104,19 @@ const PayslipPDF: React.FC<{ data: TeacherPayslip }> = ({ data }) => {
           <View key={inst.instrument_id} style={pdfStyles.section}>
             <Text style={pdfStyles.sectionHdr}>{inst.instrument_name}</Text>
 
-            {/* Attendance per batch */}
-            <Text style={pdfStyles.batchName}>Attendance</Text>
-            {inst.batches.map(b => (
-              <View key={b.batch_id}>
-                {inst.batches.length > 1 && (
-                  <Text style={{ fontSize: 8, color: '#64748b', marginBottom: 2 }}>{b.recurrence}</Text>
-                )}
-                <View style={pdfStyles.tableHead}>
-                  <Text style={pdfStyles.cellBold}>Classes Conducted</Text>
-                  <Text style={pdfStyles.cellBold}>Classes Not Conducted</Text>
+            {/* Attendance summary */}
+            {(() => {
+              const conducted = inst.batches.reduce((s, b) => s + b.attendance.conducted, 0);
+              const missed = inst.batches.reduce((s, b) => s + b.attendance.not_conducted, 0);
+              return (
+                <View style={[pdfStyles.row, { marginBottom: 6 }]}>
+                  <Text style={pdfStyles.cellBold}>Batches Conducted: </Text>
+                  <Text style={pdfStyles.cell}>{conducted}</Text>
+                  <Text style={pdfStyles.cellBold}>Batches Missed: </Text>
+                  <Text style={pdfStyles.cell}>{missed}</Text>
                 </View>
-                <View style={pdfStyles.row}>
-                  <Text style={pdfStyles.cell}>{b.attendance.conducted}</Text>
-                  <Text style={pdfStyles.cell}>{b.attendance.not_conducted}</Text>
-                </View>
-              </View>
-            ))}
+              );
+            })()}
 
             {/* Students */}
             {inst.students.length > 0 && (
@@ -533,29 +529,20 @@ const PayslipViewer: React.FC<PayslipViewerProps> = ({ payslip }) => {
               )}
             </h4>
 
-            {/* Attendance per batch */}
-            <div className="mb-4">
-              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Attendance</p>
-              <div className="space-y-2">
-                {inst.batches.map(b => (
-                  <div key={b.batch_id}>
-                    {inst.batches.length > 1 && (
-                      <p className="text-xs text-slate-500 mb-1">{b.recurrence}</p>
-                    )}
-                    <div className="flex gap-4">
-                      <div className="flex-1 bg-emerald-50 rounded-lg p-3 text-center">
-                        <p className="text-2xl font-bold text-emerald-600">{b.attendance.conducted}</p>
-                        <p className="text-xs text-emerald-700 mt-1">Conducted</p>
-                      </div>
-                      <div className="flex-1 bg-red-50 rounded-lg p-3 text-center">
-                        <p className="text-2xl font-bold text-red-500">{b.attendance.not_conducted}</p>
-                        <p className="text-xs text-red-600 mt-1">Not Conducted</p>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
+            {/* Attendance summary */}
+            {(() => {
+              const conducted = inst.batches.reduce((s, b) => s + b.attendance.conducted, 0);
+              const missed = inst.batches.reduce((s, b) => s + b.attendance.not_conducted, 0);
+              return (
+                <div className="mb-4 flex items-center gap-3 text-sm">
+                  <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Attendance</span>
+                  <span className="bg-emerald-50 text-emerald-700 px-2.5 py-1 rounded-full font-medium">{conducted} conducted</span>
+                  {missed > 0 && (
+                    <span className="bg-red-50 text-red-600 px-2.5 py-1 rounded-full font-medium">{missed} missed</span>
+                  )}
+                </div>
+              );
+            })()}
 
             {/* Students table */}
             {inst.students.length > 0 && (
