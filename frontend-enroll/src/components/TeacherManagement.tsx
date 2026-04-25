@@ -291,21 +291,13 @@ export default function TeacherManagement({ instruments, onRefresh }: TeacherMan
     }).filter(dt => dt.day);
   }
 
-  async function fetchTeacherBatches(teacherId: string) {
-    try {
-      const data = await apiGet(`/api/teachers/${teacherId}/batches`);
-      setTeacherBatches(prev => ({ ...prev, [teacherId]: data.batches || [] }));
-    } catch (err) {
-      console.error('Error fetching teacher batches:', err);
-    }
-  }
-
   async function fetchTeacherStudents(teacherId: string) {
     try {
       const data = await apiGet(`/api/teachers/${teacherId}/students`);
       setTeacherStudents(prev => ({ ...prev, [teacherId]: data.students || [] }));
     } catch (err) {
       console.error('Error fetching teacher students:', err);
+      setTeacherStudents(prev => ({ ...prev, [teacherId]: [] }));
     }
   }
 
@@ -315,7 +307,8 @@ export default function TeacherManagement({ instruments, onRefresh }: TeacherMan
     } else {
       setExpandedTeacher(teacherId);
       if (!teacherBatches[teacherId]) {
-        fetchTeacherBatches(teacherId);
+        const filtered = batches.filter(b => b.teacher_id === teacherId);
+        setTeacherBatches(prev => ({ ...prev, [teacherId]: filtered }));
       }
       if (!teacherStudents[teacherId]) {
         fetchTeacherStudents(teacherId);
