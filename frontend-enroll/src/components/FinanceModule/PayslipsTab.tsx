@@ -56,8 +56,8 @@ const pdfStyles = StyleSheet.create({
 });
 
 const PayslipPDF: React.FC<{ data: TeacherPayslip }> = ({ data }) => {
-  const { teacher, period, batches, summary } = data;
-  const allDeferred = batches.flatMap(b => b.students.filter(s => s.status === 'deferred'));
+  const { teacher, period, instruments, summary } = data;
+  const allDeferred = instruments.flatMap(inst => inst.students.filter(s => s.status === 'deferred'));
 
   return (
     <Document title={`Payslip - ${teacher.name} - ${period.month}`}>
@@ -75,31 +75,60 @@ const PayslipPDF: React.FC<{ data: TeacherPayslip }> = ({ data }) => {
 
         <View style={pdfStyles.divider} />
 
-        {/* Per-batch sections */}
-        {batches.map(batch => (
-          <View key={batch.batch_id} style={pdfStyles.section}>
-            <Text style={pdfStyles.sectionHdr}>
-              {batch.instrument_name}  ·  {batch.recurrence || ''}
-            </Text>
+        {/* Summary — at top */}
+        <View style={pdfStyles.section}>
+          <Text style={pdfStyles.sectionHdr}>Salary Summary</Text>
+          {teacher.payout_type === 'fixed' ? (
+            <View style={pdfStyles.summaryRow}>
+              <Text>Fixed Monthly Salary</Text>
+              <Text style={{ fontFamily: 'Helvetica-Bold' }}>{fmt(summary.fixed_salary!)}</Text>
+            </View>
+          ) : (
+            instruments.map(inst => inst.billable_count > 0 && (
+              <View key={inst.instrument_id} style={pdfStyles.summaryRow}>
+                <Text>{inst.instrument_name} — {inst.billable_count} student{inst.billable_count !== 1 ? 's' : ''}</Text>
+                <Text>{fmt(inst.instrument_subtotal)}</Text>
+              </View>
+            ))
+          )}
+          <View style={pdfStyles.total}>
+            <Text>Total Payable</Text>
+            <Text>{fmt(summary.total_payable)}</Text>
+          </View>
+        </View>
 
-            {/* Attendance */}
+        <View style={pdfStyles.divider} />
+
+        {/* Per-instrument sections */}
+        {instruments.map(inst => (
+          <View key={inst.instrument_id} style={pdfStyles.section}>
+            <Text style={pdfStyles.sectionHdr}>{inst.instrument_name}</Text>
+
+            {/* Attendance per batch */}
             <Text style={pdfStyles.batchName}>Attendance</Text>
-            <View style={pdfStyles.tableHead}>
-              <Text style={pdfStyles.cellBold}>Classes Conducted</Text>
-              <Text style={pdfStyles.cellBold}>Classes Not Conducted</Text>
-            </View>
-            <View style={pdfStyles.row}>
-              <Text style={pdfStyles.cell}>{batch.attendance.conducted}</Text>
-              <Text style={pdfStyles.cell}>{batch.attendance.not_conducted}</Text>
-            </View>
+            {inst.batches.map(b => (
+              <View key={b.batch_id}>
+                {inst.batches.length > 1 && (
+                  <Text style={{ fontSize: 8, color: '#64748b', marginBottom: 2 }}>{b.recurrence}</Text>
+                )}
+                <View style={pdfStyles.tableHead}>
+                  <Text style={pdfStyles.cellBold}>Classes Conducted</Text>
+                  <Text style={pdfStyles.cellBold}>Classes Not Conducted</Text>
+                </View>
+                <View style={pdfStyles.row}>
+                  <Text style={pdfStyles.cell}>{b.attendance.conducted}</Text>
+                  <Text style={pdfStyles.cell}>{b.attendance.not_conducted}</Text>
+                </View>
+              </View>
+            ))}
 
             {/* Students */}
-            {batch.students.length > 0 && (
+            {inst.students.length > 0 && (
               <>
                 <Text style={[pdfStyles.batchName, { marginTop: 8 }]}>Students</Text>
                 <View style={pdfStyles.tableHead}>
                   <Text style={pdfStyles.cellBold}>Name</Text>
-                  {!batch.is_vocal && <Text style={pdfStyles.cellBold}>Grade</Text>}
+                  {!inst.is_vocal && <Text style={pdfStyles.cellBold}>Grade</Text>}
                   <Text style={pdfStyles.cellBold}>Classes</Text>
                   {teacher.payout_type === 'per_student_monthly' && (
                     <>
@@ -109,10 +138,10 @@ const PayslipPDF: React.FC<{ data: TeacherPayslip }> = ({ data }) => {
                   )}
                   <Text style={pdfStyles.cellBold}>Status</Text>
                 </View>
-                {batch.students.map(s => (
+                {inst.students.map(s => (
                   <View key={s.student_id} style={pdfStyles.row}>
                     <Text style={pdfStyles.cell}>{s.student_name}</Text>
-                    {!batch.is_vocal && <Text style={pdfStyles.cell}>{s.trinity_grade}</Text>}
+                    {!inst.is_vocal && <Text style={pdfStyles.cell}>{s.trinity_grade}</Text>}
                     <Text style={pdfStyles.cell}>{s.classes_attended}</Text>
                     {teacher.payout_type === 'per_student_monthly' && (
                       <>
@@ -125,13 +154,13 @@ const PayslipPDF: React.FC<{ data: TeacherPayslip }> = ({ data }) => {
                     </Text>
                   </View>
                 ))}
-                {teacher.payout_type === 'per_student_monthly' && batch.billable_count > 0 && (
+                {teacher.payout_type === 'per_student_monthly' && inst.billable_count > 0 && (
                   <View style={[pdfStyles.row, { marginTop: 4 }]}>
                     <Text style={pdfStyles.cell} />
-                    {!batch.is_vocal && <Text style={pdfStyles.cell} />}
+                    {!inst.is_vocal && <Text style={pdfStyles.cell} />}
                     <Text style={pdfStyles.cell} />
                     <Text style={pdfStyles.cell} />
-                    <Text style={pdfStyles.cellBold}>{fmt(batch.batch_subtotal)}</Text>
+                    <Text style={pdfStyles.cellBold}>{fmt(inst.instrument_subtotal)}</Text>
                     <Text style={pdfStyles.cell} />
                   </View>
                 )}
@@ -153,30 +182,6 @@ const PayslipPDF: React.FC<{ data: TeacherPayslip }> = ({ data }) => {
             ))}
           </View>
         )}
-
-        {/* Summary */}
-        <View style={pdfStyles.section}>
-          <Text style={pdfStyles.sectionHdr}>Salary Summary</Text>
-          {teacher.payout_type === 'fixed' ? (
-            <View style={pdfStyles.summaryRow}>
-              <Text>Fixed Monthly Salary</Text>
-              <Text style={{ fontFamily: 'Helvetica-Bold' }}>{fmt(summary.fixed_salary!)}</Text>
-            </View>
-          ) : (
-            batches.map(b => b.billable_count > 0 && (
-              <View key={b.batch_id} style={pdfStyles.summaryRow}>
-                <Text>{b.instrument_name} — {b.billable_count} student{b.billable_count !== 1 ? 's' : ''}</Text>
-                <Text>{fmt(b.batch_subtotal)}</Text>
-              </View>
-            ))
-          )}
-          <View style={pdfStyles.total}>
-            <Text>Total Payable</Text>
-            <Text>{fmt(summary.total_payable)}</Text>
-          </View>
-        </View>
-
-        <View style={pdfStyles.divider} />
 
         {/* T&C */}
         <View style={pdfStyles.section}>
@@ -444,8 +449,8 @@ interface PayslipViewerProps {
 }
 
 const PayslipViewer: React.FC<PayslipViewerProps> = ({ payslip }) => {
-  const { teacher, period, batches, summary } = payslip;
-  const allDeferred = batches.flatMap(b => b.students.filter(s => s.status === 'deferred'));
+  const { teacher, period, instruments, summary } = payslip;
+  const allDeferred = instruments.flatMap(inst => inst.students.filter(s => s.status === 'deferred'));
 
   const handleDownloadPDF = async () => {
     const blob = await pdf(<PayslipPDF data={payslip} />).toBlob();
@@ -458,7 +463,6 @@ const PayslipViewer: React.FC<PayslipViewerProps> = ({ payslip }) => {
   };
 
   const handleOpenWhatsApp = async () => {
-    // Download PDF first so user has it, then open WhatsApp
     await handleDownloadPDF();
     const phone = teacher.phone?.replace(/\D/g, '') || '';
     const msg = encodeURIComponent(
@@ -472,7 +476,7 @@ const PayslipViewer: React.FC<PayslipViewerProps> = ({ payslip }) => {
 
   return (
     <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-      {/* Payslip header */}
+      {/* Header */}
       <div className="bg-indigo-600 text-white px-6 py-5">
         <div className="flex justify-between items-start">
           <div>
@@ -489,36 +493,72 @@ const PayslipViewer: React.FC<PayslipViewerProps> = ({ payslip }) => {
         </div>
       </div>
 
+      {/* Salary Summary — at top */}
+      <div className="p-6 border-b border-slate-200 bg-indigo-50">
+        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-4">Salary Summary</p>
+        {teacher.payout_type === 'fixed' ? (
+          <div className="flex justify-between items-center text-sm text-slate-700">
+            <span>Fixed Monthly Salary</span>
+            <span className="font-semibold">{fmt(summary.fixed_salary!)}</span>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {instruments.map(inst => inst.billable_count > 0 && (
+              <div key={inst.instrument_id} className="flex justify-between items-center text-sm text-slate-700">
+                <span>{inst.instrument_name} — {inst.billable_count} student{inst.billable_count !== 1 ? 's' : ''}</span>
+                <span>{fmt(inst.instrument_subtotal)}</span>
+              </div>
+            ))}
+          </div>
+        )}
+        <div className="mt-4 pt-4 border-t border-indigo-200 flex justify-between items-center">
+          <span className="font-bold text-slate-800">Total Payable</span>
+          <span className="text-2xl font-bold text-indigo-600">{fmt(summary.total_payable)}</span>
+        </div>
+        <div className="mt-3 flex gap-4 text-xs text-slate-500">
+          <span>{summary.billable_count} billable</span>
+          {summary.deferred_count > 0 && <span className="text-amber-600">{summary.deferred_count} deferred</span>}
+          {summary.excluded_count > 0 && <span>{summary.excluded_count} excluded</span>}
+        </div>
+      </div>
+
       <div className="divide-y divide-slate-100">
-        {/* Per-batch sections */}
-        {batches.map(batch => (
-          <div key={batch.batch_id} className="p-6">
+        {/* Per-instrument sections */}
+        {instruments.map(inst => (
+          <div key={inst.instrument_id} className="p-6">
             <h4 className="font-semibold text-slate-800 text-sm mb-4 flex items-center gap-2">
-              <span className="text-indigo-600">{batch.instrument_name}</span>
-              <span className="text-slate-400">·</span>
-              <span className="text-slate-600 font-normal">{batch.recurrence}</span>
-              {batch.is_vocal && (
+              <span className="text-indigo-600">{inst.instrument_name}</span>
+              {inst.is_vocal && (
                 <span className="text-xs bg-purple-50 text-purple-600 px-2 py-0.5 rounded-full">Vocals</span>
               )}
             </h4>
 
-            {/* Attendance — shown for both payout types */}
+            {/* Attendance per batch */}
             <div className="mb-4">
               <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Attendance</p>
-              <div className="flex gap-4">
-                <div className="flex-1 bg-emerald-50 rounded-lg p-3 text-center">
-                  <p className="text-2xl font-bold text-emerald-600">{batch.attendance.conducted}</p>
-                  <p className="text-xs text-emerald-700 mt-1">Conducted</p>
-                </div>
-                <div className="flex-1 bg-red-50 rounded-lg p-3 text-center">
-                  <p className="text-2xl font-bold text-red-500">{batch.attendance.not_conducted}</p>
-                  <p className="text-xs text-red-600 mt-1">Not Conducted</p>
-                </div>
+              <div className="space-y-2">
+                {inst.batches.map(b => (
+                  <div key={b.batch_id}>
+                    {inst.batches.length > 1 && (
+                      <p className="text-xs text-slate-500 mb-1">{b.recurrence}</p>
+                    )}
+                    <div className="flex gap-4">
+                      <div className="flex-1 bg-emerald-50 rounded-lg p-3 text-center">
+                        <p className="text-2xl font-bold text-emerald-600">{b.attendance.conducted}</p>
+                        <p className="text-xs text-emerald-700 mt-1">Conducted</p>
+                      </div>
+                      <div className="flex-1 bg-red-50 rounded-lg p-3 text-center">
+                        <p className="text-2xl font-bold text-red-500">{b.attendance.not_conducted}</p>
+                        <p className="text-xs text-red-600 mt-1">Not Conducted</p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
 
             {/* Students table */}
-            {batch.students.length > 0 && (
+            {inst.students.length > 0 && (
               <div>
                 <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Students</p>
                 <div className="overflow-x-auto">
@@ -526,7 +566,7 @@ const PayslipViewer: React.FC<PayslipViewerProps> = ({ payslip }) => {
                     <thead>
                       <tr className="bg-slate-50 text-left">
                         <th className="px-3 py-2 text-xs font-semibold text-slate-500">Name</th>
-                        {!batch.is_vocal && (
+                        {!inst.is_vocal && (
                           <th className="px-3 py-2 text-xs font-semibold text-slate-500">Grade</th>
                         )}
                         <th className="px-3 py-2 text-xs font-semibold text-slate-500">Classes</th>
@@ -540,10 +580,10 @@ const PayslipViewer: React.FC<PayslipViewerProps> = ({ payslip }) => {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                      {batch.students.map(s => (
+                      {inst.students.map(s => (
                         <tr key={s.student_id} className={s.status !== 'billable' ? 'opacity-60' : ''}>
                           <td className="px-3 py-2 font-medium text-slate-800">{s.student_name}</td>
-                          {!batch.is_vocal && (
+                          {!inst.is_vocal && (
                             <td className="px-3 py-2 text-slate-600">{s.trinity_grade}</td>
                           )}
                           <td className="px-3 py-2 text-slate-600">{s.classes_attended}</td>
@@ -571,13 +611,13 @@ const PayslipViewer: React.FC<PayslipViewerProps> = ({ payslip }) => {
                         </tr>
                       ))}
                     </tbody>
-                    {teacher.payout_type === 'per_student_monthly' && batch.billable_count > 0 && (
+                    {teacher.payout_type === 'per_student_monthly' && inst.billable_count > 0 && (
                       <tfoot>
                         <tr className="bg-slate-50">
-                          <td colSpan={batch.is_vocal ? 3 : 4} className="px-3 py-2 text-xs text-slate-500 text-right font-medium">
-                            Batch Subtotal
+                          <td colSpan={inst.is_vocal ? 3 : 4} className="px-3 py-2 text-xs text-slate-500 text-right font-medium">
+                            Subtotal
                           </td>
-                          <td className="px-3 py-2 font-bold text-indigo-700">{fmt(batch.batch_subtotal)}</td>
+                          <td className="px-3 py-2 font-bold text-indigo-700">{fmt(inst.instrument_subtotal)}</td>
                           <td />
                         </tr>
                       </tfoot>
@@ -611,35 +651,6 @@ const PayslipViewer: React.FC<PayslipViewerProps> = ({ payslip }) => {
             </div>
           </div>
         )}
-
-        {/* Salary summary */}
-        <div className="p-6">
-          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-4">Salary Summary</p>
-          {teacher.payout_type === 'fixed' ? (
-            <div className="flex justify-between items-center text-sm text-slate-700">
-              <span>Fixed Monthly Salary</span>
-              <span className="font-semibold">{fmt(summary.fixed_salary!)}</span>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {batches.map(b => b.billable_count > 0 && (
-                <div key={b.batch_id} className="flex justify-between items-center text-sm text-slate-700">
-                  <span>{b.instrument_name} — {b.billable_count} student{b.billable_count !== 1 ? 's' : ''}</span>
-                  <span>{fmt(b.batch_subtotal)}</span>
-                </div>
-              ))}
-            </div>
-          )}
-          <div className="mt-4 pt-4 border-t border-slate-200 flex justify-between items-center">
-            <span className="font-bold text-slate-800">Total Payable</span>
-            <span className="text-xl font-bold text-indigo-600">{fmt(summary.total_payable)}</span>
-          </div>
-          <div className="mt-3 flex gap-4 text-xs text-slate-500">
-            <span>{summary.billable_count} billable</span>
-            {summary.deferred_count > 0 && <span className="text-amber-600">{summary.deferred_count} deferred</span>}
-            {summary.excluded_count > 0 && <span>{summary.excluded_count} excluded</span>}
-          </div>
-        </div>
 
         {/* T&C */}
         <div className="p-6 bg-slate-50">

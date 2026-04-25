@@ -36,7 +36,6 @@ export interface TeacherGradeRateOverride {
 export interface PayslipStudent {
   student_id: string;
   student_name: string;
-  batch_id: string;
   instrument_id: string;
   instrument_name: string;
   trinity_grade: TrinityGrade;
@@ -47,18 +46,20 @@ export interface PayslipStudent {
   subtotal: number;
 }
 
-export interface PayslipBatch {
+export interface PayslipBatchAttendance {
   batch_id: string;
+  recurrence: string;
+  attendance: { conducted: number; not_conducted: number };
+}
+
+export interface PayslipInstrument {
   instrument_id: string;
   instrument_name: string;
-  recurrence: string;
-  start_time: string;
-  end_time: string;
   is_vocal: boolean;
-  attendance: { conducted: number; not_conducted: number };
+  batches: PayslipBatchAttendance[];
   students: PayslipStudent[];
   billable_count: number;
-  batch_subtotal: number;
+  instrument_subtotal: number;
 }
 
 export interface TeacherPayslip {
@@ -71,7 +72,7 @@ export interface TeacherPayslip {
     rate: number;
   };
   period: { month: string; start: string; end: string };
-  batches: PayslipBatch[];
+  instruments: PayslipInstrument[];
   summary: {
     total_payable: number;
     fixed_salary: number | null;

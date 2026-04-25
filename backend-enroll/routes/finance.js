@@ -324,7 +324,7 @@ router.get('/payslip/:teacherId', async (req, res) => {
                    email: teacher.email, payout_type: teacher.payout_type, rate: parseFloat(teacher.rate) },
         period: { month: monthStr, start: periodStart.toISOString().slice(0,10),
                   end: periodEnd.toISOString().slice(0,10) },
-        attendance: [], batches: [], summary: { total_payable: 0, deferred_count: 0, excluded_count: 0 }
+        instruments: [], summary: { total_payable: 0, fixed_salary: null, per_student_total: null, deferred_count: 0, excluded_count: 0, billable_count: 0 }
       });
     }
 
@@ -359,16 +359,14 @@ router.get('/payslip/:teacherId', async (req, res) => {
       taByBatch[r.batch_id].conducted += parseInt(r.implicit_conducted);
     });
 
-    // 4. Students per batch with enrollment info and attendance counts for the month
+    // 4. Students per instrument (unique per student+instrument) with attendance summed across batches
     const studentsRes = await pool.query(
       `SELECT
          s.id AS student_id, s.name AS student_name,
-         b.id AS batch_id,
          i.id AS instrument_id, i.name AS instrument_name,
-         eb.trinity_grade,
-         eb.enrolled_on AS batch_enrolled_on,
-         e.enrolled_on AS enrollment_date,
-         e.created_at AS enrollment_created_at,
+         MIN(eb.trinity_grade) AS trinity_grade,
+         MIN(COALESCE(e.enrolled_on, e.created_at::date)) AS enrollment_date,
+         MIN(e.created_at) AS enrollment_created_at,
          COUNT(CASE WHEN ar.status = 'present'
                      AND ar.session_date >= $2 AND ar.session_date <= $3
                     THEN 1 END) AS classes_attended_month
@@ -381,8 +379,7 @@ router.get('/payslip/:teacherId', async (req, res) => {
        WHERE b.teacher_id = $1
          AND b.is_makeup = false
          AND e.status = 'active'
-       GROUP BY s.id, s.name, b.id, i.id, i.name,
-                eb.trinity_grade, eb.enrolled_on, e.enrolled_on, e.created_at
+       GROUP BY s.id, s.name, i.id, i.name
        ORDER BY i.name, s.name`,
       [teacherId, periodStart.toISOString().slice(0,10), periodEnd.toISOString().slice(0,10)]
     );
@@ -445,7 +442,6 @@ router.get('/payslip/:teacherId', async (req, res) => {
       return {
         student_id: s.student_id,
         student_name: s.student_name,
-        batch_id: s.batch_id,
         instrument_id: s.instrument_id,
         instrument_name: s.instrument_name,
         trinity_grade: s.trinity_grade,
@@ -457,34 +453,33 @@ router.get('/payslip/:teacherId', async (req, res) => {
       };
     });
 
-    // 8. Build per-batch summaries
-    const batchSummaries = batches.map(b => {
-      const isVocal = VOCAL_INSTRUMENTS.includes(b.instrument_name.toLowerCase());
-      const attendance = taByBatch[b.id] || { conducted: 0, not_conducted: 0 };
-      const students = studentResults.filter(s => s.batch_id === b.id);
-      const billableStudents = students.filter(s => s.status === 'billable');
-      const batchSubtotal = billableStudents.reduce((sum, s) => sum + s.subtotal, 0);
+    // 8. Build per-instrument summaries (unique students per instrument, attendance per batch)
+    const uniqueInstrumentIds = [...new Set(batches.map(b => b.instrument_id))];
+    const instrumentSummaries = uniqueInstrumentIds.map(instId => {
+      const instBatches = batches.filter(b => b.instrument_id === instId);
+      const instName = instBatches[0].instrument_name;
+      const isVocal = VOCAL_INSTRUMENTS.includes(instName.toLowerCase());
+      const instStudents = studentResults.filter(s => s.instrument_id === instId);
+      const billableStudents = instStudents.filter(s => s.status === 'billable');
+      const instSubtotal = billableStudents.reduce((sum, s) => sum + s.subtotal, 0);
 
       return {
-        batch_id: b.id,
-        instrument_id: b.instrument_id,
-        instrument_name: b.instrument_name,
-        recurrence: b.recurrence,
-        start_time: b.start_time?.slice(0, 5),
-        end_time: b.end_time?.slice(0, 5),
+        instrument_id: instId,
+        instrument_name: instName,
         is_vocal: isVocal,
-        attendance: {
-          conducted: attendance.conducted,
-          not_conducted: attendance.not_conducted
-        },
-        students,
+        batches: instBatches.map(b => ({
+          batch_id: b.id,
+          recurrence: b.recurrence,
+          attendance: taByBatch[b.id] || { conducted: 0, not_conducted: 0 }
+        })),
+        students: instStudents,
         billable_count: billableStudents.length,
-        batch_subtotal: batchSubtotal
+        instrument_subtotal: instSubtotal
       };
     });
 
     // 9. Overall summary
-    const billableTotal = batchSummaries.reduce((sum, b) => sum + b.batch_subtotal, 0);
+    const billableTotal = instrumentSummaries.reduce((sum, i) => sum + i.instrument_subtotal, 0);
     const totalPayable = teacher.payout_type === 'fixed' ? parseFloat(teacher.rate) : billableTotal;
 
     res.json({
@@ -501,7 +496,7 @@ router.get('/payslip/:teacherId', async (req, res) => {
         start: periodStart.toISOString().slice(0, 10),
         end: periodEnd.toISOString().slice(0, 10)
       },
-      batches: batchSummaries,
+      instruments: instrumentSummaries,
       summary: {
         total_payable: totalPayable,
         fixed_salary: teacher.payout_type === 'fixed' ? parseFloat(teacher.rate) : null,
