@@ -104,6 +104,15 @@ const PaymentModule: React.FC<PaymentModuleProps> = ({ students, payments, onRef
     return names.sort();
   }, [enrollments]);
 
+  // Set of student IDs with an active enrollment
+  const activeStudentIds = useMemo(() => {
+    const ids = new Set<string>();
+    enrollments.forEach(e => {
+      if (e.status === 'active') ids.add(String(e.student_id));
+    });
+    return ids;
+  }, [enrollments]);
+
   // Unique instrument names from actual student enrollments (only instruments with students)
   const allInstruments = useMemo(() => {
     const names: string[] = [];
@@ -557,34 +566,42 @@ const PaymentModule: React.FC<PaymentModuleProps> = ({ students, payments, onRef
                   className="w-full px-4 py-2 rounded-lg border border-slate-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none"
                 >
                   <option value="">-- Select a student --</option>
-                  {students.map(student => (
-                    <option key={student.id || (student as any).student_id} value={student.id || (student as any).student_id}>
-                      {student.first_name && student.last_name ? `${student.first_name} ${student.last_name}` : (student as any).name || 'Unknown'}
-                    </option>
-                  ))}
+                  {students
+                    .filter(student => {
+                      const sid = String(student.id || (student as any).student_id);
+                      return activeStudentIds.has(sid);
+                    })
+                    .map(student => (
+                      <option key={student.id || (student as any).student_id} value={student.id || (student as any).student_id}>
+                        {student.first_name && student.last_name ? `${student.first_name} ${student.last_name}` : (student as any).name || 'Unknown'}
+                      </option>
+                    ))}
                 </select>
               </div>
 
               {!editingPayment && formData.student_id && (
                 <div className="space-y-4">
-                  {/* Stream selector */}
+                  {/* Stream selector — one option per instrument */}
                   <div>
                     <label className="block text-sm font-semibold text-slate-700 mb-2">Stream *</label>
                     <select
-                      value={paymentBatchId}
+                      value={selectedInstrumentId}
                       onChange={e => {
-                        const batch = studentBatches.find(b => b.batch_id === e.target.value);
-                        setPaymentBatchId(e.target.value);
-                        setSelectedInstrumentId(batch?.instrument_id ?? '');
+                        const instrId = e.target.value;
+                        const firstBatch = studentBatches.find(b => b.instrument_id === instrId);
+                        setSelectedInstrumentId(instrId);
+                        setPaymentBatchId(firstBatch?.batch_id ?? '');
                         setSelectedPackageId('');
                       }}
                       required={!editingPayment}
                       className="w-full px-4 py-2 rounded-lg border border-slate-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none"
                     >
                       <option value="">-- Select stream --</option>
-                      {studentBatches.map(b => (
-                        <option key={b.batch_id} value={b.batch_id}>
-                          {b.instrument}{b.recurrence ? ` (${b.recurrence})` : ''}
+                      {Array.from(
+                        new Map(studentBatches.map(b => [b.instrument_id, b])).values()
+                      ).map(b => (
+                        <option key={b.instrument_id} value={b.instrument_id}>
+                          {b.instrument}
                         </option>
                       ))}
                     </select>
