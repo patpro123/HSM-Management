@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const pool = require('../db');
+const { computeClassesRemaining } = require('../utils/credits');
 
 // Helper: count expected sessions for a given month from recurrence string
 // Recurrence format: "TUE 17:00-18:00, THU 17:00-18:00"
@@ -142,8 +143,7 @@ router.get('/:id/students', async (req, res) => {
          i.name AS instrument,
          MIN(b.id) AS batch_id,
          STRING_AGG(b.recurrence, ', ' ORDER BY b.recurrence) AS recurrence,
-         e.status AS enrollment_status,
-         SUM(eb.classes_remaining) AS classes_remaining
+         e.status AS enrollment_status
        FROM students s
        JOIN enrollments e ON s.id = e.student_id AND e.status = 'active'
        JOIN enrollment_batches eb ON e.id = eb.enrollment_id
@@ -153,7 +153,13 @@ router.get('/:id/students', async (req, res) => {
        ORDER BY s.name`,
       [teacherId]
     );
-    res.json({ students: result.rows });
+
+    const students = await Promise.all(result.rows.map(async (student) => {
+      const { byInstrument } = await computeClassesRemaining(pool, student.id);
+      return { ...student, classes_remaining: byInstrument[student.instrument] ?? 0 };
+    }));
+
+    res.json({ students });
   } catch (err) {
     console.error('Teacher students error:', err);
     res.status(500).json({ error: 'Internal server error' });
