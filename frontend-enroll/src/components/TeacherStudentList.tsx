@@ -62,7 +62,7 @@ const TeacherStudentList: React.FC<TeacherStudentListProps> = ({ students, teach
             </thead>
             <tbody className="divide-y divide-gray-100 bg-white">
               {filtered.map(s => (
-                <tr key={`${s.id}-${s.batch_id}`} className="hover:bg-gray-50">
+                <tr key={s.id} className="hover:bg-gray-50">
                   <td className="py-3 pl-4 pr-3 text-sm font-medium text-gray-900">{s.name}</td>
                   <td className="px-3 py-3 text-sm text-gray-600">{s.instrument}</td>
                   <td className="px-3 py-3 text-sm text-gray-500">{s.recurrence}</td>
