@@ -53,13 +53,6 @@ const Teacher360View: React.FC<Teacher360ViewProps> = ({
 
         const result = await apiGet(`/api/teachers/${id}/360`);
         setData(result);
-
-        // Also load students
-        setStudentsLoading(true);
-        apiGet(`/api/teachers/${id}/students`)
-          .then((res: any) => setStudents(res.students || []))
-          .catch(() => {/* non-critical */ })
-          .finally(() => setStudentsLoading(false));
       } catch (err: any) {
         setError(err.message || 'Failed to load teacher profile.');
       } finally {
@@ -69,6 +62,15 @@ const Teacher360View: React.FC<Teacher360ViewProps> = ({
 
     load();
   }, [teacherId, selfView]);
+
+  useEffect(() => {
+    if (activeTab !== 'students' || !resolvedId || studentsLoading || students.length > 0) return;
+    setStudentsLoading(true);
+    apiGet(`/api/teachers/${resolvedId}/students`)
+      .then((res: any) => setStudents(res.students || []))
+      .catch(() => setStudents([]))
+      .finally(() => setStudentsLoading(false));
+  }, [activeTab, resolvedId]);
 
   const attendanceRate = data
     ? data.attendance.summary.current_month_expected > 0
