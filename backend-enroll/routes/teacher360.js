@@ -141,7 +141,7 @@ router.get('/:id/students', async (req, res) => {
       `SELECT
          s.id, s.name, s.phone, s.guardian_contact,
          i.name AS instrument,
-         MIN(b.id) AS batch_id,
+         MIN(b.id::text) AS batch_id,
          STRING_AGG(b.recurrence, ', ' ORDER BY b.recurrence) AS recurrence,
          e.status AS enrollment_status
        FROM students s
