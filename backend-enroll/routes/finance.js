@@ -286,15 +286,20 @@ router.delete('/grade-rates/overrides/:teacherId/:overrideId', async (req, res) 
 router.get('/payout-params/:teacherId', async (req, res) => {
   try {
     const result = await pool.query(
-      `SELECT COALESCE(maintenance_amount, 1200) AS maintenance_amount,
-              COALESCE(payout_percentage,  0.70) AS payout_percentage
+      `SELECT COALESCE(per_student_rate_type, 'percentage') AS rate_type,
+              COALESCE(per_student_fixed_rate, 0)           AS fixed_rate,
+              COALESCE(maintenance_amount, 1200)            AS maintenance_amount,
+              COALESCE(payout_percentage,  0.70)            AS payout_percentage
        FROM teachers WHERE id = $1`,
       [req.params.teacherId]
     );
     if (result.rows.length === 0) return res.status(404).json({ error: 'Teacher not found' });
+    const r = result.rows[0];
     res.json({
-      maintenance_amount: parseFloat(result.rows[0].maintenance_amount),
-      payout_percentage:  parseFloat(result.rows[0].payout_percentage)
+      rate_type:          r.rate_type,
+      fixed_rate:         parseFloat(r.fixed_rate),
+      maintenance_amount: parseFloat(r.maintenance_amount),
+      payout_percentage:  parseFloat(r.payout_percentage)
     });
   } catch (err) {
     console.error('Get payout params error:', err);
@@ -304,21 +309,33 @@ router.get('/payout-params/:teacherId', async (req, res) => {
 
 // PUT /api/finance/payout-params/:teacherId
 router.put('/payout-params/:teacherId', async (req, res) => {
-  const { maintenance_amount, payout_percentage } = req.body;
-  if (maintenance_amount == null || payout_percentage == null) {
-    return res.status(400).json({ error: 'maintenance_amount and payout_percentage required' });
-  }
-  const ma = parseFloat(maintenance_amount);
-  const pp = parseFloat(payout_percentage);
-  if (isNaN(ma) || ma < 0 || isNaN(pp) || pp < 0 || pp > 1) {
-    return res.status(400).json({ error: 'Invalid values: maintenance_amount >= 0, payout_percentage 0–1' });
+  const { rate_type, fixed_rate, maintenance_amount, payout_percentage } = req.body;
+  if (!rate_type || !['fixed', 'percentage'].includes(rate_type)) {
+    return res.status(400).json({ error: 'rate_type must be "fixed" or "percentage"' });
   }
   try {
-    await pool.query(
-      `UPDATE teachers SET maintenance_amount = $1, payout_percentage = $2 WHERE id = $3`,
-      [ma, pp, req.params.teacherId]
-    );
-    res.json({ maintenance_amount: ma, payout_percentage: pp });
+    if (rate_type === 'fixed') {
+      const fr = parseFloat(fixed_rate);
+      if (isNaN(fr) || fr < 0) return res.status(400).json({ error: 'fixed_rate must be >= 0' });
+      await pool.query(
+        `UPDATE teachers SET per_student_rate_type = 'fixed', per_student_fixed_rate = $1 WHERE id = $2`,
+        [fr, req.params.teacherId]
+      );
+      res.json({ rate_type: 'fixed', fixed_rate: fr });
+    } else {
+      const ma = parseFloat(maintenance_amount);
+      const pp = parseFloat(payout_percentage);
+      if (isNaN(ma) || ma < 0 || isNaN(pp) || pp < 0 || pp > 1) {
+        return res.status(400).json({ error: 'maintenance_amount >= 0; payout_percentage 0–1' });
+      }
+      await pool.query(
+        `UPDATE teachers SET per_student_rate_type = 'percentage',
+                             maintenance_amount = $1, payout_percentage = $2
+         WHERE id = $3`,
+        [ma, pp, req.params.teacherId]
+      );
+      res.json({ rate_type: 'percentage', maintenance_amount: ma, payout_percentage: pp });
+    }
   } catch (err) {
     console.error('Update payout params error:', err);
     res.status(500).json({ error: 'Failed to update payout params' });
@@ -341,8 +358,10 @@ router.get('/payslip/:teacherId', async (req, res) => {
     // 1. Teacher profile
     const teacherRes = await pool.query(
       `SELECT id, name, phone, payout_type, rate,
-              COALESCE(maintenance_amount, 1200) AS maintenance_amount,
-              COALESCE(payout_percentage,  0.70) AS payout_percentage,
+              COALESCE(per_student_rate_type, 'percentage') AS per_student_rate_type,
+              COALESCE(per_student_fixed_rate, 0)           AS per_student_fixed_rate,
+              COALESCE(maintenance_amount, 1200)            AS maintenance_amount,
+              COALESCE(payout_percentage,  0.70)            AS payout_percentage,
               COALESCE(metadata->>'email', '') AS email
        FROM teachers WHERE id = $1`,
       [teacherId]
@@ -351,8 +370,10 @@ router.get('/payslip/:teacherId', async (req, res) => {
       return res.status(404).json({ error: 'Teacher not found' });
     }
     const teacher = teacherRes.rows[0];
-    const maintenanceAmount = parseFloat(teacher.maintenance_amount);
-    const payoutPercentage  = parseFloat(teacher.payout_percentage);
+    const perStudentRateType  = teacher.per_student_rate_type;
+    const perStudentFixedRate = parseFloat(teacher.per_student_fixed_rate);
+    const maintenanceAmount   = parseFloat(teacher.maintenance_amount);
+    const payoutPercentage    = parseFloat(teacher.payout_percentage);
 
     // 2. Batches for this teacher (non-makeup)
     const batchesRes = await pool.query(
@@ -516,7 +537,9 @@ router.get('/payslip/:teacherId', async (req, res) => {
           packageMonthlyRate = pkg.classes_count >= 24 ? pkg.price / 3 : pkg.price;
         }
       }
-      const effectiveRate = Math.max(0, (packageMonthlyRate - maintenanceAmount) * payoutPercentage);
+      const effectiveRate = perStudentRateType === 'fixed'
+        ? perStudentFixedRate
+        : Math.max(0, (packageMonthlyRate - maintenanceAmount) * payoutPercentage);
 
       let status = 'billable';
       if (isDeferred) status = 'deferred';
@@ -574,6 +597,8 @@ router.get('/payslip/:teacherId', async (req, res) => {
         email: teacher.email || '',
         payout_type: teacher.payout_type,
         rate: parseFloat(teacher.rate),
+        per_student_rate_type: perStudentRateType,
+        per_student_fixed_rate: perStudentFixedRate,
         maintenance_amount: maintenanceAmount,
         payout_percentage: payoutPercentage
       },

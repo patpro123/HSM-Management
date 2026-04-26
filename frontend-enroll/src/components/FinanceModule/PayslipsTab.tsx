@@ -1,11 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { pdf, Document, Page, Text, View, StyleSheet } from '@react-pdf/renderer';
-import { apiGet, apiPost, apiPut, apiDelete } from '../../api';
-import {
-  Teacher, TeacherPayslip,
-  InstrumentGradeRate, TeacherGradeRateOverride,
-  TRINITY_GRADES, TrinityGrade
-} from './types';
+import { apiGet, apiPut } from '../../api';
+import { Teacher, TeacherPayslip } from './types';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -201,337 +197,196 @@ const PayslipPDF: React.FC<{ data: TeacherPayslip }> = ({ data }) => {
 
 // ── Rate Config Panel ─────────────────────────────────────────────────────────
 
-interface Instrument { id: string; name: string; }
-
 interface PayoutParams {
+  rate_type: 'fixed' | 'percentage';
+  fixed_rate: number;
   maintenance_amount: number;
   payout_percentage: number;
 }
 
 interface RateConfigPanelProps {
-  instruments: Instrument[];
   teachers: Teacher[];
 }
 
-const RateConfigPanel: React.FC<RateConfigPanelProps> = ({ instruments, teachers }) => {
-  const [rates, setRates] = useState<InstrumentGradeRate[]>([]);
-  const [overrideTeacherId, setOverrideTeacherId] = useState('');
-  const [overrides, setOverrides] = useState<TeacherGradeRateOverride[]>([]);
-  const [saving, setSaving] = useState(false);
-  const [overrideSaving, setOverrideSaving] = useState(false);
-  const [localRates, setLocalRates] = useState<Record<string, string>>({});
-  const [localOverrideRates, setLocalOverrideRates] = useState<Record<string, string>>({});
-
-  const [payoutParamsTeacherId, setPayoutParamsTeacherId] = useState('');
+const RateConfigPanel: React.FC<RateConfigPanelProps> = ({ teachers }) => {
+  const [selectedTeacherId, setSelectedTeacherId] = useState('');
   const [payoutParams, setPayoutParams] = useState<PayoutParams | null>(null);
+  const [localRateType, setLocalRateType] = useState<'fixed' | 'percentage'>('percentage');
+  const [localFixedRate, setLocalFixedRate] = useState('');
   const [localMaintenance, setLocalMaintenance] = useState('');
   const [localPayoutPct, setLocalPayoutPct] = useState('');
-  const [payoutParamsSaving, setPayoutParamsSaving] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
 
   useEffect(() => {
-    loadRates();
-  }, []);
+    if (!selectedTeacherId) { setPayoutParams(null); return; }
+    apiGet(`/api/finance/payout-params/${selectedTeacherId}`)
+      .then((d: PayoutParams) => {
+        setPayoutParams(d);
+        setLocalRateType(d.rate_type);
+        setLocalFixedRate(String(d.fixed_rate));
+        setLocalMaintenance(String(d.maintenance_amount));
+        setLocalPayoutPct(String(Math.round(d.payout_percentage * 100)));
+      })
+      .catch(() => {});
+  }, [selectedTeacherId]);
 
-  useEffect(() => {
-    if (payoutParamsTeacherId) {
-      apiGet(`/api/finance/payout-params/${payoutParamsTeacherId}`)
-        .then((d: PayoutParams) => {
-          setPayoutParams(d);
-          setLocalMaintenance(String(d.maintenance_amount));
-          setLocalPayoutPct(String(Math.round(d.payout_percentage * 100)));
-        })
-        .catch(() => {});
-    } else {
-      setPayoutParams(null);
-    }
-  }, [payoutParamsTeacherId]);
-
-  const handleSavePayoutParams = async () => {
-    const ma = parseFloat(localMaintenance);
-    const pp = parseFloat(localPayoutPct) / 100;
-    if (isNaN(ma) || isNaN(pp) || pp < 0 || pp > 1) return;
-    setPayoutParamsSaving(true);
-    try {
-      await apiPut(`/api/finance/payout-params/${payoutParamsTeacherId}`, {
-        maintenance_amount: ma,
-        payout_percentage: pp
-      });
-      setPayoutParams({ maintenance_amount: ma, payout_percentage: pp });
-    } finally {
-      setPayoutParamsSaving(false);
-    }
-  };
-
-  useEffect(() => {
-    if (overrideTeacherId) {
-      setLocalOverrideRates({});
-      loadOverrides(overrideTeacherId);
-    }
-  }, [overrideTeacherId]);
-
-  const loadRates = async () => {
-    const data = await apiGet('/api/finance/grade-rates').catch(() => ({ rates: [] }));
-    const r: InstrumentGradeRate[] = data.rates || [];
-    setRates(r);
-    const map: Record<string, string> = {};
-    r.forEach(rate => { map[`${rate.instrument_id}-${rate.trinity_grade}`] = String(rate.rate_per_student); });
-    setLocalRates(map);
-  };
-
-  const loadOverrides = async (teacherId: string) => {
-    const data = await apiGet(`/api/finance/grade-rates/overrides/${teacherId}`).catch(() => ({ overrides: [] }));
-    const o: TeacherGradeRateOverride[] = data.overrides || [];
-    setOverrides(o);
-    const map: Record<string, string> = {};
-    o.forEach(override => { map[`${override.instrument_id}-${override.trinity_grade}`] = String(override.rate_per_student); });
-    setLocalOverrideRates(map);
-  };
-
-  const getRateValue = (instrumentId: string, grade: TrinityGrade) => {
-    const found = rates.find(r => r.instrument_id === instrumentId && r.trinity_grade === grade);
-    return found ? found.rate_per_student : 0;
-  };
-
-  const handleSaveRate = async (instrumentId: string, grade: TrinityGrade, value: string) => {
-    const rate = parseFloat(value);
-    if (isNaN(rate)) return;
+  const handleSave = async () => {
     setSaving(true);
+    setSaved(false);
     try {
-      await apiPost('/api/finance/grade-rates', { instrument_id: instrumentId, trinity_grade: grade, rate_per_student: rate });
-      await loadRates();
+      const body = localRateType === 'fixed'
+        ? { rate_type: 'fixed', fixed_rate: parseFloat(localFixedRate) }
+        : { rate_type: 'percentage', maintenance_amount: parseFloat(localMaintenance), payout_percentage: parseFloat(localPayoutPct) / 100 };
+      const updated = await apiPut(`/api/finance/payout-params/${selectedTeacherId}`, body);
+      setPayoutParams({ ...payoutParams!, ...updated });
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
     } finally {
       setSaving(false);
     }
   };
 
-  const handleSaveOverride = async (instrumentId: string, grade: TrinityGrade, value: string) => {
-    if (!overrideTeacherId) return;
-    const rate = parseFloat(value);
-    if (isNaN(rate) || value.trim() === '') return;
-    setOverrideSaving(true);
-    try {
-      await apiPost(`/api/finance/grade-rates/overrides/${overrideTeacherId}`, {
-        instrument_id: instrumentId, trinity_grade: grade, rate_per_student: rate
-      });
-      await loadOverrides(overrideTeacherId);
-    } finally {
-      setOverrideSaving(false);
-    }
-  };
-
-  const handleDeleteOverride = async (overrideId: string) => {
-    if (!overrideTeacherId) return;
-    await apiDelete(`/api/finance/grade-rates/overrides/${overrideTeacherId}/${overrideId}`);
-    await loadOverrides(overrideTeacherId);
-  };
+  const perStudentTeachers = teachers.filter(t => t.payout_type === 'per_student_monthly' && t.is_active);
 
   return (
-    <div className="space-y-8">
-      {/* School-wide rates */}
-      <div>
-        <h3 className="text-base font-semibold text-slate-800 mb-4">School-Wide Rates per Grade</h3>
-        <p className="text-xs text-slate-500 mb-4">
-          Vocal instruments (Hindustani Vocals, Carnatic Vocals) have a single fixed rate.
-          All others use Trinity grade-based rates.
-        </p>
-        <div className="space-y-6">
-          {instruments.map(inst => {
-            const vocal = isVocalInstrument(inst.name);
-            return (
-              <div key={inst.id} className="bg-white rounded-lg border border-slate-200 overflow-hidden">
-                <div className="bg-slate-50 px-4 py-2 border-b border-slate-200">
-                  <span className="font-semibold text-slate-700 text-sm">{inst.name}</span>
-                  {vocal && <span className="ml-2 text-xs text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full">Fixed rate</span>}
-                </div>
-                {vocal ? (
-                  <div className="p-4 flex items-center gap-3">
-                    <label className="text-sm text-slate-600 w-24">Rate (₹)</label>
-                    <input
-                      type="number"
-                      min="0"
-                      value={localRates[`${inst.id}-Fixed`] ?? ''}
-                      onChange={e => setLocalRates(prev => ({ ...prev, [`${inst.id}-Fixed`]: e.target.value }))}
-                      className="w-32 border border-slate-300 rounded px-2 py-1 text-sm"
-                    />
-                    <button
-                      onClick={() => handleSaveRate(inst.id, 'Fixed', localRates[`${inst.id}-Fixed`] ?? '')}
-                      disabled={saving}
-                      className="text-xs px-3 py-1 bg-indigo-600 text-white rounded hover:bg-indigo-700 disabled:opacity-50 transition"
-                    >Save</button>
-                  </div>
-                ) : (
-                  <div className="divide-y divide-slate-100">
-                    <div className="grid grid-cols-[160px_1fr_80px] bg-slate-50 px-4 py-1.5 text-xs font-semibold text-slate-500">
-                      <span>Trinity Grade</span>
-                      <span>Rate per Student (₹)</span>
-                      <span />
-                    </div>
-                    {TRINITY_GRADES.map(grade => {
-                      const rateKey = `${inst.id}-${grade}`;
-                      return (
-                        <div key={grade} className="grid grid-cols-[160px_1fr_80px] px-4 py-2 items-center">
-                          <span className="text-sm text-slate-700">{grade}</span>
-                          <input
-                            type="number"
-                            min="0"
-                            value={localRates[rateKey] ?? ''}
-                            onChange={e => setLocalRates(prev => ({ ...prev, [rateKey]: e.target.value }))}
-                            className="w-32 border border-slate-300 rounded px-2 py-1 text-sm"
-                          />
-                          <button
-                            onClick={() => handleSaveRate(inst.id, grade, localRates[rateKey] ?? '')}
-                            disabled={saving}
-                            className="text-xs px-3 py-1 bg-indigo-600 text-white rounded hover:bg-indigo-700 disabled:opacity-50 transition"
-                          >Save</button>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            );
-          })}
+    <div className="space-y-10 max-w-2xl">
+
+      {/* Formula reference */}
+      <div className="bg-slate-50 rounded-xl border border-slate-200 p-5">
+        <h3 className="text-sm font-semibold text-slate-700 mb-4">How Teacher Payout is Calculated</h3>
+        <div className="grid grid-cols-2 gap-4">
+          <div className="bg-white rounded-lg border border-indigo-100 p-4">
+            <p className="text-xs font-semibold text-indigo-600 uppercase tracking-wide mb-2">Fixed Rate per Student</p>
+            <p className="text-xs text-slate-600 mb-3">
+              Teacher receives a flat amount for each billable student, regardless of what the student pays.
+            </p>
+            <div className="bg-indigo-50 rounded px-3 py-2 font-mono text-xs text-indigo-800">
+              payout = fixed_rate × billable_students
+            </div>
+          </div>
+          <div className="bg-white rounded-lg border border-emerald-100 p-4">
+            <p className="text-xs font-semibold text-emerald-600 uppercase tracking-wide mb-2">Percentage of Student Fee</p>
+            <p className="text-xs text-slate-600 mb-3">
+              R = student's monthly fee (quarterly ÷ 3 · trial × 2).
+              Teacher gets a % of what remains after deducting maintenance.
+            </p>
+            <div className="bg-emerald-50 rounded px-3 py-2 font-mono text-xs text-emerald-800 space-y-1">
+              <p>per student = max(0, (R − maintenance) × %)</p>
+              <p>payout = sum across billable students</p>
+            </div>
+          </div>
         </div>
-        {saving && <p className="text-xs text-indigo-600 mt-2">Saving…</p>}
+        <div className="mt-4 text-xs text-slate-500 space-y-1">
+          <p><span className="font-semibold">Billable:</span> enrolled before the 20th of the month and attended more than 1 class.</p>
+          <p><span className="font-semibold">Deferred:</span> enrolled after the 20th — counted in the following month.</p>
+          <p><span className="font-semibold">Excluded:</span> attended 1 or fewer classes — first class is complimentary.</p>
+        </div>
       </div>
 
-      {/* Teacher overrides */}
-      <div className="border-t border-slate-200 pt-8">
-        <h3 className="text-base font-semibold text-slate-800 mb-1">Teacher-Level Overrides</h3>
-        <p className="text-xs text-slate-500 mb-4">
-          Override the school-wide rate for a specific teacher. Leave a field blank to use the school-wide rate.
-          Overrides only apply to per-student payout teachers.
-        </p>
+      {/* Per-teacher config */}
+      <div>
+        <h3 className="text-base font-semibold text-slate-800 mb-1">Teacher Payout Configuration</h3>
+        <p className="text-xs text-slate-500 mb-5">Select a teacher to configure their rate type and parameters.</p>
+
         <div className="flex items-center gap-3 mb-6">
-          <label className="text-sm font-medium text-slate-600">Select Teacher</label>
+          <label className="text-sm font-medium text-slate-600 shrink-0">Teacher</label>
           <select
-            value={overrideTeacherId}
-            onChange={e => setOverrideTeacherId(e.target.value)}
-            className="border border-slate-300 rounded px-3 py-1.5 text-sm bg-white"
+            value={selectedTeacherId}
+            onChange={e => setSelectedTeacherId(e.target.value)}
+            className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white min-w-[220px]"
           >
-            <option value="">— choose teacher —</option>
-            {teachers.filter(t => t.payout_type === 'per_student_monthly' && t.is_active).map(t => (
+            <option value="">— select teacher —</option>
+            {perStudentTeachers.map(t => (
               <option key={t.id} value={t.id}>{t.name}</option>
             ))}
           </select>
         </div>
 
-        {overrideTeacherId && (
-          <div className="space-y-6">
-            {instruments.map(inst => {
-              const vocal = isVocalInstrument(inst.name);
-              const gradesToShow = vocal ? (['Fixed'] as TrinityGrade[]) : TRINITY_GRADES;
-              return (
-                <div key={inst.id} className="bg-white rounded-lg border border-slate-200 overflow-hidden">
-                  <div className="bg-slate-50 px-4 py-2 border-b border-slate-200">
-                    <span className="font-semibold text-slate-700 text-sm">{inst.name}</span>
-                  </div>
-                  <div className="divide-y divide-slate-100">
-                    {!vocal && (
-                      <div className="grid grid-cols-[160px_180px_180px_60px_40px] bg-slate-50 px-4 py-1.5 text-xs font-semibold text-slate-500">
-                        <span>Grade</span>
-                        <span>School Rate</span>
-                        <span>Override Rate (₹)</span>
-                        <span />
-                        <span />
-                      </div>
-                    )}
-                    {gradesToShow.map(grade => {
-                      const existing = overrides.find(o => o.instrument_id === inst.id && o.trinity_grade === grade);
-                      const overrideKey = `${inst.id}-${grade}`;
-                      return (
-                        <div key={grade} className="grid grid-cols-[160px_180px_180px_60px_40px] px-4 py-2 items-center">
-                          <span className="text-sm text-slate-700">{vocal ? 'Fixed Rate' : grade}</span>
-                          <span className="text-sm text-slate-400">{fmt(getRateValue(inst.id, grade))}</span>
-                          <input
-                            type="number"
-                            min="0"
-                            placeholder="use school rate"
-                            value={localOverrideRates[overrideKey] ?? ''}
-                            onChange={e => setLocalOverrideRates(prev => ({ ...prev, [overrideKey]: e.target.value }))}
-                            className="w-36 border border-slate-300 rounded px-2 py-1 text-sm"
-                          />
-                          <button
-                            onClick={() => {
-                              const val = localOverrideRates[overrideKey] ?? '';
-                              if (val.trim() !== '') handleSaveOverride(inst.id, grade, val);
-                            }}
-                            disabled={overrideSaving || !localOverrideRates[overrideKey]?.trim()}
-                            className="text-xs px-2 py-1 bg-indigo-600 text-white rounded hover:bg-indigo-700 disabled:opacity-50 transition"
-                            title="Save override"
-                          >Save</button>
-                          {existing && (
-                            <button
-                              onClick={() => handleDeleteOverride(existing.id!)}
-                              className="text-red-400 hover:text-red-600 text-xs ml-1"
-                              title="Remove override"
-                            >✕</button>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
+        {selectedTeacherId && payoutParams && (
+          <div className="bg-white rounded-xl border border-slate-200 p-6 space-y-6">
+            {/* Rate type toggle */}
+            <div>
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">Rate Type</p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setLocalRateType('fixed')}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium border transition ${
+                    localRateType === 'fixed'
+                      ? 'bg-indigo-600 text-white border-indigo-600'
+                      : 'bg-white text-slate-600 border-slate-300 hover:border-indigo-400'
+                  }`}
+                >
+                  Fixed Rate per Student
+                </button>
+                <button
+                  onClick={() => setLocalRateType('percentage')}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium border transition ${
+                    localRateType === 'percentage'
+                      ? 'bg-indigo-600 text-white border-indigo-600'
+                      : 'bg-white text-slate-600 border-slate-300 hover:border-indigo-400'
+                  }`}
+                >
+                  % of Student Fee
+                </button>
+              </div>
+            </div>
+
+            {/* Fields */}
+            {localRateType === 'fixed' ? (
+              <div className="space-y-3">
+                <p className="text-xs text-slate-500">Teacher earns this amount per billable student per month.</p>
+                <div className="flex items-center gap-3">
+                  <label className="text-sm text-slate-600 w-48">Fixed Rate per Student (₹)</label>
+                  <input
+                    type="number" min="0"
+                    value={localFixedRate}
+                    onChange={e => setLocalFixedRate(e.target.value)}
+                    className="w-32 border border-slate-300 rounded px-2 py-1.5 text-sm"
+                  />
                 </div>
-              );
-            })}
-            {overrideSaving && <p className="text-xs text-indigo-600">Saving override…</p>}
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <p className="text-xs text-slate-500">
+                  Per student: <span className="font-mono">max(0, (R − maintenance) × payout%)</span>
+                </p>
+                <div className="flex items-center gap-3">
+                  <label className="text-sm text-slate-600 w-48">Per-Student Maintenance (₹)</label>
+                  <input
+                    type="number" min="0"
+                    value={localMaintenance}
+                    onChange={e => setLocalMaintenance(e.target.value)}
+                    className="w-32 border border-slate-300 rounded px-2 py-1.5 text-sm"
+                  />
+                </div>
+                <div className="flex items-center gap-3">
+                  <label className="text-sm text-slate-600 w-48">Payout Percentage (%)</label>
+                  <input
+                    type="number" min="0" max="100" step="1"
+                    value={localPayoutPct}
+                    onChange={e => setLocalPayoutPct(e.target.value)}
+                    className="w-32 border border-slate-300 rounded px-2 py-1.5 text-sm"
+                  />
+                </div>
+              </div>
+            )}
+
+            <div className="flex items-center gap-3 pt-2 border-t border-slate-100">
+              <button
+                onClick={handleSave}
+                disabled={saving}
+                className="px-5 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 disabled:opacity-50 transition"
+              >
+                {saving ? 'Saving…' : 'Save'}
+              </button>
+              {saved && <span className="text-xs text-emerald-600 font-medium">Saved</span>}
+            </div>
           </div>
         )}
-      </div>
 
-      {/* Payout formula parameters */}
-      <div className="border-t border-slate-200 pt-8">
-        <h3 className="text-base font-semibold text-slate-800 mb-1">Payout Formula Parameters</h3>
-        <p className="text-xs text-slate-500 mb-4">
-          Configure the maintenance amount and payout percentage used to compute each teacher's per-student earnings.
-          Formula: <span className="font-mono">(student_monthly_fee − maintenance) × payout%</span>
-        </p>
-        <div className="flex items-center gap-3 mb-6">
-          <label className="text-sm font-medium text-slate-600">Select Teacher</label>
-          <select
-            value={payoutParamsTeacherId}
-            onChange={e => setPayoutParamsTeacherId(e.target.value)}
-            className="border border-slate-300 rounded px-3 py-1.5 text-sm bg-white"
-          >
-            <option value="">— choose teacher —</option>
-            {teachers.filter(t => t.payout_type === 'per_student_monthly' && t.is_active).map(t => (
-              <option key={t.id} value={t.id}>{t.name}</option>
-            ))}
-          </select>
-        </div>
-
-        {payoutParamsTeacherId && payoutParams && (
-          <div className="bg-white rounded-lg border border-slate-200 p-5 max-w-sm space-y-4">
-            <div className="flex items-center gap-3">
-              <label className="text-sm text-slate-600 w-44">Maintenance Amount (₹)</label>
-              <input
-                type="number"
-                min="0"
-                value={localMaintenance}
-                onChange={e => setLocalMaintenance(e.target.value)}
-                className="w-32 border border-slate-300 rounded px-2 py-1 text-sm"
-              />
-            </div>
-            <div className="flex items-center gap-3">
-              <label className="text-sm text-slate-600 w-44">Payout Percentage (%)</label>
-              <input
-                type="number"
-                min="0"
-                max="100"
-                step="1"
-                value={localPayoutPct}
-                onChange={e => setLocalPayoutPct(e.target.value)}
-                className="w-32 border border-slate-300 rounded px-2 py-1 text-sm"
-              />
-            </div>
-            <button
-              onClick={handleSavePayoutParams}
-              disabled={payoutParamsSaving}
-              className="text-xs px-4 py-1.5 bg-indigo-600 text-white rounded hover:bg-indigo-700 disabled:opacity-50 transition"
-            >
-              {payoutParamsSaving ? 'Saving…' : 'Save'}
-            </button>
-          </div>
+        {perStudentTeachers.length === 0 && (
+          <p className="text-sm text-slate-400">No per-student payout teachers found.</p>
         )}
       </div>
     </div>
@@ -790,11 +645,6 @@ const PayslipsTab: React.FC<PayslipsTabProps> = ({ teachers, selectedMonth }) =>
   const [payslip, setPayslip] = useState<TeacherPayslip | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [instruments, setInstruments] = useState<Instrument[]>([]);
-
-  useEffect(() => {
-    apiGet('/api/instruments').then(d => setInstruments(d.instruments || [])).catch(() => {});
-  }, []);
 
   const handleGenerate = useCallback(async () => {
     if (!selectedTeacherId) { setError('Please select a teacher.'); return; }
@@ -834,7 +684,7 @@ const PayslipsTab: React.FC<PayslipsTabProps> = ({ teachers, selectedMonth }) =>
       </div>
 
       {view === 'rates' ? (
-        <RateConfigPanel instruments={instruments} teachers={teachers} />
+        <RateConfigPanel teachers={teachers} />
       ) : (
         <>
           {/* Controls */}
