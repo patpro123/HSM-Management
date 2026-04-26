@@ -268,8 +268,7 @@ const RateConfigPanel: React.FC<RateConfigPanelProps> = ({ teachers }) => {
           <div className="bg-white rounded-lg border border-emerald-100 p-4">
             <p className="text-xs font-semibold text-emerald-600 uppercase tracking-wide mb-2">Percentage of Student Fee</p>
             <p className="text-xs text-slate-600 mb-3">
-              R = student's monthly fee (quarterly ÷ 3 · trial × 2).
-              Teacher gets a % of what remains after deducting maintenance.
+              R = student's monthly-equivalent fee. Teacher gets a % of what remains after deducting maintenance.
             </p>
             <div className="bg-emerald-50 rounded px-3 py-2 font-mono text-xs text-emerald-800 space-y-1">
               <p>per student = max(0, (R − maintenance) × %)</p>
@@ -278,6 +277,7 @@ const RateConfigPanel: React.FC<RateConfigPanelProps> = ({ teachers }) => {
           </div>
         </div>
         <div className="mt-4 text-xs text-slate-500 space-y-1">
+          <p><span className="font-semibold">R — monthly-equivalent fee:</span> monthly package → fee as-is · quarterly → fee ÷ 3 · 4-class → monthly fee × 53% · trial → fee × 2</p>
           <p><span className="font-semibold">Billable:</span> enrolled before the 20th of the month and attended more than 1 class.</p>
           <p><span className="font-semibold">Deferred:</span> enrolled after the 20th — counted in the following month.</p>
           <p><span className="font-semibold">Excluded:</span> attended 1 or fewer classes — first class is complimentary.</p>
