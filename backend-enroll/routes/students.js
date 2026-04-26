@@ -106,9 +106,8 @@ router.post('/', authenticateJWT, authorizeRole(['admin']), async (req, res) => 
         let initialCredits = classes_remaining || 0;
         let freq = (payment_frequency || 'monthly').toLowerCase();
 
-        // Translate PBEL AND trial package types to valid DB enum values
-        if (freq === 'pbel_4') { initialCredits = initialCredits || 4; freq = 'monthly'; }
-        else if (freq === 'pbel_8') { initialCredits = initialCredits || 8; freq = 'monthly'; }
+        if (freq === 'pbel_4') { initialCredits = initialCredits || 4; }
+        else if (freq === 'pbel_8') { initialCredits = initialCredits || 8; }
         else if (freq === 'trial') { initialCredits = initialCredits || 4; freq = 'monthly'; }
         else if (!initialCredits && freq === 'monthly') initialCredits = 8;
         else if (!initialCredits && freq === 'quarterly') initialCredits = 24;
@@ -369,9 +368,8 @@ router.put('/:id', authenticateJWT, authorizeRole(['admin']), async (req, res) =
       for (const b of toAdd) {
         let initialCredits = 0;
         let freq = (b.payment_frequency || 'monthly').toLowerCase();
-        // Translate PBEL package types to valid DB enum values
-        if (freq === 'pbel_4') { initialCredits = 4; freq = 'monthly'; }
-        else if (freq === 'pbel_8') { initialCredits = 8; freq = 'monthly'; }
+        if (freq === 'pbel_4') { initialCredits = 4; }
+        else if (freq === 'pbel_8') { initialCredits = 8; }
         else if (freq === 'trial') { initialCredits = 4; freq = 'monthly'; }
         else if (freq === 'monthly') initialCredits = 8;
         else if (freq === 'quarterly') initialCredits = 24;
@@ -387,17 +385,17 @@ router.put('/:id', authenticateJWT, authorizeRole(['admin']), async (req, res) =
         );
       }
 
-      // Update existing batches (e.g. payment frequency change)
+      // Update existing batches (payment frequency, grade, fee_structure_id)
       for (const b of toUpdate) {
         const existingRecord = currentBatches.find(cb => String(cb.batch_id) === String(b.batch_id));
         if (existingRecord) {
           let updFreq = (b.payment_frequency || 'monthly').toLowerCase();
-          if (updFreq === 'pbel_4' || updFreq === 'pbel_8' || updFreq === 'trial') updFreq = 'monthly';
+          if (updFreq === 'trial') updFreq = 'monthly';
           await client.query(
             `UPDATE enrollment_batches
-              SET payment_frequency = $1, enrolled_on = $2
-              WHERE id = $3`,
-            [updFreq, b.enrolled_on || new Date(), existingRecord.id]
+              SET payment_frequency = $1, enrolled_on = $2, trinity_grade = $3, fee_structure_id = $4
+              WHERE id = $5`,
+            [updFreq, b.enrolled_on || new Date(), b.trinity_grade || 'Initial', b.fee_structure_id || null, existingRecord.id]
           );
         }
       }

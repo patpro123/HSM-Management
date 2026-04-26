@@ -84,7 +84,13 @@ const StudentDetails: React.FC<StudentDetailsProps> = ({ student, batches, instr
       );
       const monthlyFee = data.fee_structure.fee_amount;
       const displayFee = payType === 'pbel_4' ? Math.round(monthlyFee * 0.53) : monthlyFee;
-      setInstrFees(prev => ({ ...prev, [instrumentId]: { fee_amount: displayFee, fee_structure_id: data.fee_structure.id } }));
+      const feeStructureId = data.fee_structure.id;
+      setInstrFees(prev => ({ ...prev, [instrumentId]: { fee_amount: displayFee, fee_structure_id: feeStructureId } }));
+      // Propagate fee_structure_id to all selected batches for this instrument
+      setSelectedBatches(prev => {
+        const instrBatchIds = new Set(batches.filter(b => String(b.instrument_id) === instrumentId).map(b => String(b.id)));
+        return prev.map(eb => instrBatchIds.has(String(eb.batch_id)) ? { ...eb, fee_structure_id: feeStructureId } : eb);
+      });
     } catch {
       setInstrFees(prev => ({ ...prev, [instrumentId]: null }));
     }
@@ -125,6 +131,7 @@ const StudentDetails: React.FC<StudentDetailsProps> = ({ student, batches, instr
         payment_frequency: (enr.payment_frequency as PaymentType) || 'quarterly',
         enrollment_date: enr.enrolled_on ? enr.enrolled_on.split('T')[0] : '',
         trinity_grade: enr.trinity_grade || 'Initial',
+        fee_structure_id: enr.fee_structure_id || undefined,
       }));
       setSelectedBatches(initBatches);
       // Pre-select instruments from existing batches
