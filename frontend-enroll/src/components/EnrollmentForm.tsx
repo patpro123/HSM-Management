@@ -91,10 +91,7 @@ const EnrollmentForm: React.FC<EnrollmentFormProps> = ({ students, batches, inst
     if (isTrial) {
       resolveGrade = 'Initial';
       classesCount = 4;
-    } else if (payType === 'pbel_4') {
-      resolveGrade = 'Fixed';
-      classesCount = 4;
-    } else if (payType === 'pbel_8') {
+    } else if (payType === 'pbel_4' || payType === 'pbel_8') {
       resolveGrade = 'Fixed';
       classesCount = 8;
     } else {
@@ -107,7 +104,9 @@ const EnrollmentForm: React.FC<EnrollmentFormProps> = ({ students, batches, inst
         `/api/fee-structures/resolve?branch_id=${branchId}&instrument_id=${instrumentId}` +
         `&trinity_grade=${encodeURIComponent(resolveGrade)}&classes_count=${classesCount}&is_trial=${isTrial}`
       );
-      const resolved = { fee_amount: data.fee_structure.fee_amount, fee_structure_id: data.fee_structure.id };
+      const monthlyFee = data.fee_structure.fee_amount;
+      const displayFee = payType === 'pbel_4' ? Math.round(monthlyFee * 0.53) : monthlyFee;
+      const resolved = { fee_amount: displayFee, fee_structure_id: data.fee_structure.id };
       setInstrFees(prev => ({ ...prev, [instrKey]: resolved }));
       setEnrollmentData(prev => ({
         ...prev,
@@ -467,11 +466,15 @@ const EnrollmentForm: React.FC<EnrollmentFormProps> = ({ students, batches, inst
                     <label className="block text-sm font-semibold text-slate-700 mb-2">Package</label>
                     {(() => {
                       const isPbel = branches.find(b => b.id === selectedBranchId)?.code === 'pbel';
+                      const instrKey = String(instrument.id);
+                      const resolvedFee = instrFees[instrKey];
+                      const pbel4Fee = currentPayType === 'pbel_4' && resolvedFee ? `₹${resolvedFee.fee_amount.toLocaleString()}` : '53% of monthly';
+                      const pbel8Fee = currentPayType === 'pbel_8' && resolvedFee ? `₹${resolvedFee.fee_amount.toLocaleString()}` : '';
                       const packageOptions: Array<{ type: PaymentType; label: string; sub: string }> = isPbel
                         ? [
                           { type: 'trial', label: 'Trial Session', sub: '4 classes · 2 weeks' },
-                          { type: 'pbel_4', label: '4-Class Package', sub: '4 classes · ₹1,600' },
-                          { type: 'pbel_8', label: '8-Class Package', sub: '8 classes · ₹2,990' },
+                          { type: 'pbel_4', label: '4-Class Package', sub: `4 classes · ${pbel4Fee}` },
+                          { type: 'pbel_8', label: '8-Class Package', sub: `8 classes${pbel8Fee ? ` · ${pbel8Fee}` : ''}` },
                         ]
                         : [
                           { type: 'trial', label: 'Trial Session', sub: '4 classes · 2 weeks' },

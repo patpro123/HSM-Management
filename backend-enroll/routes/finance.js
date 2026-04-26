@@ -469,53 +469,20 @@ router.get('/payslip/:teacherId', async (req, res) => {
       studentsRes.rows.map(r => r.fee_structure_id).filter(Boolean)
     )];
     const feeStructureMap = {};
-    // monthly rate lookup for 4-class non-trial students:
-    // key = branch_id::instrument_id::trinity_grade → monthly fee_amount
-    const fourClassMonthlyMap = {};
 
     if (feeStructureIds.length > 0) {
       const fsRes = await pool.query(
-        `SELECT id, branch_id, instrument_id, trinity_grade, fee_amount, classes_count, is_trial
+        `SELECT id, fee_amount, classes_count, is_trial
          FROM fee_structures WHERE id = ANY($1)`,
         [feeStructureIds]
       );
       fsRes.rows.forEach(r => {
         feeStructureMap[r.id] = {
-          branch_id: r.branch_id,
-          instrument_id: r.instrument_id,
-          trinity_grade: r.trinity_grade,
           fee_amount: parseFloat(r.fee_amount),
           classes_count: parseInt(r.classes_count),
           is_trial: r.is_trial
         };
       });
-
-      // For 4-class non-trial students, look up the corresponding 8-class (monthly) fee
-      // R is computed as monthly_fee * 0.53 (4 classes ≈ 53% of a full month)
-      const fourClassIds = fsRes.rows
-        .filter(r => parseInt(r.classes_count) === 4 && !r.is_trial)
-        .map(r => r.id);
-
-      if (fourClassIds.length > 0) {
-        const monthlyFsRes = await pool.query(
-          `SELECT DISTINCT ON (f.branch_id, f.instrument_id, f.trinity_grade)
-                  f.branch_id, f.instrument_id, f.trinity_grade, f.fee_amount
-           FROM fee_structures f
-           WHERE f.classes_count = 8 AND f.is_trial = false
-             AND EXISTS (
-               SELECT 1 FROM fee_structures f4
-               WHERE f4.id = ANY($1)
-                 AND f4.branch_id    = f.branch_id
-                 AND f4.instrument_id = f.instrument_id
-                 AND f4.trinity_grade = f.trinity_grade
-             )
-           ORDER BY f.branch_id, f.instrument_id, f.trinity_grade, f.effective_from DESC`,
-          [fourClassIds]
-        );
-        monthlyFsRes.rows.forEach(r => {
-          fourClassMonthlyMap[`${r.branch_id}::${r.instrument_id}::${r.trinity_grade}`] = parseFloat(r.fee_amount);
-        });
-      }
     }
 
     // 6. Legacy package prices (fallback for students without fee_structure_id)
@@ -551,10 +518,9 @@ router.get('/payslip/:teacherId', async (req, res) => {
       const isExcluded = !isDeferred && classesAttended <= 1;
 
       // Compute R: monthly-equivalent fee the student pays
-      // 4-class (non-trial): R = monthly_fee * 0.53  (half-month package)
-      // trial (4-class):     R = fee_amount * 2
-      // quarterly (24):      R = fee_amount / 3
-      // monthly (8):         R = fee_amount
+      // trial:        R = fee_amount * 2
+      // quarterly:    R = fee_amount / 3
+      // monthly/pbel: R = fee_amount
       let packageMonthlyRate = 0;
       const fs = feeStructureMap[s.fee_structure_id];
       if (fs) {
@@ -562,12 +528,8 @@ router.get('/payslip/:teacherId', async (req, res) => {
           packageMonthlyRate = fs.fee_amount * 2;
         } else if (fs.classes_count >= 24) {
           packageMonthlyRate = fs.fee_amount / 3;
-        } else if (fs.classes_count === 4) {
-          const monthlyKey = `${fs.branch_id}::${fs.instrument_id}::${fs.trinity_grade}`;
-          const monthlyFee = fourClassMonthlyMap[monthlyKey] || 0;
-          packageMonthlyRate = monthlyFee * 0.53;
         } else {
-          packageMonthlyRate = fs.fee_amount; // standard monthly (8 classes)
+          packageMonthlyRate = fs.fee_amount;
         }
       } else {
         // Legacy fallback: look up from packages table
@@ -575,14 +537,7 @@ router.get('/payslip/:teacherId', async (req, res) => {
         const pkg = legacyPackageMap[`${s.instrument_id}::${freq}`]
                  || legacyPackageMap[`${s.instrument_id}::monthly`];
         if (pkg) {
-          if (pkg.classes_count >= 24) {
-            packageMonthlyRate = pkg.price / 3;
-          } else if (pkg.classes_count === 4) {
-            const monthlyPkg = legacyPackageMap[`${s.instrument_id}::monthly`];
-            packageMonthlyRate = monthlyPkg ? monthlyPkg.price * 0.53 : pkg.price;
-          } else {
-            packageMonthlyRate = pkg.price;
-          }
+          packageMonthlyRate = pkg.classes_count >= 24 ? pkg.price / 3 : pkg.price;
         }
       }
       const effectiveRate = perStudentRateType === 'fixed'
