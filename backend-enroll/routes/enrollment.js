@@ -222,7 +222,10 @@ router.get('/enrollments', rbac.filterTeacherData, async (req, res) => {
               'start_time', b.start_time,
               'end_time', b.end_time,
               'payment_frequency', eb.payment_frequency,
-              'enrolled_on', COALESCE(eb.enrolled_on, e.enrolled_on)
+              'enrolled_on', COALESCE(eb.enrolled_on, e.enrolled_on),
+              'trinity_grade', eb.trinity_grade,
+              'fee_structure_id', eb.fee_structure_id,
+              'branch_code', br.code
             )
             ORDER BY i.name, b.recurrence
           ) FILTER (WHERE b.id IS NOT NULL),
@@ -235,6 +238,8 @@ router.get('/enrollments', rbac.filterTeacherData, async (req, res) => {
       LEFT JOIN batches b ON eb.batch_id = b.id
       LEFT JOIN instruments i ON b.instrument_id = i.id
       LEFT JOIN teachers t ON b.teacher_id = t.id
+      LEFT JOIN fee_structures fs ON eb.fee_structure_id = fs.id
+      LEFT JOIN branches br ON fs.branch_id = br.id
       LEFT JOIN student_credits sc ON sc.student_id = s.id
       LEFT JOIN student_attended sa ON sa.student_id = s.id
       WHERE (s.student_type = 'permanent' OR s.student_type IS NULL) ${teacherFilter}

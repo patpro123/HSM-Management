@@ -52,11 +52,29 @@ const StudentDetails: React.FC<StudentDetailsProps> = ({ student, batches, instr
       .then(data => {
         const branchList = data.branches || [];
         setBranches(branchList);
-        const main = branchList.find((b: any) => b.code === 'main');
-        if (main) setSelectedBranchId(main.id);
+        // selectedBranchId is set by the student+branches effect below
       })
       .catch(() => { });
   }, []);
+
+  // Detect branch from student's existing enrollments when editing
+  useEffect(() => {
+    if (branches.length === 0) return;
+    if (student) {
+      const studentBatches = (student as any).batches || (student as any).enrollments || [];
+      const isPbel = studentBatches.some((b: any) =>
+        b.branch_code === 'pbel' ||
+        b.payment_frequency === 'pbel_4' ||
+        b.payment_frequency === 'pbel_8'
+      );
+      if (isPbel) {
+        const pbelBranch = branches.find((b: any) => b.code === 'pbel');
+        if (pbelBranch) { setSelectedBranchId(pbelBranch.id); return; }
+      }
+    }
+    const main = branches.find((b: any) => b.code === 'main');
+    if (main) setSelectedBranchId(main.id);
+  }, [student, branches]);
 
   const resolveFee = async (instrumentId: string, grade: string, payType: PaymentType) => {
     const branchId = selectedBranchId;
