@@ -540,7 +540,8 @@ router.get('/payslip/:teacherId', async (req, res) => {
           packageMonthlyRate = pkg.classes_count >= 24 ? pkg.price / 3 : pkg.price;
         }
       }
-      const effectiveRate = perStudentRateType === 'fixed'
+      const isFourClassOrTrial = fs?.is_trial || s.payment_frequency === 'pbel_4';
+      const effectiveRate = (!isFourClassOrTrial && perStudentRateType === 'fixed')
         ? perStudentFixedRate
         : Math.max(0, (packageMonthlyRate - maintenanceAmount) * payoutPercentage);
 
