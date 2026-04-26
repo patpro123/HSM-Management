@@ -408,7 +408,8 @@ router.get('/payslip/:teacherId', async (req, res) => {
       taByBatch[r.batch_id].conducted += parseInt(r.implicit_conducted);
     });
 
-    // 4. Students per instrument (unique per student+instrument) with attendance summed across batches
+    // 4. Students per instrument — attendance counted across ANY batch of the same instrument
+    //    (handles cases where a student was moved to a different batch mid-month)
     const studentsRes = await pool.query(
       `SELECT
          s.id AS student_id, s.name AS student_name,
@@ -418,15 +419,20 @@ router.get('/payslip/:teacherId', async (req, res) => {
          MIN(e.created_at) AS enrollment_created_at,
          MIN(eb.payment_frequency::text) AS payment_frequency,
          MIN(eb.fee_structure_id::text) AS fee_structure_id,
-         COUNT(CASE WHEN ar.status = 'present'
-                     AND ar.session_date >= $2 AND ar.session_date <= $3
-                    THEN 1 END) AS classes_attended_month
+         COALESCE((
+           SELECT COUNT(DISTINCT ar.id)
+           FROM attendance_records ar
+           JOIN batches ab ON ab.id = ar.batch_id
+           WHERE ar.student_id = s.id
+             AND ab.instrument_id = i.id
+             AND ar.status = 'present'
+             AND ar.session_date >= $2 AND ar.session_date <= $3
+         ), 0) AS classes_attended_month
        FROM enrollment_batches eb
        JOIN enrollments e ON e.id = eb.enrollment_id
        JOIN students s ON s.id = e.student_id
        JOIN batches b ON b.id = eb.batch_id
        JOIN instruments i ON i.id = b.instrument_id
-       LEFT JOIN attendance_records ar ON ar.student_id = s.id AND ar.batch_id = b.id
        WHERE b.teacher_id = $1
          AND b.is_makeup = false
          AND e.status = 'active'
