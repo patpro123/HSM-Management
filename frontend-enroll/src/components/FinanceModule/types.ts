@@ -42,6 +42,7 @@ export interface PayslipStudent {
   enrollment_date: string;
   classes_attended: number;
   status: 'billable' | 'deferred' | 'excluded';
+  package_monthly_rate: number;
   rate: number;
   subtotal: number;
 }

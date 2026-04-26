@@ -128,7 +128,8 @@ const PayslipPDF: React.FC<{ data: TeacherPayslip }> = ({ data }) => {
                   <Text style={pdfStyles.cellBold}>Classes</Text>
                   {teacher.payout_type === 'per_student_monthly' && (
                     <>
-                      <Text style={pdfStyles.cellBold}>Rate</Text>
+                      <Text style={pdfStyles.cellBold}>Fee (R)</Text>
+                      <Text style={pdfStyles.cellBold}>Teacher Rate</Text>
                       <Text style={pdfStyles.cellBold}>Subtotal</Text>
                     </>
                   )}
@@ -141,6 +142,7 @@ const PayslipPDF: React.FC<{ data: TeacherPayslip }> = ({ data }) => {
                     <Text style={pdfStyles.cell}>{s.classes_attended}</Text>
                     {teacher.payout_type === 'per_student_monthly' && (
                       <>
+                        <Text style={pdfStyles.cell}>{s.status === 'billable' ? fmt(s.package_monthly_rate) : '—'}</Text>
                         <Text style={pdfStyles.cell}>{s.status === 'billable' ? fmt(s.rate) : '—'}</Text>
                         <Text style={pdfStyles.cell}>{s.status === 'billable' ? fmt(s.subtotal) : '—'}</Text>
                       </>
@@ -154,6 +156,7 @@ const PayslipPDF: React.FC<{ data: TeacherPayslip }> = ({ data }) => {
                   <View style={[pdfStyles.row, { marginTop: 4 }]}>
                     <Text style={pdfStyles.cell} />
                     {!inst.is_vocal && <Text style={pdfStyles.cell} />}
+                    <Text style={pdfStyles.cell} />
                     <Text style={pdfStyles.cell} />
                     <Text style={pdfStyles.cell} />
                     <Text style={pdfStyles.cellBold}>{fmt(inst.instrument_subtotal)}</Text>
@@ -188,6 +191,10 @@ const PayslipPDF: React.FC<{ data: TeacherPayslip }> = ({ data }) => {
           <Text style={pdfStyles.tcItem}>
             † Only students who have attended more than 1 class in the month are considered for payment.
             {'\n'}The first class is complimentary and does not count towards the teacher's payout.
+          </Text>
+          <Text style={pdfStyles.tcItem}>
+            ‡ Teacher rate per student = (R − ₹1,200) × 0.7, where R is the student's monthly fee
+            (quarterly fees divided by 3; trial fees multiplied by 2).
           </Text>
         </View>
 
@@ -559,7 +566,11 @@ const PayslipViewer: React.FC<PayslipViewerProps> = ({ payslip }) => {
                         <th className="px-3 py-2 text-xs font-semibold text-slate-500">Classes</th>
                         {teacher.payout_type === 'per_student_monthly' && (
                           <>
-                            <th className="px-3 py-2 text-xs font-semibold text-slate-500">Rate</th>
+                            <th className="px-3 py-2 text-xs font-semibold text-slate-500">Fee (R)</th>
+                            <th className="px-3 py-2 text-xs font-semibold text-slate-500">
+                              Teacher Rate
+                              <span className="block text-slate-400 font-normal">(R−1200)×0.7</span>
+                            </th>
                             <th className="px-3 py-2 text-xs font-semibold text-slate-500">Subtotal</th>
                           </>
                         )}
@@ -576,6 +587,9 @@ const PayslipViewer: React.FC<PayslipViewerProps> = ({ payslip }) => {
                           <td className="px-3 py-2 text-slate-600">{s.classes_attended}</td>
                           {teacher.payout_type === 'per_student_monthly' && (
                             <>
+                              <td className="px-3 py-2 text-slate-600">
+                                {s.status === 'billable' ? fmt(s.package_monthly_rate) : '—'}
+                              </td>
                               <td className="px-3 py-2 text-slate-600">
                                 {s.status === 'billable' ? fmt(s.rate) : '—'}
                               </td>
@@ -601,7 +615,7 @@ const PayslipViewer: React.FC<PayslipViewerProps> = ({ payslip }) => {
                     {teacher.payout_type === 'per_student_monthly' && inst.billable_count > 0 && (
                       <tfoot>
                         <tr className="bg-slate-50">
-                          <td colSpan={inst.is_vocal ? 3 : 4} className="px-3 py-2 text-xs text-slate-500 text-right font-medium">
+                          <td colSpan={inst.is_vocal ? 4 : 5} className="px-3 py-2 text-xs text-slate-500 text-right font-medium">
                             Subtotal
                           </td>
                           <td className="px-3 py-2 font-bold text-indigo-700">{fmt(inst.instrument_subtotal)}</td>
@@ -645,6 +659,7 @@ const PayslipViewer: React.FC<PayslipViewerProps> = ({ payslip }) => {
           <ol className="space-y-2 text-xs text-slate-600 list-none">
             <li><span className="font-semibold">*</span> Students enrolled after the 20th of the month will be credited in the following month's salary.</li>
             <li><span className="font-semibold">†</span> Only students who have attended more than 1 class in the month are considered for payment. The first class is complimentary and does not count towards the teacher's payout.</li>
+            <li><span className="font-semibold">‡</span> Teacher rate per student = (R − ₹1,200) × 0.7, where R is the student's monthly fee (quarterly fees ÷ 3; trial fees × 2).</li>
           </ol>
         </div>
       </div>

@@ -367,6 +367,8 @@ router.get('/payslip/:teacherId', async (req, res) => {
          MIN(eb.trinity_grade) AS trinity_grade,
          MIN(COALESCE(e.enrolled_on, e.created_at::date)) AS enrollment_date,
          MIN(e.created_at) AS enrollment_created_at,
+         MIN(eb.payment_frequency::text) AS payment_frequency,
+         MIN(eb.fee_structure_id::text) AS fee_structure_id,
          COUNT(CASE WHEN ar.status = 'present'
                      AND ar.session_date >= $2 AND ar.session_date <= $3
                     THEN 1 END) AS classes_attended_month
@@ -384,30 +386,40 @@ router.get('/payslip/:teacherId', async (req, res) => {
       [teacherId, periodStart.toISOString().slice(0,10), periodEnd.toISOString().slice(0,10)]
     );
 
-    // 5. School-wide grade rates for instruments this teacher teaches
     const instrumentIds = [...new Set(batches.map(b => b.instrument_id))];
-    const gradeRatesRes = await pool.query(
-      `SELECT instrument_id, trinity_grade, rate_per_student
-       FROM instrument_grade_rates
-       WHERE instrument_id = ANY($1)`,
+
+    // 5. Fee structures for students who have a locked rate (post-2026 enrollments)
+    const feeStructureIds = [...new Set(
+      studentsRes.rows.map(r => r.fee_structure_id).filter(Boolean)
+    )];
+    const feeStructureMap = {};
+    if (feeStructureIds.length > 0) {
+      const fsRes = await pool.query(
+        `SELECT id, fee_amount, classes_count, is_trial
+         FROM fee_structures WHERE id = ANY($1)`,
+        [feeStructureIds]
+      );
+      fsRes.rows.forEach(r => {
+        feeStructureMap[r.id] = {
+          fee_amount: parseFloat(r.fee_amount),
+          classes_count: parseInt(r.classes_count),
+          is_trial: r.is_trial
+        };
+      });
+    }
+
+    // 6. Legacy package prices (fallback for students without fee_structure_id)
+    const legacyPkgRes = await pool.query(
+      `SELECT instrument_id, LOWER(name) AS freq_key, price, classes_count
+       FROM packages WHERE instrument_id = ANY($1)`,
       [instrumentIds]
     );
-    const gradeRateMap = {};
-    gradeRatesRes.rows.forEach(r => {
-      const key = `${r.instrument_id}::${r.trinity_grade}`;
-      gradeRateMap[key] = parseFloat(r.rate_per_student);
-    });
-
-    // 6. Teacher-level overrides
-    const overridesRes = await pool.query(
-      `SELECT instrument_id, trinity_grade, rate_per_student
-       FROM teacher_grade_rate_overrides
-       WHERE teacher_id = $1 AND instrument_id = ANY($2)`,
-      [teacherId, instrumentIds]
-    );
-    overridesRes.rows.forEach(r => {
-      const key = `${r.instrument_id}::${r.trinity_grade}`;
-      gradeRateMap[key] = parseFloat(r.rate_per_student); // override wins
+    const legacyPackageMap = {};
+    legacyPkgRes.rows.forEach(p => {
+      legacyPackageMap[`${p.instrument_id}::${p.freq_key}`] = {
+        price: parseFloat(p.price),
+        classes_count: parseInt(p.classes_count)
+      };
     });
 
     // 7. Classify each student: billable / deferred / excluded
@@ -428,12 +440,28 @@ router.get('/payslip/:teacherId', async (req, res) => {
       // Excluded: first class is free — only >1 class counts
       const isExcluded = !isDeferred && classesAttended <= 1;
 
-      // Effective rate (for per_student_monthly teachers)
-      // Vocal instruments store their rate under 'Fixed' grade key (trinity_grade is NULL for vocals)
-      const isVocal = VOCAL_INSTRUMENTS.includes(s.instrument_name.toLowerCase());
-      const gradeKey = isVocal ? 'Fixed' : s.trinity_grade;
-      const rateKey = `${s.instrument_id}::${gradeKey}`;
-      const effectiveRate = gradeRateMap[rateKey] || 0;
+      // Compute R: monthly-equivalent fee the student pays
+      // Formula: teacher earns max(0, (R - 1200) * 0.7) per billable student per month
+      let packageMonthlyRate = 0;
+      const fs = feeStructureMap[s.fee_structure_id];
+      if (fs) {
+        if (fs.is_trial) {
+          packageMonthlyRate = fs.fee_amount * 2;
+        } else if (fs.classes_count >= 24) {
+          packageMonthlyRate = fs.fee_amount / 3; // quarterly → monthly
+        } else {
+          packageMonthlyRate = fs.fee_amount; // monthly (8 classes) or smaller
+        }
+      } else {
+        // Legacy fallback: look up from packages table
+        const freq = (s.payment_frequency || 'monthly').toLowerCase();
+        const pkg = legacyPackageMap[`${s.instrument_id}::${freq}`]
+                 || legacyPackageMap[`${s.instrument_id}::monthly`];
+        if (pkg) {
+          packageMonthlyRate = pkg.classes_count >= 24 ? pkg.price / 3 : pkg.price;
+        }
+      }
+      const effectiveRate = Math.max(0, (packageMonthlyRate - 1200) * 0.7);
 
       let status = 'billable';
       if (isDeferred) status = 'deferred';
@@ -448,8 +476,9 @@ router.get('/payslip/:teacherId', async (req, res) => {
         enrollment_date: enrollDate.toISOString().slice(0, 10),
         classes_attended: classesAttended,
         status,
-        rate: effectiveRate,
-        subtotal: status === 'billable' ? effectiveRate : 0
+        package_monthly_rate: Math.round(packageMonthlyRate),
+        rate: Math.round(effectiveRate),
+        subtotal: status === 'billable' ? Math.round(effectiveRate) : 0
       };
     });
 
