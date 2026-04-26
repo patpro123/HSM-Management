@@ -280,6 +280,51 @@ router.delete('/grade-rates/overrides/:teacherId/:overrideId', async (req, res) 
   }
 });
 
+// ── PAYOUT PARAMS ─────────────────────────────────────────────────────────────
+
+// GET /api/finance/payout-params/:teacherId
+router.get('/payout-params/:teacherId', async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT COALESCE(maintenance_amount, 1200) AS maintenance_amount,
+              COALESCE(payout_percentage,  0.70) AS payout_percentage
+       FROM teachers WHERE id = $1`,
+      [req.params.teacherId]
+    );
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Teacher not found' });
+    res.json({
+      maintenance_amount: parseFloat(result.rows[0].maintenance_amount),
+      payout_percentage:  parseFloat(result.rows[0].payout_percentage)
+    });
+  } catch (err) {
+    console.error('Get payout params error:', err);
+    res.status(500).json({ error: 'Failed to fetch payout params' });
+  }
+});
+
+// PUT /api/finance/payout-params/:teacherId
+router.put('/payout-params/:teacherId', async (req, res) => {
+  const { maintenance_amount, payout_percentage } = req.body;
+  if (maintenance_amount == null || payout_percentage == null) {
+    return res.status(400).json({ error: 'maintenance_amount and payout_percentage required' });
+  }
+  const ma = parseFloat(maintenance_amount);
+  const pp = parseFloat(payout_percentage);
+  if (isNaN(ma) || ma < 0 || isNaN(pp) || pp < 0 || pp > 1) {
+    return res.status(400).json({ error: 'Invalid values: maintenance_amount >= 0, payout_percentage 0–1' });
+  }
+  try {
+    await pool.query(
+      `UPDATE teachers SET maintenance_amount = $1, payout_percentage = $2 WHERE id = $3`,
+      [ma, pp, req.params.teacherId]
+    );
+    res.json({ maintenance_amount: ma, payout_percentage: pp });
+  } catch (err) {
+    console.error('Update payout params error:', err);
+    res.status(500).json({ error: 'Failed to update payout params' });
+  }
+});
+
 // ── PAYSLIP ENDPOINT ──────────────────────────────────────────────────────────
 
 // GET /api/finance/payslip/:teacherId?month=YYYY-MM
@@ -296,6 +341,8 @@ router.get('/payslip/:teacherId', async (req, res) => {
     // 1. Teacher profile
     const teacherRes = await pool.query(
       `SELECT id, name, phone, payout_type, rate,
+              COALESCE(maintenance_amount, 1200) AS maintenance_amount,
+              COALESCE(payout_percentage,  0.70) AS payout_percentage,
               COALESCE(metadata->>'email', '') AS email
        FROM teachers WHERE id = $1`,
       [teacherId]
@@ -304,6 +351,8 @@ router.get('/payslip/:teacherId', async (req, res) => {
       return res.status(404).json({ error: 'Teacher not found' });
     }
     const teacher = teacherRes.rows[0];
+    const maintenanceAmount = parseFloat(teacher.maintenance_amount);
+    const payoutPercentage  = parseFloat(teacher.payout_percentage);
 
     // 2. Batches for this teacher (non-makeup)
     const batchesRes = await pool.query(
@@ -461,7 +510,7 @@ router.get('/payslip/:teacherId', async (req, res) => {
           packageMonthlyRate = pkg.classes_count >= 24 ? pkg.price / 3 : pkg.price;
         }
       }
-      const effectiveRate = Math.max(0, (packageMonthlyRate - 1200) * 0.7);
+      const effectiveRate = Math.max(0, (packageMonthlyRate - maintenanceAmount) * payoutPercentage);
 
       let status = 'billable';
       if (isDeferred) status = 'deferred';
@@ -518,7 +567,9 @@ router.get('/payslip/:teacherId', async (req, res) => {
         phone: teacher.phone || '',
         email: teacher.email || '',
         payout_type: teacher.payout_type,
-        rate: parseFloat(teacher.rate)
+        rate: parseFloat(teacher.rate),
+        maintenance_amount: maintenanceAmount,
+        payout_percentage: payoutPercentage
       },
       period: {
         month: monthStr,

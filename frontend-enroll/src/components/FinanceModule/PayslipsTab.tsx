@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { pdf, Document, Page, Text, View, StyleSheet } from '@react-pdf/renderer';
-import { apiGet, apiPost, apiDelete } from '../../api';
+import { apiGet, apiPost, apiPut, apiDelete } from '../../api';
 import {
   Teacher, TeacherPayslip,
   InstrumentGradeRate, TeacherGradeRateOverride,
@@ -128,7 +128,6 @@ const PayslipPDF: React.FC<{ data: TeacherPayslip }> = ({ data }) => {
                   <Text style={pdfStyles.cellBold}>Classes</Text>
                   {teacher.payout_type === 'per_student_monthly' && (
                     <>
-                      <Text style={pdfStyles.cellBold}>Fee (R)</Text>
                       <Text style={pdfStyles.cellBold}>Teacher Rate</Text>
                       <Text style={pdfStyles.cellBold}>Subtotal</Text>
                     </>
@@ -142,7 +141,6 @@ const PayslipPDF: React.FC<{ data: TeacherPayslip }> = ({ data }) => {
                     <Text style={pdfStyles.cell}>{s.classes_attended}</Text>
                     {teacher.payout_type === 'per_student_monthly' && (
                       <>
-                        <Text style={pdfStyles.cell}>{s.status === 'billable' ? fmt(s.package_monthly_rate) : '—'}</Text>
                         <Text style={pdfStyles.cell}>{s.status === 'billable' ? fmt(s.rate) : '—'}</Text>
                         <Text style={pdfStyles.cell}>{s.status === 'billable' ? fmt(s.subtotal) : '—'}</Text>
                       </>
@@ -156,7 +154,6 @@ const PayslipPDF: React.FC<{ data: TeacherPayslip }> = ({ data }) => {
                   <View style={[pdfStyles.row, { marginTop: 4 }]}>
                     <Text style={pdfStyles.cell} />
                     {!inst.is_vocal && <Text style={pdfStyles.cell} />}
-                    <Text style={pdfStyles.cell} />
                     <Text style={pdfStyles.cell} />
                     <Text style={pdfStyles.cell} />
                     <Text style={pdfStyles.cellBold}>{fmt(inst.instrument_subtotal)}</Text>
@@ -193,8 +190,7 @@ const PayslipPDF: React.FC<{ data: TeacherPayslip }> = ({ data }) => {
             {'\n'}The first class is complimentary and does not count towards the teacher's payout.
           </Text>
           <Text style={pdfStyles.tcItem}>
-            ‡ Teacher rate per student = (R − ₹1,200) × 0.7, where R is the student's monthly fee
-            (quarterly fees divided by 3; trial fees multiplied by 2).
+            ‡ Teacher rate per student is computed from the student's package fee using the school's payout formula.
           </Text>
         </View>
 
@@ -206,6 +202,11 @@ const PayslipPDF: React.FC<{ data: TeacherPayslip }> = ({ data }) => {
 // ── Rate Config Panel ─────────────────────────────────────────────────────────
 
 interface Instrument { id: string; name: string; }
+
+interface PayoutParams {
+  maintenance_amount: number;
+  payout_percentage: number;
+}
 
 interface RateConfigPanelProps {
   instruments: Instrument[];
@@ -221,9 +222,45 @@ const RateConfigPanel: React.FC<RateConfigPanelProps> = ({ instruments, teachers
   const [localRates, setLocalRates] = useState<Record<string, string>>({});
   const [localOverrideRates, setLocalOverrideRates] = useState<Record<string, string>>({});
 
+  const [payoutParamsTeacherId, setPayoutParamsTeacherId] = useState('');
+  const [payoutParams, setPayoutParams] = useState<PayoutParams | null>(null);
+  const [localMaintenance, setLocalMaintenance] = useState('');
+  const [localPayoutPct, setLocalPayoutPct] = useState('');
+  const [payoutParamsSaving, setPayoutParamsSaving] = useState(false);
+
   useEffect(() => {
     loadRates();
   }, []);
+
+  useEffect(() => {
+    if (payoutParamsTeacherId) {
+      apiGet(`/api/finance/payout-params/${payoutParamsTeacherId}`)
+        .then((d: PayoutParams) => {
+          setPayoutParams(d);
+          setLocalMaintenance(String(d.maintenance_amount));
+          setLocalPayoutPct(String(Math.round(d.payout_percentage * 100)));
+        })
+        .catch(() => {});
+    } else {
+      setPayoutParams(null);
+    }
+  }, [payoutParamsTeacherId]);
+
+  const handleSavePayoutParams = async () => {
+    const ma = parseFloat(localMaintenance);
+    const pp = parseFloat(localPayoutPct) / 100;
+    if (isNaN(ma) || isNaN(pp) || pp < 0 || pp > 1) return;
+    setPayoutParamsSaving(true);
+    try {
+      await apiPut(`/api/finance/payout-params/${payoutParamsTeacherId}`, {
+        maintenance_amount: ma,
+        payout_percentage: pp
+      });
+      setPayoutParams({ maintenance_amount: ma, payout_percentage: pp });
+    } finally {
+      setPayoutParamsSaving(false);
+    }
+  };
 
   useEffect(() => {
     if (overrideTeacherId) {
@@ -441,6 +478,62 @@ const RateConfigPanel: React.FC<RateConfigPanelProps> = ({ instruments, teachers
           </div>
         )}
       </div>
+
+      {/* Payout formula parameters */}
+      <div className="border-t border-slate-200 pt-8">
+        <h3 className="text-base font-semibold text-slate-800 mb-1">Payout Formula Parameters</h3>
+        <p className="text-xs text-slate-500 mb-4">
+          Configure the maintenance amount and payout percentage used to compute each teacher's per-student earnings.
+          Formula: <span className="font-mono">(student_monthly_fee − maintenance) × payout%</span>
+        </p>
+        <div className="flex items-center gap-3 mb-6">
+          <label className="text-sm font-medium text-slate-600">Select Teacher</label>
+          <select
+            value={payoutParamsTeacherId}
+            onChange={e => setPayoutParamsTeacherId(e.target.value)}
+            className="border border-slate-300 rounded px-3 py-1.5 text-sm bg-white"
+          >
+            <option value="">— choose teacher —</option>
+            {teachers.filter(t => t.payout_type === 'per_student_monthly' && t.is_active).map(t => (
+              <option key={t.id} value={t.id}>{t.name}</option>
+            ))}
+          </select>
+        </div>
+
+        {payoutParamsTeacherId && payoutParams && (
+          <div className="bg-white rounded-lg border border-slate-200 p-5 max-w-sm space-y-4">
+            <div className="flex items-center gap-3">
+              <label className="text-sm text-slate-600 w-44">Maintenance Amount (₹)</label>
+              <input
+                type="number"
+                min="0"
+                value={localMaintenance}
+                onChange={e => setLocalMaintenance(e.target.value)}
+                className="w-32 border border-slate-300 rounded px-2 py-1 text-sm"
+              />
+            </div>
+            <div className="flex items-center gap-3">
+              <label className="text-sm text-slate-600 w-44">Payout Percentage (%)</label>
+              <input
+                type="number"
+                min="0"
+                max="100"
+                step="1"
+                value={localPayoutPct}
+                onChange={e => setLocalPayoutPct(e.target.value)}
+                className="w-32 border border-slate-300 rounded px-2 py-1 text-sm"
+              />
+            </div>
+            <button
+              onClick={handleSavePayoutParams}
+              disabled={payoutParamsSaving}
+              className="text-xs px-4 py-1.5 bg-indigo-600 text-white rounded hover:bg-indigo-700 disabled:opacity-50 transition"
+            >
+              {payoutParamsSaving ? 'Saving…' : 'Save'}
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   );
 };
@@ -566,11 +659,7 @@ const PayslipViewer: React.FC<PayslipViewerProps> = ({ payslip }) => {
                         <th className="px-3 py-2 text-xs font-semibold text-slate-500">Classes</th>
                         {teacher.payout_type === 'per_student_monthly' && (
                           <>
-                            <th className="px-3 py-2 text-xs font-semibold text-slate-500">Fee (R)</th>
-                            <th className="px-3 py-2 text-xs font-semibold text-slate-500">
-                              Teacher Rate
-                              <span className="block text-slate-400 font-normal">(R−1200)×0.7</span>
-                            </th>
+                            <th className="px-3 py-2 text-xs font-semibold text-slate-500">Teacher Rate</th>
                             <th className="px-3 py-2 text-xs font-semibold text-slate-500">Subtotal</th>
                           </>
                         )}
@@ -587,9 +676,6 @@ const PayslipViewer: React.FC<PayslipViewerProps> = ({ payslip }) => {
                           <td className="px-3 py-2 text-slate-600">{s.classes_attended}</td>
                           {teacher.payout_type === 'per_student_monthly' && (
                             <>
-                              <td className="px-3 py-2 text-slate-600">
-                                {s.status === 'billable' ? fmt(s.package_monthly_rate) : '—'}
-                              </td>
                               <td className="px-3 py-2 text-slate-600">
                                 {s.status === 'billable' ? fmt(s.rate) : '—'}
                               </td>
@@ -615,7 +701,7 @@ const PayslipViewer: React.FC<PayslipViewerProps> = ({ payslip }) => {
                     {teacher.payout_type === 'per_student_monthly' && inst.billable_count > 0 && (
                       <tfoot>
                         <tr className="bg-slate-50">
-                          <td colSpan={inst.is_vocal ? 4 : 5} className="px-3 py-2 text-xs text-slate-500 text-right font-medium">
+                          <td colSpan={inst.is_vocal ? 3 : 4} className="px-3 py-2 text-xs text-slate-500 text-right font-medium">
                             Subtotal
                           </td>
                           <td className="px-3 py-2 font-bold text-indigo-700">{fmt(inst.instrument_subtotal)}</td>
@@ -659,7 +745,7 @@ const PayslipViewer: React.FC<PayslipViewerProps> = ({ payslip }) => {
           <ol className="space-y-2 text-xs text-slate-600 list-none">
             <li><span className="font-semibold">*</span> Students enrolled after the 20th of the month will be credited in the following month's salary.</li>
             <li><span className="font-semibold">†</span> Only students who have attended more than 1 class in the month are considered for payment. The first class is complimentary and does not count towards the teacher's payout.</li>
-            <li><span className="font-semibold">‡</span> Teacher rate per student = (R − ₹1,200) × 0.7, where R is the student's monthly fee (quarterly fees ÷ 3; trial fees × 2).</li>
+            <li><span className="font-semibold">‡</span> Teacher rate per student is computed from the student's package fee using the school's payout formula.</li>
           </ol>
         </div>
       </div>

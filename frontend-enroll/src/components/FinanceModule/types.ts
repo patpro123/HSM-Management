@@ -71,6 +71,8 @@ export interface TeacherPayslip {
     email: string;
     payout_type: 'fixed' | 'per_student_monthly';
     rate: number;
+    maintenance_amount: number;
+    payout_percentage: number;
   };
   period: { month: string; start: string; end: string };
   instruments: PayslipInstrument[];
