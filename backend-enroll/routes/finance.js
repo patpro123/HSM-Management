@@ -541,9 +541,12 @@ router.get('/payslip/:teacherId', async (req, res) => {
         }
       }
       const isFourClassOrTrial = fs?.is_trial || s.payment_frequency === 'pbel_4';
-      const effectiveRate = (!isFourClassOrTrial && perStudentRateType === 'fixed')
-        ? perStudentFixedRate
-        : Math.max(0, (packageMonthlyRate - maintenanceAmount) * payoutPercentage);
+      let effectiveRate;
+      if (perStudentRateType === 'fixed') {
+        effectiveRate = isFourClassOrTrial ? perStudentFixedRate / 2 : perStudentFixedRate;
+      } else {
+        effectiveRate = Math.max(0, (packageMonthlyRate - maintenanceAmount) * payoutPercentage);
+      }
 
       let status = 'billable';
       if (isDeferred) status = 'deferred';
