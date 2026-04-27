@@ -89,3 +89,13 @@
 /* Hide scrollbar on chip row */
 .chat-chips-row::-webkit-scrollbar { display: none; }
 .chat-chips-row { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* On mobile, lift FAB and panel above the bottom tab bar (~56px + safe area) */
+@media (max-width: 767px) {
+  .chat-fab {
+    bottom: calc(72px + env(safe-area-inset-bottom)) !important;
+  }
+  .chat-panel {
+    bottom: calc(136px + env(safe-area-inset-bottom)) !important;
+  }
+}
