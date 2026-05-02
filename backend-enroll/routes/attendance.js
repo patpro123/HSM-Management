@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../db');
 const rbac = require('../auth/rbacMiddleware');
+const wa = require('../services/whatsappService');
 
 // GET /api/attendance - fetch attendance records
 router.get('/', rbac.filterTeacherData, async (req, res) => {
@@ -113,6 +114,31 @@ router.post('/', rbac.filterTeacherData, async (req, res) => {
 
     await client.query('COMMIT');
     res.json({ message: 'Attendance saved successfully' });
+
+    // Fire-and-forget WhatsApp notifications — must not block or throw
+    if (wa.isEnabled()) {
+      const presentRecords = records.filter(r => r.status === 'present');
+      for (const record of presentRecords) {
+        pool.query(
+          `SELECT s.id, s.name, i.name AS instrument, eb.classes_remaining
+           FROM students s
+           JOIN enrollment_batches eb ON eb.enrollment_id = (
+             SELECT id FROM enrollments WHERE student_id = s.id LIMIT 1
+           ) AND eb.batch_id = $2
+           JOIN batches b ON b.id = eb.batch_id
+           JOIN instruments i ON i.id = b.instrument_id
+           WHERE s.id = $1`,
+          [record.student_id, record.batch_id]
+        ).then(({ rows }) => {
+          if (!rows[0]) return;
+          const { id, name, instrument, classes_remaining } = rows[0];
+          wa.notifyAttendancePresent(id, name, instrument).catch(() => {});
+          if (classes_remaining <= 2) {
+            wa.notifyClassesLow(id, name, classes_remaining, instrument).catch(() => {});
+          }
+        }).catch(() => {});
+      }
+    }
   } catch (err) {
     await client.query('ROLLBACK');
     console.error('Attendance save error:', err);

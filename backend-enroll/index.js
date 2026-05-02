@@ -9,6 +9,8 @@ const rbac = require('./auth/rbacMiddleware')
 
 const app = express()
 app.use(cors())
+// Raw body parser must be registered before express.json for webhook HMAC verification
+app.use('/api/whatsapp/webhook', express.raw({ type: 'application/json' }))
 app.use(express.json({ limit: '50mb' }))
 app.use(morgan('dev'))
 
@@ -233,6 +235,7 @@ app.use('/api/public/chat', require('./routes/publicChat'));
 app.use('/api/prospects', require('./routes/prospects'));
 app.use('/api/migration', require('./routes/migration'));
 app.use('/api', require('./routes/documents'));
+app.use('/api/whatsapp', require('./routes/whatsapp'));
 
 // GET /api/packages — list all packages, optionally filtered by instrument_id and location
 app.get('/api/packages', async (req, res) => {
