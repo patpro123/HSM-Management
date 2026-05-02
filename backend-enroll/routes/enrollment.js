@@ -232,7 +232,13 @@ router.get('/enrollments', rbac.filterTeacherData, async (req, res) => {
           '[]'::json
         ) as batches
       FROM students s
-      LEFT JOIN enrollments e ON s.id = e.student_id
+      LEFT JOIN LATERAL (
+        SELECT id, status, enrolled_on
+        FROM enrollments
+        WHERE student_id = s.id
+        ORDER BY CASE WHEN status = 'active' THEN 0 ELSE 1 END, id DESC
+        LIMIT 1
+      ) e ON true
       ${teacherJoin}
       LEFT JOIN enrollment_batches eb ON e.id = eb.enrollment_id
       LEFT JOIN batches b ON eb.batch_id = b.id
