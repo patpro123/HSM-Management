@@ -644,26 +644,13 @@ router.post('/teacher-payouts', async (req, res) => {
     return res.status(400).json({ error: 'amount must be a non-negative number' });
   }
   try {
-    let result;
-    try {
-      // Full insert with optional columns (requires migration 034)
-      result = await pool.query(
-        `INSERT INTO teacher_payouts
-           (teacher_id, amount, method, period_start, period_end, linked_classes_count, override_reason, payment_proof)
-         VALUES ($1, $2, $3, $4, $5, 0, $6, $7) RETURNING *`,
-        [teacher_id, parsedAmount, method || 'bank_transfer', period_start, period_end,
-         override_reason || null, payment_proof || null]
-      );
-    } catch (colErr) {
-      if (colErr.code !== '42703') throw colErr; // re-throw if not "column does not exist"
-      // Migration 034 not yet applied — fall back to base columns
-      result = await pool.query(
-        `INSERT INTO teacher_payouts
-           (teacher_id, amount, method, period_start, period_end, linked_classes_count)
-         VALUES ($1, $2, $3, $4, $5, 0) RETURNING *`,
-        [teacher_id, parsedAmount, method || 'bank_transfer', period_start, period_end]
-      );
-    }
+    const result = await pool.query(
+      `INSERT INTO teacher_payouts
+         (teacher_id, amount, method, period_start, period_end, linked_classes_count, override_reason, payment_proof)
+       VALUES ($1, $2, $3, $4, $5, 0, $6, $7) RETURNING *`,
+      [teacher_id, parsedAmount, method || 'bank_transfer', period_start, period_end,
+       override_reason || null, payment_proof || null]
+    );
     res.status(201).json({ payout: result.rows[0] });
   } catch (err) {
     console.error('Record teacher payout error:', err);
@@ -673,19 +660,8 @@ router.post('/teacher-payouts', async (req, res) => {
 
 // GET /api/finance/teacher-payouts?month=YYYY-MM
 // When month is provided, filters to that month. Without month, returns last 18 months.
-// Detects whether migration 034 columns exist and selects accordingly.
 router.get('/teacher-payouts', async (req, res) => {
   try {
-    // Check if migration 034 columns exist (cached per process lifetime)
-    if (router._payoutColumnsChecked === undefined) {
-      const col = await pool.query(
-        `SELECT 1 FROM information_schema.columns
-         WHERE table_name = 'teacher_payouts' AND column_name = 'override_reason' LIMIT 1`
-      );
-      router._payoutColumnsChecked = col.rows.length > 0;
-    }
-    const hasNewCols = router._payoutColumnsChecked;
-
     let result;
     if (req.query.month) {
       const [year, month] = req.query.month.split('-').map(Number);
@@ -693,8 +669,7 @@ router.get('/teacher-payouts', async (req, res) => {
       const periodEnd   = new Date(year, month, 0).toISOString().slice(0, 10);
       result = await pool.query(
         `SELECT tp.id, tp.teacher_id, tp.amount, tp.method, tp.period_start, tp.period_end,
-                ${hasNewCols ? 'tp.override_reason, tp.payment_proof,' : ''}
-                tp.created_at, t.name AS teacher_name
+                tp.override_reason, tp.payment_proof, tp.created_at, t.name AS teacher_name
          FROM teacher_payouts tp
          JOIN teachers t ON t.id = tp.teacher_id
          WHERE tp.period_start >= $1 AND tp.period_end <= $2
@@ -706,8 +681,7 @@ router.get('/teacher-payouts', async (req, res) => {
       cutoff.setMonth(cutoff.getMonth() - 18);
       result = await pool.query(
         `SELECT tp.id, tp.teacher_id, tp.amount, tp.method, tp.period_start, tp.period_end,
-                ${hasNewCols ? 'tp.override_reason,' : ''}
-                tp.created_at, t.name AS teacher_name
+                tp.override_reason, tp.created_at, t.name AS teacher_name
          FROM teacher_payouts tp
          JOIN teachers t ON t.id = tp.teacher_id
          WHERE tp.created_at >= $1
