@@ -35,7 +35,9 @@ const OverviewTab: React.FC<OverviewTabProps> = ({ stats, chartData, selectedMon
         <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
           <p className="text-sm font-semibold text-slate-500">Total Expenses</p>
           <p className="text-2xl font-bold text-red-600 mt-1">{formatCurrency(stats.totalExpenses)}</p>
-          <p className="text-xs text-slate-400 mt-1">Teachers + Fixed Costs</p>
+          <p className="text-xs text-slate-400 mt-1">
+            {stats.actualTeacherPaid > 0 ? 'Actual paid + Fixed' : 'Projected teachers + Fixed'}
+          </p>
         </div>
       </div>
 
@@ -86,7 +88,7 @@ const OverviewTab: React.FC<OverviewTabProps> = ({ stats, chartData, selectedMon
                 <PieChart>
                   <Pie
                     data={[
-                      { name: 'Teacher Payouts', value: stats.teacherExpense },
+                      { name: stats.actualTeacherPaid > 0 ? 'Teacher Payouts (Actual)' : 'Teacher Payouts (Projected)', value: stats.actualTeacherPaid > 0 ? stats.actualTeacherPaid : stats.teacherExpense },
                       { name: 'Fixed Costs', value: stats.fixedCosts }
                     ]}
                     cx="50%"
@@ -104,12 +106,27 @@ const OverviewTab: React.FC<OverviewTabProps> = ({ stats, chartData, selectedMon
                 </PieChart>
               </ResponsiveContainer>
             </div>
-            <div className="mt-4 grid grid-cols-2 gap-4 text-center">
-              <div>
-                <p className="text-xs text-slate-500">Teacher Payouts</p>
-                <p className="font-bold text-slate-800">{formatCurrency(stats.teacherExpense)}</p>
+            <div className="mt-4 space-y-2">
+              <div className="flex justify-between items-center">
+                <div>
+                  <p className="text-xs text-slate-500">Teacher Payouts</p>
+                  {stats.actualTeacherPaid > 0 ? (
+                    <p className="text-xs text-emerald-600 font-medium">Actual paid</p>
+                  ) : (
+                    <p className="text-xs text-amber-500 font-medium">Projected (not yet paid)</p>
+                  )}
+                </div>
+                <p className="font-bold text-slate-800">
+                  {formatCurrency(stats.actualTeacherPaid > 0 ? stats.actualTeacherPaid : stats.teacherExpense)}
+                </p>
               </div>
-              <div>
+              {stats.actualTeacherPaid > 0 && stats.actualTeacherPaid !== stats.teacherExpense && (
+                <div className="flex justify-between items-center text-xs text-slate-400">
+                  <span>Projected</span>
+                  <span>{formatCurrency(stats.teacherExpense)}</span>
+                </div>
+              )}
+              <div className="flex justify-between items-center pt-1 border-t border-slate-100">
                 <p className="text-xs text-slate-500">Fixed Costs</p>
                 <p className="font-bold text-slate-800">{formatCurrency(stats.fixedCosts)}</p>
               </div>

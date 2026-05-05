@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { apiGet, apiPost } from '../api';
+import { apiGet, apiPost, apiDelete } from '../api';
 import { Student, Batch, PaymentRecord, Instrument } from '../types';
-import { Teacher, Expense, FeeStructure, MonthlyBudget } from './FinanceModule/types';
+import { Teacher, Expense, FeeStructure, MonthlyBudget, TeacherPayoutRecord } from './FinanceModule/types';
 import OverviewTab from './FinanceModule/OverviewTab';
 import ExpensesTab from './FinanceModule/ExpensesTab';
 import BudgetTab from './FinanceModule/BudgetTab';
@@ -26,6 +26,7 @@ const FinanceModule: React.FC<FinanceModuleProps> = ({ students, batches, paymen
   const [newExpense, setNewExpense] = useState({ category: '', amount: '', date: new Date().toISOString().slice(0, 10), notes: '' });
   const [budgets, setBudgets] = useState<MonthlyBudget[]>([]);
   const [saving, setSaving] = useState(false);
+  const [allTeacherPayouts, setAllTeacherPayouts] = useState<TeacherPayoutRecord[]>([]);
 
   useEffect(() => {
     fetchTeachers();
@@ -34,6 +35,15 @@ const FinanceModule: React.FC<FinanceModuleProps> = ({ students, batches, paymen
   useEffect(() => {
     fetchFinanceData();
   }, [instruments]);
+
+  const fetchAllTeacherPayouts = async () => {
+    try {
+      const data = await apiGet('/api/finance/teacher-payouts').catch(() => ({ payouts: [] }));
+      setAllTeacherPayouts(data.payouts || []);
+    } catch {
+      // non-critical
+    }
+  };
 
   const fetchFinanceData = async () => {
     try {
@@ -45,6 +55,7 @@ const FinanceModule: React.FC<FinanceModuleProps> = ({ students, batches, paymen
 
       setExpenses(expensesData.expenses || []);
       setBudgets(budgetsData.budgets || []);
+      fetchAllTeacherPayouts();
 
       const loadedFees = feesData.fees || {};
       const initialFees: FeeStructure = { ...loadedFees };
@@ -128,14 +139,24 @@ const FinanceModule: React.FC<FinanceModuleProps> = ({ students, batches, paymen
       })
       .reduce((sum, e) => sum + e.amount, 0);
 
-    const totalExpenses = teacherExpense + fixedCosts;
-    const projectedProfit = projectedRevenue - totalExpenses;
+    // Actual teacher payments recorded for this month
+    const actualTeacherPaid = allTeacherPayouts
+      .filter(tp => {
+        const ps = new Date(tp.period_start);
+        return ps.getFullYear() === year && ps.getMonth() + 1 === month;
+      })
+      .reduce((sum, tp) => sum + parseFloat(String(tp.amount)), 0);
+
+    // Total expenses uses actual paid teacher amounts when available, else projected
+    const effectiveTeacherCost = actualTeacherPaid > 0 ? actualTeacherPaid : teacherExpense;
+    const totalExpenses = effectiveTeacherCost + fixedCosts;
+    const projectedProfit = projectedRevenue - (teacherExpense + fixedCosts);
     const realizedProfit = realRevenue - totalExpenses;
 
-    return { realRevenue, projectedRevenue, teacherExpense, fixedCosts, totalExpenses, projectedProfit, realizedProfit };
+    return { realRevenue, projectedRevenue, teacherExpense, actualTeacherPaid, fixedCosts, totalExpenses, projectedProfit, realizedProfit };
   };
 
-  const stats = useMemo(() => calculateStatsForMonth(selectedMonth), [selectedMonth, payments, students, batches, teachers, expenses, fees]);
+  const stats = useMemo(() => calculateStatsForMonth(selectedMonth), [selectedMonth, payments, students, batches, teachers, expenses, fees, allTeacherPayouts]);
 
   const chartData = useMemo(() => {
     const data = [];
@@ -148,7 +169,7 @@ const FinanceModule: React.FC<FinanceModuleProps> = ({ students, batches, paymen
       data.push({ name: monthLabel, month: monthStr, ...monthStats });
     }
     return data;
-  }, [payments, students, batches, teachers, expenses, fees]);
+  }, [payments, students, batches, teachers, expenses, fees, allTeacherPayouts]);
 
   const budgetComparison = useMemo(() => {
     const budget = budgets.find(b => b.month === selectedMonth) || {
@@ -158,7 +179,8 @@ const FinanceModule: React.FC<FinanceModuleProps> = ({ students, batches, paymen
     };
 
     const actualsByCategory: Record<string, number> = {};
-    actualsByCategory['Teacher Payouts'] = stats.teacherExpense;
+    // Use actual recorded payouts when available, otherwise fall back to projected
+    actualsByCategory['Teacher Payouts'] = stats.actualTeacherPaid > 0 ? stats.actualTeacherPaid : stats.teacherExpense;
 
     const [year, month] = selectedMonth.split('-').map(Number);
     expenses
@@ -198,24 +220,33 @@ const FinanceModule: React.FC<FinanceModuleProps> = ({ students, batches, paymen
     };
   }, [selectedMonth, budgets, stats, expenses]);
 
-  const handleAddExpense = (e: React.FormEvent) => {
+  const handleAddExpense = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newExpense.category || !newExpense.amount) return;
-
-    const expense: Expense = {
-      id: Date.now().toString(),
-      category: newExpense.category,
-      amount: parseFloat(newExpense.amount),
-      date: newExpense.date,
-      notes: newExpense.notes
-    };
-
-    setExpenses([...expenses, expense]);
-    setNewExpense({ category: '', amount: '', date: new Date().toISOString().slice(0, 10), notes: '' });
+    try {
+      await apiPost('/api/finance/expenses', {
+        category: newExpense.category,
+        amount: parseFloat(newExpense.amount),
+        date: newExpense.date,
+        notes: newExpense.notes
+      });
+      setNewExpense({ category: '', amount: '', date: new Date().toISOString().slice(0, 10), notes: '' });
+      const data = await apiGet('/api/finance/expenses').catch(() => ({ expenses: [] }));
+      setExpenses(data.expenses || []);
+    } catch (err) {
+      console.error('Failed to add expense:', err);
+      alert('Failed to add expense. Please try again.');
+    }
   };
 
-  const handleDeleteExpense = (id: string) => {
-    setExpenses(expenses.filter(e => e.id !== id));
+  const handleDeleteExpense = async (id: string) => {
+    try {
+      await apiDelete(`/api/finance/expenses/${id}`);
+      setExpenses(prev => prev.filter(e => e.id !== id));
+    } catch (err) {
+      console.error('Failed to delete expense:', err);
+      alert('Failed to delete expense.');
+    }
   };
 
   const handleUpdateBudget = (field: string, value: number, category?: string) => {
@@ -307,6 +338,8 @@ const FinanceModule: React.FC<FinanceModuleProps> = ({ students, batches, paymen
           onAddExpense={handleAddExpense}
           onDeleteExpense={handleDeleteExpense}
           formatCurrency={formatCurrency}
+          teachers={teachers}
+          onPayoutRecorded={fetchAllTeacherPayouts}
         />
       )}
 

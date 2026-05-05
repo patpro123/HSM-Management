@@ -115,10 +115,24 @@ export interface MonthStats {
   realRevenue: number;
   projectedRevenue: number;
   teacherExpense: number;
+  actualTeacherPaid: number;
   fixedCosts: number;
   totalExpenses: number;
   projectedProfit: number;
   realizedProfit: number;
+}
+
+export interface TeacherPayoutRecord {
+  id: string;
+  teacher_id: string;
+  teacher_name: string;
+  amount: string;
+  method: string;
+  period_start: string;
+  period_end: string;
+  override_reason?: string;
+  payment_proof?: string;
+  created_at: string;
 }
 
 export interface BudgetComparison {
