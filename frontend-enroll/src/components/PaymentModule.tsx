@@ -282,7 +282,7 @@ const PaymentModule: React.FC<PaymentModuleProps> = ({ students, payments, onRef
       onRefresh();
     } catch (error) {
       console.error('Error saving payment:', error);
-      alert('Error saving payment');
+      alert(`Error saving payment: ${error instanceof Error ? error.message : String(error)}`);
     }
   };
 

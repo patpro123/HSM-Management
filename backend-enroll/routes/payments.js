@@ -194,7 +194,19 @@ router.post('/', async (req, res) => {
       }
     }
 
-    const resolvedPackageId = package_id || null;
+    // package_id may be a fee_structures.id (from the modern packages endpoint) rather than
+    // a packages.id. The payments FK only references packages, so we must verify before inserting.
+    let resolvedPackageId = null;
+    if (package_id) {
+      const pkgCheck = await client.query('SELECT id FROM packages WHERE id = $1', [package_id]);
+      if (pkgCheck.rows.length > 0) {
+        resolvedPackageId = package_id;
+      } else {
+        // It came from fee_structures — store the reference in metadata so it isn't lost
+        metadata.fee_structure_id = package_id;
+      }
+    }
+
     const paymentRes = await client.query(
       `INSERT INTO payments (student_id, package_id, amount, method, metadata, timestamp)
        VALUES ($1, $2, $3, $4, $5, $6)
@@ -234,8 +246,8 @@ router.post('/', async (req, res) => {
 
   } catch (err) {
     await client.query('ROLLBACK');
-    console.error('Error recording payment:', err);
-    res.status(500).json({ error: 'Failed to record payment' });
+    console.error('[Payment] Error recording payment for student', student_id, ':', err.message, err.detail || '');
+    res.status(500).json({ error: err.message || 'Failed to record payment' });
   } finally {
     client.release();
   }
