@@ -376,43 +376,46 @@ const PayTeacherPanel: React.FC<{
           <div className="px-4 py-3 bg-slate-50 border-b border-slate-200">
             <h4 className="font-semibold text-slate-700 text-sm">Teacher Payments — {selectedMonth}</h4>
           </div>
-          <table className="w-full text-sm">
-            <thead className="bg-slate-50 text-xs uppercase text-slate-500 font-semibold">
-              <tr>
-                <th className="px-4 py-3 text-left">Teacher</th>
-                <th className="px-4 py-3 text-left">Method</th>
-                <th className="px-4 py-3 text-left">Date</th>
-                <th className="px-4 py-3 text-left">Notes</th>
-                <th className="px-4 py-3 text-right">Amount</th>
-                <th className="px-4 py-3 text-center">Proof</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {payouts.map(p => (
-                <tr key={p.id} className="hover:bg-slate-50">
-                  <td className="px-4 py-3 font-medium text-slate-800">{p.teacher_name}</td>
-                  <td className="px-4 py-3 text-slate-600 capitalize">{p.method?.replace('_', ' ')}</td>
-                  <td className="px-4 py-3 text-slate-600">{new Date(p.created_at).toLocaleDateString('en-IN')}</td>
-                  <td className="px-4 py-3 text-xs text-amber-600">
-                    {p.override_reason ? `Override: ${p.override_reason}` : ''}
-                  </td>
-                  <td className="px-4 py-3 text-right font-bold text-slate-800">{formatCurrency(parseFloat(p.amount))}</td>
-                  <td className="px-4 py-3 text-center">
-                    {p.payment_proof ? (
-                      <button
-                        onClick={() => setViewingProof(p.payment_proof!)}
-                        className="text-xs text-indigo-600 underline"
-                      >
-                        View
-                      </button>
-                    ) : (
-                      <span className="text-xs text-slate-300">—</span>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <div className="divide-y divide-slate-100">
+            {payouts.map(p => (
+              <div key={p.id} className="flex gap-4 px-4 py-4 hover:bg-slate-50 items-start">
+                {/* Thumbnail — always reserve the column so layout is stable */}
+                <div className="shrink-0 w-16 h-16 rounded-lg overflow-hidden border border-slate-200 bg-slate-50 flex items-center justify-center">
+                  {p.payment_proof ? (
+                    <button
+                      onClick={() => setViewingProof(p.payment_proof!)}
+                      className="w-full h-full"
+                      title="Click to enlarge"
+                    >
+                      <img
+                        src={p.payment_proof}
+                        alt="Payment proof"
+                        className="w-full h-full object-cover"
+                      />
+                    </button>
+                  ) : (
+                    <span className="text-xs text-slate-300 text-center leading-tight px-1">No proof</span>
+                  )}
+                </div>
+
+                {/* Details */}
+                <div className="flex-1 min-w-0 space-y-1">
+                  <div className="flex justify-between items-start">
+                    <span className="font-semibold text-slate-800">{p.teacher_name}</span>
+                    <span className="font-bold text-slate-800 ml-4 shrink-0">{formatCurrency(parseFloat(p.amount))}</span>
+                  </div>
+                  <div className="flex gap-3 text-xs text-slate-500 flex-wrap">
+                    <span className="capitalize">{p.method?.replace('_', ' ')}</span>
+                    <span>·</span>
+                    <span>{new Date(p.created_at).toLocaleDateString('en-IN')}</span>
+                  </div>
+                  {p.override_reason && (
+                    <p className="text-xs text-amber-600">Override: {p.override_reason}</p>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
