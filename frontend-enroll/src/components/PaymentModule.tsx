@@ -34,6 +34,7 @@ const PaymentModule: React.FC<PaymentModuleProps> = ({ students, payments, onRef
     payment_date: new Date().toISOString().split('T')[0]
   });
   const [paymentBatchId, setPaymentBatchId] = useState<string>('');
+  const [saving, setSaving] = useState(false);
   const [studentBatches, setStudentBatches] = useState<Array<{ batch_id: string; instrument: string; instrument_id: string; recurrence: string }>>([]);
   const [selectedInstrumentId, setSelectedInstrumentId] = useState('');
   const [availablePackages, setAvailablePackages] = useState<Package[]>([]);
@@ -222,6 +223,7 @@ const PaymentModule: React.FC<PaymentModuleProps> = ({ students, payments, onRef
       return;
     }
 
+    setSaving(true);
     try {
       if (editingPayment) {
         await apiPut(`/api/payments/${editingPayment.id}`, {
@@ -283,6 +285,8 @@ const PaymentModule: React.FC<PaymentModuleProps> = ({ students, payments, onRef
     } catch (error) {
       console.error('Error saving payment:', error);
       alert(`Error saving payment: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -847,9 +851,10 @@ const PaymentModule: React.FC<PaymentModuleProps> = ({ students, payments, onRef
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 px-4 py-3 bg-indigo-600 text-white rounded-lg font-semibold hover:bg-indigo-700 transition"
+                  disabled={saving}
+                  className="flex-1 px-4 py-3 bg-indigo-600 text-white rounded-lg font-semibold hover:bg-indigo-700 disabled:opacity-60 disabled:cursor-not-allowed transition"
                 >
-                  {editingPayment ? '💾 Update Payment' : '💰 Record Payment'}
+                  {saving ? 'Saving…' : editingPayment ? '💾 Update Payment' : '💰 Record Payment'}
                 </button>
               </div>
             </form>
