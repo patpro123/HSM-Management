@@ -665,16 +665,15 @@ router.get('/teacher-payouts', async (req, res) => {
     let result;
     if (req.query.month) {
       const [year, month] = req.query.month.split('-').map(Number);
-      const periodStart = new Date(year, month - 1, 1).toISOString().slice(0, 10);
-      const periodEnd   = new Date(year, month, 0).toISOString().slice(0, 10);
       result = await pool.query(
         `SELECT tp.id, tp.teacher_id, tp.amount, tp.method, tp.period_start, tp.period_end,
                 tp.override_reason, tp.payment_proof, tp.created_at, t.name AS teacher_name
          FROM teacher_payouts tp
          JOIN teachers t ON t.id = tp.teacher_id
-         WHERE tp.period_start >= $1 AND tp.period_end <= $2
+         WHERE EXTRACT(YEAR FROM tp.period_start) = $1
+           AND EXTRACT(MONTH FROM tp.period_start) = $2
          ORDER BY tp.created_at DESC`,
-        [periodStart, periodEnd]
+        [year, month]
       );
     } else {
       const cutoff = new Date();

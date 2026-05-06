@@ -169,8 +169,10 @@ const PayTeacherPanel: React.FC<{
   };
 
   const [year, month] = selectedMonth.split('-').map(Number);
-  const periodStart = new Date(year, month - 1, 1).toISOString().slice(0, 10);
-  const periodEnd   = new Date(year, month, 0).toISOString().slice(0, 10);
+  // Build date strings directly — avoids UTC conversion shifting dates in IST (+5:30)
+  const periodStart = `${selectedMonth}-01`;
+  const lastDay = new Date(year, month, 0).getDate();
+  const periodEnd = `${selectedMonth}-${String(lastDay).padStart(2, '0')}`;
 
   const handlePay = async () => {
     if (!selectedTeacherId || effectiveAmount == null || isNaN(effectiveAmount)) return;
