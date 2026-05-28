@@ -1,0 +1,1413 @@
+{
+  "communities": {
+    "0": [
+      "api_apidelete",
+      "api_apiget",
+      "api_apipost",
+      "api_apirequest",
+      "enrollmentform_handlepaymentsubmit",
+      "feeratestab_flattenedits",
+      "feeratestab_fmt",
+      "feeratestab_handlechange",
+      "feeratestab_handlenewrevision",
+      "feeratestab_handlesave",
+      "feeratestab_val",
+      "financemodule_calculatestatsformonth",
+      "financemodule_fetchfinancedata",
+      "financemodule_fetchteachers",
+      "financemodule_formatcurrency",
+      "financemodule_handleaddexpense",
+      "financemodule_handledeleteexpense",
+      "financemodule_handlesavebudget",
+      "financemodule_handleupdatebudget",
+      "frontend_enroll_src_api_ts",
+      "frontend_enroll_src_components_financemodule_feeratestab_tsx",
+      "frontend_enroll_src_components_financemodule_tsx",
+      "frontend_enroll_src_components_student360view_tsx",
+      "frontend_enroll_src_components_studenthub_tsx",
+      "frontend_enroll_src_components_studentmanagement_tsx",
+      "frontend_enroll_src_components_teacher360view_tsx",
+      "frontend_enroll_src_components_teacherbatchattendance_tsx",
+      "frontend_enroll_src_components_teachermanagement_tsx",
+      "student360view_fetchdata",
+      "student360view_fetchdocuments",
+      "student360view_handledeletedocument",
+      "student360view_handledownload",
+      "student360view_handlefileupload",
+      "studentmanagement_getagebucket",
+      "studentmanagement_getagedays",
+      "studentmanagement_handleaddstudent",
+      "studentmanagement_handledeletestudent",
+      "studentmanagement_handleeditstudent",
+      "studentmanagement_handlepaymentsubmit",
+      "studentmanagement_handlerestorestudent",
+      "teacher360view_formatmonth",
+      "teacher360view_load",
+      "teacher360view_rowcolor",
+      "teacherbatchattendance_handledatechange",
+      "teacherbatchattendance_handlesave",
+      "teacherbatchattendance_loadstudents",
+      "teacherbatchattendance_today",
+      "teachermanagement_fetchbatches",
+      "teachermanagement_fetchteacherattendance",
+      "teachermanagement_fetchteachers",
+      "teachermanagement_fetchteacherstudents",
+      "teachermanagement_handleaddteacher",
+      "teachermanagement_handlecreatebatch",
+      "teachermanagement_handledeletebatch",
+      "teachermanagement_handledeleteteacher",
+      "teachermanagement_handlenumextrabatcheschange",
+      "teachermanagement_handleupdatebatch",
+      "teachermanagement_handleupdateteacher",
+      "teachermanagement_markallteacherattendance",
+      "teachermanagement_markextraattendance",
+      "teachermanagement_markteacherattendance",
+      "teachermanagement_openaddmodal",
+      "teachermanagement_openbatchmodal",
+      "teachermanagement_openeditbatchmodal",
+      "teachermanagement_openeditmodal",
+      "teachermanagement_parsebatchrecurrence",
+      "teachermanagement_toggleteacherexpand"
+    ],
+    "1": [
+      "api_data_model_one_enrollment_per_student",
+      "api_enrollment_batches_table",
+      "api_enrollment_module",
+      "api_env_vars",
+      "api_get_batches",
+      "api_get_batches_by_instrument",
+      "api_get_enrollments",
+      "api_get_instruments",
+      "api_migration_001",
+      "api_post_enroll",
+      "backend_readme",
+      "backend_readme_agent_enroll",
+      "backend_readme_api_md",
+      "backend_readme_index_js",
+      "backend_readme_ollama_integration",
+      "backend_readme_stats_endpoint",
+      "backend_readme_test_api_js",
+      "frontend_readme",
+      "frontend_readme_api_base_url",
+      "frontend_readme_attendancedashboard",
+      "frontend_readme_attendancelist",
+      "frontend_readme_attendancetab",
+      "frontend_readme_batchselector",
+      "frontend_readme_capacitor",
+      "frontend_readme_enrollmentform",
+      "frontend_readme_historicalattendance",
+      "frontend_readme_paymentmodule",
+      "frontend_readme_react",
+      "frontend_readme_statsoverview",
+      "frontend_readme_studentmanagement",
+      "frontend_readme_teachermanagement",
+      "frontend_readme_types_ts",
+      "frontend_readme_vite"
+    ],
+    "2": [
+      "api_apiput",
+      "enrollmentform_handleenrollmentsubmit",
+      "frontend_enroll_src_components_migrationtools_tsx",
+      "frontend_enroll_src_components_notificationspanel_tsx",
+      "frontend_enroll_src_components_paymentmodule_tsx",
+      "frontend_enroll_src_components_prospectmodal_tsx",
+      "migrationtools_canceleditclasses",
+      "migrationtools_canceleditpayment",
+      "migrationtools_editkey",
+      "migrationtools_fetchdata",
+      "migrationtools_handleteacherchange",
+      "migrationtools_savecredits",
+      "migrationtools_savepaymentdate",
+      "migrationtools_showmessage",
+      "migrationtools_starteditclasses",
+      "migrationtools_starteditpayment",
+      "notificationspanel_fetchnotifications",
+      "notificationspanel_formattimeago",
+      "notificationspanel_handleclickoutside",
+      "notificationspanel_handlemarkallread",
+      "notificationspanel_handlemarkasread",
+      "notificationspanel_handlenotificationclick",
+      "paymentmodule_fetchstatusandbatches",
+      "paymentmodule_getstudentname",
+      "paymentmodule_handleedit",
+      "paymentmodule_handleinputchange",
+      "paymentmodule_handlesubmit",
+      "prospectmodal_agebucket",
+      "prospectmodal_handleaddnote",
+      "prospectmodal_handlemarkactive",
+      "prospectmodal_handlemarkinactive",
+      "prospectmodal_handlestatuschange"
+    ],
+    "3": [
+      "backend_enroll_llm_ratelimit_js",
+      "backend_enroll_routes_enrollment_js",
+      "backend_enroll_routes_payouts_js",
+      "backend_enroll_routes_publicchat_js",
+      "backend_enroll_scheduler_payoutscheduler_js",
+      "backend_enroll_services_payoutservice_js",
+      "enrollment_resolveinstrument",
+      "feeratestab_groupfeerows",
+      "frontend_enroll_src_intake_tsx",
+      "intake_buildschedulegrid",
+      "intake_classifyperiod",
+      "intake_handlesubmit",
+      "intake_parsebatchdays",
+      "intake_set",
+      "intake_validate",
+      "payouts_buildemailhtml",
+      "payouts_buildtransporter",
+      "payouts_sendpayoutemail",
+      "payoutscheduler_getrecipients",
+      "payoutscheduler_registerpayoutscheduler",
+      "payoutscheduler_runpayoutreportjob",
+      "payoutservice_buildpayoutcutoffdate",
+      "payoutservice_getmonthlypayoutreport",
+      "publicchat_checkiplimit",
+      "ratelimit_checkratelimit",
+      "ratelimit_getcached",
+      "ratelimit_setcached"
+    ],
+    "4": [
+      "app_fetchdata",
+      "app_handledevswitched",
+      "app_handlelogout",
+      "app_handletabchange",
+      "auth_authenticatedfetch",
+      "auth_decodetoken",
+      "auth_getcurrentuser",
+      "auth_gettoken",
+      "auth_handleoauthcallback",
+      "auth_isauthenticated",
+      "auth_istokenexpired",
+      "auth_login",
+      "auth_logout",
+      "auth_removetoken",
+      "auth_settoken",
+      "frontend_enroll_src_app_tsx",
+      "frontend_enroll_src_auth_ts",
+      "frontend_enroll_src_components_studentprofile_tsx",
+      "frontend_enroll_src_main_tsx",
+      "frontend_enroll_src_pages_studentprofile_tsx",
+      "studentmanagement_handlesavestudent",
+      "studentprofile_fetchprofile",
+      "studentprofile_formatcurrency",
+      "studentprofile_formatdate",
+      "studentprofile_getattendancecolor",
+      "studentprofile_getpaymentfrequencylabel",
+      "studentprofile_studentprofile"
+    ],
+    "5": [
+      "001_migration",
+      "002_migration",
+      "003_migration",
+      "004_migration",
+      "006_migration",
+      "enrollment_batches_table",
+      "enrollments_table",
+      "guardian_relationship_enum",
+      "login_history_table",
+      "login_method_enum",
+      "migrationplan_document",
+      "payment_frequency_enum",
+      "paymentmapping_document",
+      "payments_table",
+      "payout_type_enum",
+      "refresh_tokens_table",
+      "student_evaluations_table",
+      "student_guardians_table",
+      "students_table",
+      "teacher_users_table",
+      "teachers_table",
+      "user_role_type_enum",
+      "user_roles_table",
+      "users_table"
+    ],
+    "6": [
+      "attendance_dashboard",
+      "attendance_details_form",
+      "attendance_part2_screenshot",
+      "attendance_status_absent",
+      "attendance_status_field",
+      "attendance_status_present",
+      "attendance_tab",
+      "cancel_button",
+      "dashboard_tab",
+      "date_field",
+      "mark_attendance_button",
+      "mark_attendance_page",
+      "mark_attendance_screenshot",
+      "payments_tab",
+      "quick_mark_today_section",
+      "sample_student_ava_davis",
+      "sample_student_emma_johnson",
+      "sample_student_liam_smith",
+      "sample_student_noah_brown",
+      "sample_student_olivia_williams",
+      "student_attendance_row",
+      "student_dropdown",
+      "students_tab"
+    ],
+    "7": [
+      "admin_setup_admin_account",
+      "admin_setup_get_token_script",
+      "admin_setup_google_oauth_flow",
+      "admin_setup_jwt_token",
+      "admin_setup_link_student",
+      "admin_setup_link_teacher",
+      "admin_setup_list_users_script",
+      "admin_setup_readme",
+      "admin_setup_refresh_token",
+      "admin_setup_role_admin",
+      "admin_setup_role_parent",
+      "admin_setup_role_teacher",
+      "admin_setup_setup_admin_script",
+      "auth_test_api_auth_google",
+      "auth_test_api_auth_profile",
+      "auth_test_google_oauth",
+      "auth_test_html",
+      "auth_test_jwt_localstorage",
+      "auth_test_token_expiry_check"
+    ],
+    "8": [
+      "enrollmentform_getstudentdisplayname",
+      "enrollmentform_getstudentinitials",
+      "enrollmentform_handlebranchchange",
+      "enrollmentform_handleday1change",
+      "enrollmentform_handleday2change",
+      "enrollmentform_handlegradechange",
+      "enrollmentform_handlepaytypechange",
+      "enrollmentform_handlestudentselect",
+      "enrollmentform_isvocalinstrument",
+      "enrollmentform_makeenrollmentitem",
+      "enrollmentform_resolvefee",
+      "frontend_enroll_src_components_enrollmentform_tsx"
+    ],
+    "9": [
+      "frontend_enroll_src_components_studentdetails_tsx",
+      "studentdetails_handlebranchchange",
+      "studentdetails_handleday1change",
+      "studentdetails_handleday2change",
+      "studentdetails_handlegradechange",
+      "studentdetails_handleinputchange",
+      "studentdetails_handleinstrumentsettingchange",
+      "studentdetails_handleprospectselect",
+      "studentdetails_handlesubmit",
+      "studentdetails_resolvefee",
+      "studentdetails_toggleinstrument"
+    ],
+    "10": [
+      "agent_buildclarification",
+      "agent_buildprompt",
+      "agent_callollama",
+      "agent_detectmissing",
+      "agent_fallbackextract",
+      "agent_mergecollected",
+      "agent_postjson",
+      "agent_runllm",
+      "agent_safejsonextract",
+      "backend_enroll_routes_agent_js"
+    ],
+    "11": [
+      "frontend_enroll_src_components_usermanagement_tsx",
+      "usermanagement_fetchall",
+      "usermanagement_handleaddrole",
+      "usermanagement_handlemarkactivated",
+      "usermanagement_handleprovision",
+      "usermanagement_handleremoveprovision",
+      "usermanagement_handleremoverole",
+      "usermanagement_handletoggleactive",
+      "usermanagement_showerror",
+      "usermanagement_showsuccess"
+    ],
+    "12": [
+      "chattypes_getroledefaultchips",
+      "components_chat_chattypes_ts",
+      "frontend_enroll_src_components_chat_chattypes_ts",
+      "frontend_enroll_src_components_chat_usechatsession_ts",
+      "usechatsession_botresponsetomessage",
+      "usechatsession_loadpersistedsession",
+      "usechatsession_makebotmessage",
+      "usechatsession_makewelcomemessage",
+      "usechatsession_persistsession",
+      "usechatsession_usechatsession"
+    ],
+    "13": [
+      "agents_docs_dir",
+      "agents_nextjs_breaking_changes",
+      "claude_agents_ref",
+      "readme_create_next_app",
+      "readme_dev_server",
+      "readme_geist",
+      "readme_next_font",
+      "readme_nextjs",
+      "readme_page_tsx",
+      "readme_vercel"
+    ],
+    "14": [
+      "backend_enroll_llm_client_js",
+      "client_callgemini",
+      "client_callgroq",
+      "client_callllm",
+      "client_callollama",
+      "client_callprovider",
+      "client_callxai",
+      "client_postjson",
+      "client_withretry"
+    ],
+    "15": [
+      "components_landingpage_tsx",
+      "frontend_enroll_src_components_landingpage_tsx",
+      "landingpage_fetchbatches",
+      "landingpage_fetchteachers",
+      "landingpage_handleclosemodal",
+      "landingpage_handleopenmodal",
+      "landingpage_handler",
+      "landingpage_handlescroll",
+      "landingpage_toggletheme"
+    ],
+    "16": [
+      "backend_enroll_llm_skills_js",
+      "skills_i",
+      "skills_isuuid",
+      "skills_makeresponse",
+      "skills_resolvebatchid",
+      "skills_resolvestudentid",
+      "skills_s",
+      "skills_t"
+    ],
+    "17": [
+      "frontend_enroll_src_components_financemodule_payslipstab_tsx",
+      "payslipstab_fmt",
+      "payslipstab_formatdate",
+      "payslipstab_formatperiod",
+      "payslipstab_handledownloadpdf",
+      "payslipstab_handleopenwhatsapp",
+      "payslipstab_handlesave",
+      "payslipstab_isvocalinstrument"
+    ],
+    "18": [
+      "drums_instrument",
+      "feesstructure_paper",
+      "guitar_instrument",
+      "keyboard_instrument",
+      "octopad_instrument",
+      "piano_instrument",
+      "tabla_instrument",
+      "violin_instrument"
+    ],
+    "19": [
+      "backend_enroll_auth_rbacmiddleware_js",
+      "rbacmiddleware_authorizerole",
+      "rbacmiddleware_filterparentdata",
+      "rbacmiddleware_filterteacherdata",
+      "rbacmiddleware_restricttotodayforteachers",
+      "rbacmiddleware_verifybatchownership",
+      "rbacmiddleware_verifystudentaccess"
+    ],
+    "20": [
+      "components_landingpage_schedulesection_tsx",
+      "frontend_enroll_src_components_landingpage_schedulesection_tsx",
+      "schedulesection_buildschedulegrid",
+      "schedulesection_cardposition",
+      "schedulesection_classifyperiod",
+      "schedulesection_geticon",
+      "schedulesection_parsebatchdays"
+    ],
+    "21": [
+      "frontend_index_html",
+      "frontend_index_inter_font",
+      "frontend_index_main_tsx",
+      "frontend_index_tailwindcss",
+      "frontend_intake_html",
+      "frontend_intake_intake_tsx",
+      "frontend_intake_playfair_font"
+    ],
+    "22": [
+      "backend_enroll_auth_jwtmiddleware_js",
+      "jwtmiddleware_authenticatejwt",
+      "jwtmiddleware_generaterefreshtoken",
+      "jwtmiddleware_generatetoken",
+      "jwtmiddleware_refreshaccesstoken",
+      "jwtmiddleware_revokerefreshtoken"
+    ],
+    "23": [
+      "frontend_enroll_src_components_todaysclasses_tsx",
+      "todaysclasses_buildbatchmessage",
+      "todaysclasses_copytoclipboard",
+      "todaysclasses_formattime",
+      "todaysclasses_handlecopyandopen",
+      "todaysclasses_handleshareviawhatsapp"
+    ],
+    "24": [
+      "enrollment_agent_feature",
+      "multi_bot_image_asset",
+      "multi_bot_image_state_greeting",
+      "multi_bot_image_state_happy",
+      "multi_bot_image_state_idle",
+      "multi_bot_image_state_listening"
+    ],
+    "25": [
+      "batchschedulegrid_capacitydots",
+      "batchschedulegrid_formattime",
+      "batchschedulegrid_getstyle",
+      "batchschedulegrid_parserecurrence",
+      "frontend_enroll_src_components_batchschedulegrid_tsx"
+    ],
+    "26": [
+      "creditreporttab_buildwhatsappmessage",
+      "creditreporttab_calctentativedate",
+      "creditreporttab_formatdate",
+      "creditreporttab_openwhatsapp",
+      "frontend_enroll_src_components_attendancedashboard_creditreporttab_tsx"
+    ],
+    "27": [
+      "components_landingpage_instrumentshowcase_tsx",
+      "frontend_enroll_src_components_landingpage_instrumentshowcase_tsx",
+      "instrumentshowcase_cardposition",
+      "instrumentshowcase_ontouch",
+      "instrumentshowcase_ontouchend"
+    ],
+    "28": [
+      "components_landingpage_teacherssection_tsx",
+      "frontend_enroll_src_components_landingpage_teacherssection_tsx",
+      "teacherssection_cardposition",
+      "teacherssection_ontouch",
+      "teacherssection_ontouchend"
+    ],
+    "29": [
+      "backend_enroll_test_api_js",
+      "test_api_main",
+      "test_api_postendpoint",
+      "test_api_testendpoint"
+    ],
+    "30": [
+      "backend_enroll_routes_student360_js",
+      "backend_enroll_utils_credits_js",
+      "credits_computeclassesremaining",
+      "student360_fetchstudent360data"
+    ],
+    "31": [
+      "backend_enroll_services_emailservice_js",
+      "emailservice_buildtransporter",
+      "emailservice_sendabsencenotification",
+      "emailservice_sendpaymentreminder"
+    ],
+    "32": [
+      "batchmanager_buildwalink",
+      "batchmanager_formatphoneforwa",
+      "batchmanager_whatsappsyncmodal",
+      "frontend_enroll_src_components_batchmanager_tsx"
+    ],
+    "33": [
+      "chatmessage_chatmessage",
+      "chatmessage_rendercontent",
+      "chatmessage_towhatsapptext",
+      "frontend_enroll_src_components_chat_chatmessage_tsx"
+    ],
+    "34": [
+      "batchmodal_adddaytiming",
+      "batchmodal_removedaytiming",
+      "batchmodal_updatedaytiming",
+      "frontend_enroll_src_components_teachermanagement_batchmodal_tsx"
+    ],
+    "35": [
+      "app_page_tsx",
+      "page_getbatches",
+      "page_getteachers",
+      "page_home"
+    ],
+    "36": [
+      "components_chat_publiccleffchat_tsx",
+      "frontend_enroll_src_components_chat_publiccleffchat_tsx",
+      "publiccleffchat_dismissnudge",
+      "publiccleffchat_handlekey"
+    ],
+    "37": [
+      "fretboard",
+      "guitar",
+      "guitar_dark_png",
+      "strings"
+    ],
+    "38": [
+      "guitar_fretboard_image",
+      "guitar_frets",
+      "guitar_inlays",
+      "guitar_strings"
+    ],
+    "39": [
+      "concept:Microphone",
+      "concept:Rode",
+      "concept:Vocals",
+      "file:/Users/srinikamukherjee/Documents/HSM-Management/frontend-landing/public/assets/vocals.png"
+    ],
+    "40": [
+      "migrations_prod_datamigration_seed_students_js",
+      "seed_students_findbestbatchmatch",
+      "seed_students_parsedayfrombatchstring",
+      "seed_students_seedstudents"
+    ],
+    "41": [
+      "backend_enroll_routes_teacher360_js",
+      "teacher360_batchscheduledonday",
+      "teacher360_countexpectedsessionsformonth"
+    ],
+    "42": [
+      "frontend_enroll_src_components_questionflow_jsx",
+      "questionflow_questionflow",
+      "questionflow_summary"
+    ],
+    "43": [
+      "attendancepicker_handlesave",
+      "attendancepicker_toggle",
+      "frontend_enroll_src_components_chat_attendancepicker_tsx"
+    ],
+    "44": [
+      "cleffavatar_cleffavatar",
+      "components_chat_cleffavatar_tsx",
+      "frontend_enroll_src_components_chat_cleffavatar_tsx"
+    ],
+    "45": [
+      "components_landingpage_navbar_tsx",
+      "frontend_enroll_src_components_landingpage_navbar_tsx",
+      "navbar_navbar"
+    ],
+    "46": [
+      "bookingmodal_bookingmodal",
+      "components_landingpage_bookingmodal_tsx",
+      "frontend_enroll_src_components_landingpage_bookingmodal_tsx"
+    ],
+    "47": [
+      "components_landingpage_whyhsm_tsx",
+      "frontend_enroll_src_components_landingpage_whyhsm_tsx",
+      "whyhsm_whyhsm"
+    ],
+    "48": [
+      "guitar_icon",
+      "hsm_logo_horizontal_logo",
+      "hyderabad_school_of_music_brand"
+    ],
+    "49": [
+      "app_robots_txt_route_ts",
+      "app_sitemap_xml_route_ts",
+      "route_get"
+    ],
+    "50": [
+      "entity_cymbal",
+      "entity_snare_drum",
+      "file_drums_dark"
+    ],
+    "51": [
+      "concept:microphone",
+      "concept:vocals",
+      "file:/Users/srinikamukherjee/Documents/HSM-Management/frontend-landing/public/assets/vocals_dark.png"
+    ],
+    "52": [
+      "Guitar Motif",
+      "HSM Logo",
+      "Hyderabad School of Music"
+    ],
+    "53": [
+      "file:/Users/srinikamukherjee/Documents/HSM-Management/frontend-landing/public/window.svg",
+      "ui:window_controls",
+      "ui:window_icon"
+    ],
+    "54": [
+      "asset_drums",
+      "visual_cymbal",
+      "visual_drum"
+    ],
+    "55": [
+      "migrations_prod_datamigration_seed_batches_js",
+      "seed_batches_convertto24hour",
+      "seed_batches_seedbatches"
+    ],
+    "56": [
+      "extract_unique_values_extractdata",
+      "extract_unique_values_parsecsvline",
+      "migrations_prod_datamigration_extract_unique_values_js"
+    ],
+    "57": [
+      "cleanup_db_cleanupdatabase",
+      "cleanup_db_triggerrollback",
+      "migrations_prod_datamigration_cleanup_db_js"
+    ],
+    "58": [
+      "backend_enroll_setup_admin_js",
+      "setup_admin_setupadmin"
+    ],
+    "59": [
+      "backend_enroll_check_types_js",
+      "check_types_checktypes"
+    ],
+    "60": [
+      "backend_enroll_cleanup_duplicates_js",
+      "cleanup_duplicates_cleanup"
+    ],
+    "61": [
+      "backend_enroll_migrate_bhaduri_students_js",
+      "migrate_bhaduri_students_migrate"
+    ],
+    "62": [
+      "backend_enroll_list_users_js",
+      "list_users_listusers"
+    ],
+    "63": [
+      "backend_enroll_index_js",
+      "index_resolvedevuser"
+    ],
+    "64": [
+      "backend_enroll_fix_duplicate_enrollments_js",
+      "fix_duplicate_enrollments_fixenrollments"
+    ],
+    "65": [
+      "backend_enroll_finalize_cleanup_js",
+      "finalize_cleanup_finalizecleanup"
+    ],
+    "66": [
+      "backend_enroll_llm_prompts_js",
+      "prompts_getprompt"
+    ],
+    "67": [
+      "backend_enroll_llm_test_all_js",
+      "test_all_testall"
+    ],
+    "68": [
+      "backend_enroll_tests_payouts_routes_test_js",
+      "payouts_routes_test_buildapp"
+    ],
+    "69": [
+      "backend_enroll_tests_payoutservice_test_js",
+      "payoutservice_test_mockpool"
+    ],
+    "70": [
+      "backend_enroll_routes_prospects_js",
+      "prospects_sendprospectnotification"
+    ],
+    "71": [
+      "devswitcher_switchprofile",
+      "frontend_enroll_src_components_devswitcher_tsx"
+    ],
+    "72": [
+      "frontend_enroll_src_components_phonelink_tsx",
+      "phonelink_phonelink"
+    ],
+    "73": [
+      "frontend_enroll_src_components_loginpage_jsx",
+      "loginpage_loginpage"
+    ],
+    "74": [
+      "frontend_enroll_src_components_statsoverview_tsx",
+      "statsoverview_statcard"
+    ],
+    "75": [
+      "attendancedashboard_attendancedashboard",
+      "frontend_enroll_src_components_attendancedashboard_tsx"
+    ],
+    "76": [
+      "frontend_enroll_src_components_streamsconfigurator_jsx",
+      "streamsconfigurator_streamsconfigurator"
+    ],
+    "77": [
+      "frontend_enroll_src_components_chat_messageconfirm_tsx",
+      "messageconfirm_handleconfirm"
+    ],
+    "78": [
+      "frontend_enroll_src_components_chat_quickreplychips_tsx",
+      "quickreplychips_quickreplychips"
+    ],
+    "79": [
+      "chatinput_handlekeydown",
+      "frontend_enroll_src_components_chat_chatinput_tsx"
+    ],
+    "80": [
+      "frontend_enroll_src_components_teachermanagement_teachercard_tsx",
+      "teachercard_getpaytypelabel"
+    ],
+    "81": [
+      "frontend_enroll_src_pages_studentspage_jsx",
+      "studentspage_studentspage"
+    ],
+    "82": [
+      "adminpage_adminpage",
+      "frontend_enroll_src_pages_adminpage_jsx"
+    ],
+    "83": [
+      "enrollpage_enrollpage",
+      "frontend_enroll_src_pages_enrollpage_jsx"
+    ],
+    "84": [
+      "hsmlogo_brand_logo",
+      "hsmlogo_organization"
+    ],
+    "85": [
+      "full_rotation_robot",
+      "full_rotation_sprite"
+    ],
+    "86": [
+      "alumnisection_cardposition",
+      "components_landingpage_alumnisection_tsx"
+    ],
+    "87": [
+      "robots_hsm_org",
+      "robots_sitemap"
+    ],
+    "88": [
+      "/Users/srinikamukherjee/Documents/HSM-Management/frontend-landing/public/globe.svg",
+      "visual_element:globe_icon"
+    ],
+    "89": [
+      "vercel.svg",
+      "vercel_triangle"
+    ],
+    "90": [
+      "document_concept",
+      "file_icon_svg"
+    ],
+    "91": [
+      "migrations_prod_datamigration_seed_instruments_js",
+      "seed_instruments_seedinstruments"
+    ],
+    "92": [
+      "migrations_prod_datamigration_seed_packages_js",
+      "seed_packages_seedpackages"
+    ],
+    "93": [
+      "migrations_prod_datamigration_seed_batches_drums_js",
+      "seed_batches_drums_seeddrumsbatches"
+    ],
+    "94": [
+      "apply_migration_applymigration",
+      "scripts_apply_migration_js"
+    ],
+    "95": [
+      "cleanup_attendance_cleanupattendance",
+      "scripts_cleanup_attendance_js"
+    ],
+    "96": [
+      "apply_migration_004_applymigration",
+      "scripts_apply_migration_004_js"
+    ],
+    "97": [
+      "scripts_verify_migration_004_js",
+      "verify_migration_004_verifymigration"
+    ],
+    "98": [
+      "backend_enroll_db_js"
+    ],
+    "99": [
+      "backend_enroll_auth_googlestrategy_js"
+    ],
+    "100": [
+      "backend_enroll_routes_documents_js"
+    ],
+    "101": [
+      "backend_enroll_routes_teachers_js"
+    ],
+    "102": [
+      "backend_enroll_routes_attendance_js"
+    ],
+    "103": [
+      "backend_enroll_routes_auth_js"
+    ],
+    "104": [
+      "backend_enroll_routes_users_js"
+    ],
+    "105": [
+      "backend_enroll_routes_portal_js"
+    ],
+    "106": [
+      "backend_enroll_routes_finance_js"
+    ],
+    "107": [
+      "backend_enroll_routes_payments_js"
+    ],
+    "108": [
+      "backend_enroll_routes_batches_js"
+    ],
+    "109": [
+      "backend_enroll_routes_students_js"
+    ],
+    "110": [
+      "backend_enroll_routes_migration_js"
+    ],
+    "111": [
+      "backend_enroll_routes_fee_structures_js"
+    ],
+    "112": [
+      "backend_enroll_routes_chat_js"
+    ],
+    "113": [
+      "backend_enroll_routes_instruments_js"
+    ],
+    "114": [
+      "backend_enroll_routes_notifications_js"
+    ],
+    "115": [
+      "frontend_enroll_vite_config_js"
+    ],
+    "116": [
+      "frontend_enroll_src_types_ts"
+    ],
+    "117": [
+      "frontend_enroll_src_vite_env_d_ts"
+    ],
+    "118": [
+      "frontend_enroll_src_config_ts"
+    ],
+    "119": [
+      "frontend_enroll_src_fetchoverride_ts"
+    ],
+    "120": [
+      "frontend_enroll_src_mockdata_ts"
+    ],
+    "121": [
+      "frontend_enroll_src_components_prospectviewermodal_tsx"
+    ],
+    "122": [
+      "frontend_enroll_src_components_studentsummary_tsx"
+    ],
+    "123": [
+      "frontend_enroll_src_components_teacherstudentlist_tsx"
+    ],
+    "124": [
+      "frontend_enroll_src_components_attendancedashboard_markattendancetab_tsx"
+    ],
+    "125": [
+      "frontend_enroll_src_components_chat_chatfab_tsx"
+    ],
+    "126": [
+      "frontend_enroll_src_components_chat_messagelist_tsx"
+    ],
+    "127": [
+      "frontend_enroll_src_components_chat_messagechart_tsx"
+    ],
+    "128": [
+      "frontend_enroll_src_components_chat_chatpanel_tsx"
+    ],
+    "129": [
+      "frontend_enroll_src_components_chat_index_ts"
+    ],
+    "130": [
+      "frontend_enroll_src_components_chat_typingindicator_tsx"
+    ],
+    "131": [
+      "frontend_enroll_src_components_chat_messagecard_tsx"
+    ],
+    "132": [
+      "frontend_enroll_src_components_teachermanagement_teachermodal_tsx"
+    ],
+    "133": [
+      "frontend_enroll_src_components_teachermanagement_teacherattendanceview_tsx"
+    ],
+    "134": [
+      "frontend_enroll_src_components_teachermanagement_batchestable_tsx"
+    ],
+    "135": [
+      "frontend_enroll_src_components_financemodule_overviewtab_tsx"
+    ],
+    "136": [
+      "frontend_enroll_src_components_financemodule_types_ts"
+    ],
+    "137": [
+      "frontend_enroll_src_components_financemodule_expensestab_tsx"
+    ],
+    "138": [
+      "frontend_enroll_src_components_financemodule_budgettab_tsx"
+    ],
+    "139": [
+      "frontend_enroll_src_components_studentmanagement_prospectlist_tsx"
+    ],
+    "140": [
+      "frontend_enroll_src_components_studentmanagement_studenttableview_tsx"
+    ],
+    "141": [
+      "frontend_enroll_src_components_studentmanagement_studentfilters_tsx"
+    ],
+    "142": [
+      "frontend_enroll_src_components_studentmanagement_studentcardgrid_tsx"
+    ],
+    "143": [
+      "frontend_enroll_src_components_landingpage_footercta_tsx"
+    ],
+    "144": [
+      "frontend_enroll_src_components_landingpage_alumnisection_tsx"
+    ],
+    "145": [
+      "frontend_enroll_src_components_landingpage_faqsection_tsx"
+    ],
+    "146": [
+      "frontend_enroll_src_components_landingpage_locationsection_tsx"
+    ],
+    "147": [
+      "frontend_enroll_src_components_landingpage_testimonialssection_tsx"
+    ],
+    "148": [
+      "frontend_enroll_src_components_landingpage_herosection_tsx"
+    ],
+    "149": [
+      "vocals_icon"
+    ],
+    "150": [
+      "piano_icon"
+    ],
+    "151": [
+      "drums_icon"
+    ],
+    "152": [
+      "guitar_dark_icon"
+    ],
+    "153": [
+      "drums_dark_icon"
+    ],
+    "154": [
+      "vocals_dark_icon"
+    ],
+    "155": [
+      "piano_dark_icon"
+    ],
+    "156": [
+      "talking_cleff_mascot"
+    ],
+    "157": [
+      "cleff_talking_animation"
+    ],
+    "158": [
+      "cleff_rotate_animation"
+    ],
+    "159": [
+      "pngtree_orange_robot"
+    ],
+    "160": [
+      "cleff_animated_mascot"
+    ],
+    "161": [
+      "rotating_cleff_character"
+    ],
+    "162": [
+      "next_env_d_ts"
+    ],
+    "163": [
+      "next_config_ts"
+    ],
+    "164": [
+      "app_layout_tsx"
+    ],
+    "165": [
+      "components_landingpage_footercta_tsx"
+    ],
+    "166": [
+      "components_landingpage_faqsection_tsx"
+    ],
+    "167": [
+      "components_landingpage_locationsection_tsx"
+    ],
+    "168": [
+      "components_landingpage_testimonialssection_tsx"
+    ],
+    "169": [
+      "components_landingpage_herosection_tsx"
+    ],
+    "170": [
+      "/Users/srinikamukherjee/Documents/HSM-Management/frontend-landing/public/assets/piano_dark.png"
+    ],
+    "171": [
+      "next_logo"
+    ],
+    "172": [
+      "/Users/srinikamukherjee/Documents/HSM-Management/frontend-landing/public/assets/piano.png"
+    ],
+    "173": [
+      "schemastatus_document"
+    ],
+    "174": [
+      "readme_document"
+    ],
+    "175": [
+      "migration004_document"
+    ],
+    "176": [
+      "archivereadme_document"
+    ],
+    "177": [
+      "scriptsreadme_document"
+    ],
+    "178": [
+      "instruments_table"
+    ],
+    "179": [
+      "batches_table"
+    ],
+    "180": [
+      "attendance_records_table"
+    ],
+    "181": [
+      "packages_table"
+    ],
+    "182": [
+      "teacher_payouts_table"
+    ],
+    "183": [
+      "holidays_table"
+    ],
+    "184": [
+      "audit_logs_table"
+    ],
+    "185": [
+      "attendance_status_enum"
+    ],
+    "186": [
+      "attendance_source_enum"
+    ],
+    "187": [
+      "enrollment_status_enum"
+    ],
+    "188": [
+      "holiday_scope_enum"
+    ],
+    "189": [
+      "vocals_instrument"
+    ],
+    "190": [
+      "carnatik_instrument"
+    ]
+  },
+  "cohesion": {
+    "0": 0.05,
+    "1": 0.08,
+    "2": 0.09,
+    "3": 0.1,
+    "4": 0.11,
+    "5": 0.09,
+    "6": 0.1,
+    "7": 0.13,
+    "8": 0.27,
+    "9": 0.24,
+    "10": 0.24,
+    "11": 0.6,
+    "12": 0.24,
+    "13": 0.2,
+    "14": 0.44,
+    "15": 0.33,
+    "16": 0.32,
+    "17": 0.32,
+    "18": 0.25,
+    "19": 0.29,
+    "20": 0.48,
+    "21": 0.29,
+    "22": 0.47,
+    "23": 0.47,
+    "24": 0.33,
+    "25": 0.4,
+    "26": 0.7,
+    "27": 0.5,
+    "28": 0.5,
+    "29": 0.83,
+    "30": 0.5,
+    "31": 0.83,
+    "32": 0.83,
+    "33": 0.67,
+    "34": 0.5,
+    "35": 0.83,
+    "36": 0.67,
+    "37": 0.5,
+    "38": 0.5,
+    "39": 0.5,
+    "40": 0.83,
+    "41": 0.67,
+    "42": 0.67,
+    "43": 0.67,
+    "44": 0.67,
+    "45": 0.67,
+    "46": 0.67,
+    "47": 0.67,
+    "48": 1.33,
+    "49": 0.67,
+    "50": 0.67,
+    "51": 0.67,
+    "52": 0.67,
+    "53": 0.67,
+    "54": 0.67,
+    "55": 1.0,
+    "56": 1.0,
+    "57": 1.0,
+    "58": 1.0,
+    "59": 1.0,
+    "60": 1.0,
+    "61": 1.0,
+    "62": 1.0,
+    "63": 1.0,
+    "64": 1.0,
+    "65": 1.0,
+    "66": 1.0,
+    "67": 1.0,
+    "68": 1.0,
+    "69": 1.0,
+    "70": 1.0,
+    "71": 1.0,
+    "72": 1.0,
+    "73": 1.0,
+    "74": 1.0,
+    "75": 1.0,
+    "76": 1.0,
+    "77": 1.0,
+    "78": 1.0,
+    "79": 1.0,
+    "80": 1.0,
+    "81": 1.0,
+    "82": 1.0,
+    "83": 1.0,
+    "84": 1.0,
+    "85": 2.0,
+    "86": 1.0,
+    "87": 1.0,
+    "88": 1.0,
+    "89": 1.0,
+    "90": 1.0,
+    "91": 1.0,
+    "92": 1.0,
+    "93": 1.0,
+    "94": 1.0,
+    "95": 1.0,
+    "96": 1.0,
+    "97": 1.0,
+    "98": 1.0,
+    "99": 1.0,
+    "100": 1.0,
+    "101": 1.0,
+    "102": 1.0,
+    "103": 1.0,
+    "104": 1.0,
+    "105": 1.0,
+    "106": 1.0,
+    "107": 1.0,
+    "108": 1.0,
+    "109": 1.0,
+    "110": 1.0,
+    "111": 1.0,
+    "112": 1.0,
+    "113": 1.0,
+    "114": 1.0,
+    "115": 1.0,
+    "116": 1.0,
+    "117": 1.0,
+    "118": 1.0,
+    "119": 1.0,
+    "120": 1.0,
+    "121": 1.0,
+    "122": 1.0,
+    "123": 1.0,
+    "124": 1.0,
+    "125": 1.0,
+    "126": 1.0,
+    "127": 1.0,
+    "128": 1.0,
+    "129": 1.0,
+    "130": 1.0,
+    "131": 1.0,
+    "132": 1.0,
+    "133": 1.0,
+    "134": 1.0,
+    "135": 1.0,
+    "136": 1.0,
+    "137": 1.0,
+    "138": 1.0,
+    "139": 1.0,
+    "140": 1.0,
+    "141": 1.0,
+    "142": 1.0,
+    "143": 1.0,
+    "144": 1.0,
+    "145": 1.0,
+    "146": 1.0,
+    "147": 1.0,
+    "148": 1.0,
+    "149": 1.0,
+    "150": 1.0,
+    "151": 1.0,
+    "152": 1.0,
+    "153": 1.0,
+    "154": 1.0,
+    "155": 1.0,
+    "156": 1.0,
+    "157": 1.0,
+    "158": 1.0,
+    "159": 1.0,
+    "160": 1.0,
+    "161": 1.0,
+    "162": 1.0,
+    "163": 1.0,
+    "164": 1.0,
+    "165": 1.0,
+    "166": 1.0,
+    "167": 1.0,
+    "168": 1.0,
+    "169": 1.0,
+    "170": 1.0,
+    "171": 1.0,
+    "172": 1.0,
+    "173": 1.0,
+    "174": 1.0,
+    "175": 1.0,
+    "176": 1.0,
+    "177": 1.0,
+    "178": 1.0,
+    "179": 1.0,
+    "180": 1.0,
+    "181": 1.0,
+    "182": 1.0,
+    "183": 1.0,
+    "184": 1.0,
+    "185": 1.0,
+    "186": 1.0,
+    "187": 1.0,
+    "188": 1.0,
+    "189": 1.0,
+    "190": 1.0
+  },
+  "gods": [
+    {
+      "id": "api_apiget",
+      "label": "apiGet()",
+      "degree": 20
+    },
+    {
+      "id": "api_apipost",
+      "label": "apiPost()",
+      "degree": 19
+    },
+    {
+      "id": "api_apiput",
+      "label": "apiPut()",
+      "degree": 16
+    },
+    {
+      "id": "frontend_readme",
+      "label": "HSM Frontend README",
+      "degree": 16
+    },
+    {
+      "id": "admin_setup_readme",
+      "label": "Admin Setup README",
+      "degree": 11
+    },
+    {
+      "id": "backend_readme",
+      "label": "HSM Backend API README",
+      "degree": 10
+    },
+    {
+      "id": "api_enrollment_module",
+      "label": "Enrollment Module API Documentation",
+      "degree": 9
+    },
+    {
+      "id": "api_apidelete",
+      "label": "apiDelete()",
+      "degree": 8
+    },
+    {
+      "id": "usermanagement_fetchall",
+      "label": "fetchAll()",
+      "degree": 8
+    },
+    {
+      "id": "intake_set",
+      "label": "set()",
+      "degree": 7
+    }
+  ],
+  "surprises": [
+    {
+      "source": "apiGet()",
+      "target": "fetchStatusAndBatches()",
+      "source_files": [
+        "/Users/srinikamukherjee/Documents/HSM-Management/frontend-enroll/src/api.ts",
+        "/Users/srinikamukherjee/Documents/HSM-Management/frontend-enroll/src/components/PaymentModule.tsx"
+      ],
+      "confidence": "INFERRED",
+      "relation": "calls",
+      "why": "inferred connection - not explicitly stated in source; bridges separate communities; peripheral node `fetchStatusAndBatches()` unexpectedly reaches hub `apiGet()`"
+    },
+    {
+      "source": "apiGet()",
+      "target": "fetchNotifications()",
+      "source_files": [
+        "/Users/srinikamukherjee/Documents/HSM-Management/frontend-enroll/src/api.ts",
+        "/Users/srinikamukherjee/Documents/HSM-Management/frontend-enroll/src/components/NotificationsPanel.tsx"
+      ],
+      "confidence": "INFERRED",
+      "relation": "calls",
+      "why": "inferred connection - not explicitly stated in source; bridges separate communities; peripheral node `fetchNotifications()` unexpectedly reaches hub `apiGet()`"
+    },
+    {
+      "source": "apiPost()",
+      "target": "handleAddNote()",
+      "source_files": [
+        "/Users/srinikamukherjee/Documents/HSM-Management/frontend-enroll/src/api.ts",
+        "/Users/srinikamukherjee/Documents/HSM-Management/frontend-enroll/src/components/ProspectModal.tsx"
+      ],
+      "confidence": "INFERRED",
+      "relation": "calls",
+      "why": "inferred connection - not explicitly stated in source; bridges separate communities; peripheral node `handleAddNote()` unexpectedly reaches hub `apiPost()`"
+    },
+    {
+      "source": "apiPut()",
+      "target": "handleSave()",
+      "source_files": [
+        "/Users/srinikamukherjee/Documents/HSM-Management/frontend-enroll/src/api.ts",
+        "/Users/srinikamukherjee/Documents/HSM-Management/frontend-enroll/src/components/FinanceModule/PayslipsTab.tsx"
+      ],
+      "confidence": "INFERRED",
+      "relation": "calls",
+      "why": "inferred connection - not explicitly stated in source; bridges separate communities; peripheral node `handleSave()` unexpectedly reaches hub `apiPut()`"
+    },
+    {
+      "source": "POST /api/enroll",
+      "target": "Component: EnrollmentForm.tsx",
+      "source_files": [
+        "backend-enroll/API.md",
+        "frontend-enroll/README.md"
+      ],
+      "confidence": "INFERRED",
+      "relation": "calls",
+      "why": "inferred connection - not explicitly stated in source; connects across different repos/directories"
+    }
+  ],
+  "questions": [
+    {
+      "type": "bridge_node",
+      "question": "Why does `apiPost()` connect `Community 0` to `Community 2`, `Community 11`?",
+      "why": "High betweenness centrality (0.034) - this node is a cross-community bridge."
+    },
+    {
+      "type": "bridge_node",
+      "question": "Why does `apiGet()` connect `Community 0` to `Community 2`, `Community 4`, `Community 8`, `Community 9`, `Community 11`?",
+      "why": "High betweenness centrality (0.031) - this node is a cross-community bridge."
+    },
+    {
+      "type": "verify_inferred",
+      "question": "Are the 18 inferred relationships involving `apiGet()` (e.g. with `fetchData()` and `loadStudents()`) actually correct?",
+      "why": "`apiGet()` has 18 INFERRED edges - model-reasoned connections that need verification."
+    },
+    {
+      "type": "verify_inferred",
+      "question": "Are the 17 inferred relationships involving `apiPost()` (e.g. with `handleSave()` and `handlePaymentSubmit()`) actually correct?",
+      "why": "`apiPost()` has 17 INFERRED edges - model-reasoned connections that need verification."
+    },
+    {
+      "type": "verify_inferred",
+      "question": "Are the 14 inferred relationships involving `apiPut()` (e.g. with `savePaymentDate()` and `saveCredits()`) actually correct?",
+      "why": "`apiPut()` has 14 INFERRED edges - model-reasoned connections that need verification."
+    },
+    {
+      "type": "isolated_nodes",
+      "question": "What connects `GET /api/batches/:instrumentId`, `DB Migration: 001_update_enrollment_schema.sql`, `Role: admin` to the rest of the system?",
+      "why": "108 weakly-connected nodes found - possible documentation gaps or missing edges."
+    },
+    {
+      "type": "low_cohesion",
+      "question": "Should `Community 0` be split into smaller, more focused modules?",
+      "why": "Cohesion score 0.05 - nodes in this community are weakly interconnected."
+    }
+  ]
+}

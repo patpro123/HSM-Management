@@ -117,7 +117,7 @@ CREATE TABLE IF NOT EXISTS instruments (
   updated_at timestamptz DEFAULT now()
 );
 
-COMMENT ON TABLE instruments IS 'Available instruments (Keyboard, Guitar, Piano, Drums, Tabla, Violin, Vocals)';
+COMMENT ON TABLE instruments IS 'Available instruments (Keyboard, Guitar, Bass Guitar, Piano, Drums, Tabla, Violin, Vocals)';
 
 -- Batches table (class schedules with teacher and instrument assignments)
 CREATE TABLE IF NOT EXISTS batches (

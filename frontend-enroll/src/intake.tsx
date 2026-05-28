@@ -247,6 +247,7 @@ function IntakeForm() {
     else if (!/^\+?[\d\s\-()]{7,15}$/.test(form.phone.trim())) errs.phone = 'Enter a valid phone number.';
     if (!form.instrument_id) errs.instrument_id = 'Please choose an instrument / stream.';
     if (!form.location) errs.location = 'Please select a branch location.';
+    if (!form.source) errs.source = 'Please let us know how you heard about us.';
     setErrors(errs);
     return Object.keys(errs).length === 0;
   };
@@ -457,7 +458,7 @@ function IntakeForm() {
               ) : (
                 <select value={form.instrument_id} onChange={e => set('instrument_id', e.target.value)} style={inputStyle}>
                   <option value="">Select an instrument...</option>
-                  {['Keyboard','Guitar','Piano','Drums','Tabla','Violin','Hindustani Vocals','Carnatic Vocals'].map(n => (
+                  {['Keyboard','Guitar','Bass Guitar','Piano','Drums','Tabla','Violin','Hindustani Vocals','Carnatic Vocals'].map(n => (
                     <option key={n} value={n}>{n}</option>
                   ))}
                 </select>
@@ -511,7 +512,7 @@ function IntakeForm() {
 
             {/* ── How did you hear ── */}
             <div>
-              <SectionHeading>How did you hear about us?</SectionHeading>
+              <SectionHeading>How did you hear about us? <span style={{ color: '#ef4444' }}>*</span></SectionHeading>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.6rem' }}>
                 {SOURCES.map(src => (
                   <Pill
@@ -522,6 +523,7 @@ function IntakeForm() {
                   />
                 ))}
               </div>
+              {errors.source && <p style={errorStyle}>{errors.source}</p>}
             </div>
 
             {/* ── Notes ── */}

@@ -7,6 +7,7 @@ interface InstrumentShowcaseProps {
 
 const INSTRUMENTS = [
   { id: 'guitar',      name: 'Guitar',               icon: '🎸', desc: 'Most popular worldwide — acoustic to electric' },
+  { id: 'bass_guitar', name: 'Bass Guitar',           icon: '🎸', desc: 'The rhythmic backbone — groove, funk, and feel' },
   { id: 'keyboard',    name: 'Keyboard',              icon: '🎹', desc: 'Build musical foundations fast — ideal first instrument' },
   { id: 'piano',       name: 'Piano',                 icon: '🎹', desc: 'Classical elegance; read music, compose, perform' },
   { id: 'tabla',       name: 'Tabla',                 icon: '🪘', desc: "India's heartbeat — rhythm, tradition, discipline" },
