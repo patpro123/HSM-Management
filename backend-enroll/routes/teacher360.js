@@ -122,10 +122,21 @@ router.get('/me/360', async (req, res) => {
       `SELECT teacher_id FROM teacher_users WHERE user_id = $1 AND is_active = true LIMIT 1`,
       [req.user.id]
     );
-    if (result.rows.length === 0) {
+
+    let teacherId = result.rows[0]?.teacher_id;
+
+    // In local dev mode, fall back to the first teacher so the default dev teacher
+    // user can browse the teacher view without a teacher_users link.
+    if (!teacherId && process.env.DISABLE_AUTH === 'true') {
+      const fallback = await pool.query('SELECT id FROM teachers ORDER BY name LIMIT 1');
+      teacherId = fallback.rows[0]?.id;
+      if (teacherId) console.log(`[DEV] /teachers/me/360 fallback → teacher ${teacherId}`);
+    }
+
+    if (!teacherId) {
       return res.status(404).json({ error: 'No teacher profile linked to this account. Ask an admin to link your account.' });
     }
-    res.json({ teacher_id: result.rows[0].teacher_id });
+    res.json({ teacher_id: teacherId });
   } catch (err) {
     console.error('Teacher /me/360 error:', err);
     res.status(500).json({ error: 'Internal server error' });

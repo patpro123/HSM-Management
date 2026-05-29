@@ -489,6 +489,32 @@ CREATE TABLE IF NOT EXISTS teacher_grade_rate_overrides (
 COMMENT ON TABLE teacher_grade_rate_overrides IS
   'Teacher-specific overrides for per-student payout rates. Supersedes instrument_grade_rates when present.';
 
+-- ==================== HOMEWORK ====================
+
+-- Teacher assigns homework to a specific student
+CREATE TABLE IF NOT EXISTS homework_assignments (
+  id           UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  student_id   UUID        NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+  title        TEXT        NOT NULL,
+  instructions TEXT,
+  due_date     DATE,
+  assigned_by  TEXT        NOT NULL DEFAULT 'teacher',
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  status       TEXT        NOT NULL DEFAULT 'pending'  -- pending | submitted | reviewed
+);
+
+-- Student's audio submission for a homework assignment
+CREATE TABLE IF NOT EXISTS homework_submissions (
+  id            UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  assignment_id UUID        NOT NULL REFERENCES homework_assignments(id) ON DELETE CASCADE,
+  student_id    UUID        NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+  file_name     TEXT,
+  file_type     TEXT,
+  file_data     TEXT,
+  note          TEXT,
+  submitted_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 -- ==================== INDEXES ====================
 
 CREATE INDEX IF NOT EXISTS idx_students_phone ON students (phone);
@@ -497,6 +523,8 @@ CREATE INDEX IF NOT EXISTS idx_enrollment_batches_enrollment ON enrollment_batch
 CREATE INDEX IF NOT EXISTS idx_attendance_batch_date ON attendance_records (batch_id, session_date);
 CREATE INDEX IF NOT EXISTS idx_payments_student ON payments (student_id);
 CREATE INDEX IF NOT EXISTS idx_evaluations_student ON student_evaluations(student_id);
+CREATE INDEX IF NOT EXISTS idx_homework_assignments_student ON homework_assignments(student_id);
+CREATE INDEX IF NOT EXISTS idx_homework_submissions_assignment ON homework_submissions(assignment_id);
 
 
 -- ==================== NOTES ====================

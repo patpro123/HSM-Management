@@ -176,6 +176,17 @@ app.get('/api/auth/config', (req, res) => {
   })
 })
 
+// POST /api/auth/dev-login — returns a real signed JWT for the current dev profile (no Google needed)
+if (DISABLE_AUTH) {
+  app.post('/api/auth/dev-login', (req, res) => {
+    const { generateToken } = require('./auth/jwtMiddleware')
+    const user = currentDevOverride || DEV_DEFAULTS[currentDevProfile] || DEV_DEFAULTS.admin
+    const token = generateToken(user)
+    console.log(`[DEV] dev-login → ${user.email} (${user.roles.join(', ')})`)
+    res.json({ token, user })
+  })
+}
+
 // POST /api/dev/switch-profile — only available in local dev mode
 if (DISABLE_AUTH) {
   app.post('/api/dev/switch-profile', async (req, res) => {
@@ -208,6 +219,17 @@ if (DISABLE_AUTH) {
       user: currentDevOverride || DEV_DEFAULTS[currentDevProfile],
     })
   })
+
+  // POST /api/dev/run-file-cleanup — manually trigger Drive file cleanup (dev only)
+  app.post('/api/dev/run-file-cleanup', async (req, res) => {
+    try {
+      const { runFileCleanupJob } = require('./scheduler/fileCleanupScheduler')
+      const result = await runFileCleanupJob()
+      res.json(result)
+    } catch (err) {
+      res.status(500).json({ error: err.message })
+    }
+  })
 }
 // -----------------------------------------
 
@@ -236,6 +258,8 @@ app.use('/api/prospects', require('./routes/prospects'));
 app.use('/api/migration', require('./routes/migration'));
 app.use('/api', require('./routes/documents'));
 app.use('/api/whatsapp', require('./routes/whatsapp'));
+app.use('/api', require('./routes/homework'));
+app.use('/api', require('./routes/files'));
 
 // GET /api/packages — list all packages, optionally filtered by instrument_id and location
 app.get('/api/packages', async (req, res) => {
@@ -323,4 +347,6 @@ app.listen(PORT, '0.0.0.0', () => {
   // Register background schedulers
   const { registerPayoutScheduler } = require('./scheduler/payoutScheduler')
   registerPayoutScheduler()
+  const { registerFileCleanupScheduler } = require('./scheduler/fileCleanupScheduler')
+  registerFileCleanupScheduler()
 })

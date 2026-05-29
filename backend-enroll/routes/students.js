@@ -218,22 +218,70 @@ router.post('/:studentId/image', async (req, res) => {
   if (!image || typeof image !== 'string') {
     return res.status(400).json({ error: 'image (base64 string) is required' });
   }
+
+  const useDrive =
+    process.env.DRIVE_ENABLED === 'true' &&
+    Boolean(process.env.DRIVE_FOLDER_PROFILE_IMAGES);
+
+  let profileImageUrl = null;
+  let storageId       = null;
+
+  if (useDrive) {
+    try {
+      const driveService = require('../services/driveService');
+      const base64Part = image.includes(',') ? image.split(',')[1] : image;
+      const mimeMatch  = image.match(/^data:([^;]+);/);
+      const mimeType   = mimeMatch ? mimeMatch[1] : 'image/jpeg';
+      const ext        = mimeType.split('/')[1] || 'jpg';
+      const buffer     = Buffer.from(base64Part, 'base64');
+
+      const result = await driveService.upload({
+        buffer,
+        fileName:   `profile_${studentId}_${Date.now()}.${ext}`,
+        mimeType,
+        category:   'profile_image',
+        entityType: 'student',
+        entityId:   studentId,
+      });
+      profileImageUrl = result.publicUrl;
+      storageId       = result.fileStorageId;
+    } catch (err) {
+      console.error('Drive upload failed for profile image, storing base64:', err.message);
+    }
+  }
+
+  const client = await pool.connect();
   try {
-    const updateRes = await pool.query(
+    await client.query('BEGIN');
+
+    // Always store in metadata.image for backward compat (use URL if Drive succeeded)
+    const metaValue = profileImageUrl ?? image;
+    const updateRes = await client.query(
       `UPDATE students SET metadata = jsonb_set(
-        COALESCE(metadata, '{}'::jsonb),
-        '{image}',
-        to_jsonb($1)
-      ) WHERE id = $2 RETURNING id`,
-      [image, studentId]
+         COALESCE(metadata, '{}'::jsonb), '{image}', to_jsonb($1)
+       ) WHERE id = $2 RETURNING id`,
+      [metaValue, studentId]
     );
     if (updateRes.rows.length === 0) {
+      await client.query('ROLLBACK');
       return res.status(404).json({ error: 'Student not found' });
     }
-    res.json({ ok: true, studentId, message: 'Image uploaded successfully' });
+
+    if (profileImageUrl) {
+      await client.query(
+        `UPDATE students SET profile_image_url = $1, profile_storage_id = $2 WHERE id = $3`,
+        [profileImageUrl, storageId, studentId]
+      );
+    }
+
+    await client.query('COMMIT');
+    res.json({ ok: true, studentId, message: 'Image uploaded successfully', file_url: profileImageUrl });
   } catch (err) {
+    await client.query('ROLLBACK');
     console.error('Image upload error:', err);
     res.status(500).json({ error: 'Failed to upload image' });
+  } finally {
+    client.release();
   }
 });
 

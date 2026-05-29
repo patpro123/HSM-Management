@@ -220,23 +220,26 @@ const App: React.FC = () => {
       <>
         <LandingPage
           authError={authError ?? undefined}
-          onLogin={() => {
-            if (bypassedUser) {
-              // Dev mode bypass: Login instantly with dummy user
-              const fakePayload = {
-                userId: bypassedUser.id,
-                email: bypassedUser.email,
-                name: bypassedUser.name,
-                roles: bypassedUser.roles,
-                exp: Math.floor(Date.now() / 1000) + 86400 // 1 day expiry
-              };
-              const fakeToken = ['header', btoa(JSON.stringify(fakePayload)), 'signature'].join('.');
-              setToken(fakeToken);
-              setUser(bypassedUser);
-            } else {
-              // Production: trigger actual OAuth flow
-              login(API_BASE_URL);
+          onLogin={async () => {
+            // In dev mode, call the dev-login endpoint directly — no Google OAuth
+            if (import.meta.env.DEV) {
+              try {
+                const res = await fetch(`${API_BASE_URL}/api/auth/dev-login`, { method: 'POST' });
+                if (res.ok) {
+                  const data = await res.json();
+                  setToken(data.token);
+                  setUser(data.user);
+                  setBypassedUser(data.user);
+                  return;
+                }
+              } catch {
+                // backend not running — fall through to show an error rather than Google
+              }
+              setAuthError('Backend not reachable. Start the backend with DISABLE_AUTH=true.');
+              return;
             }
+            // Production: trigger actual Google OAuth flow
+            login(API_BASE_URL);
           }}
         />
         {bypassedUser && (

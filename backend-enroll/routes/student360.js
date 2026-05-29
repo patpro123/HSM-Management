@@ -137,10 +137,29 @@ router.get('/me/360', authenticateJWT, async (req, res) => {
       `SELECT student_id FROM student_guardians WHERE user_id = $1 LIMIT 1`,
       [req.user.id]
     );
-    if (linkResult.rows.length === 0) {
+
+    let studentId = linkResult.rows[0]?.student_id;
+
+    // In local dev mode, fall back to the first active student so the default
+    // dev student user can browse the student view without a guardian link.
+    if (!studentId && process.env.DISABLE_AUTH === 'true') {
+      const fallback = await pool.query(
+        `SELECT s.id FROM students s
+         JOIN enrollments e ON e.student_id = s.id
+         WHERE e.status = 'active'
+         ORDER BY s.name LIMIT 1`
+      );
+      studentId = fallback.rows[0]?.id;
+      if (studentId) {
+        console.log(`[DEV] /me/360 fallback → student ${studentId}`);
+      }
+    }
+
+    if (!studentId) {
       return res.status(404).json({ error: 'No student profile linked to your account. Please contact the school.' });
     }
-    const data = await fetchStudent360Data(linkResult.rows[0].student_id);
+
+    const data = await fetchStudent360Data(studentId);
     if (!data) return res.status(404).json({ error: 'Student not found' });
     res.json(data);
   } catch (error) {

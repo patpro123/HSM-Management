@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { apiGet, apiPost, apiDelete } from '../api';
 import PhoneLink from './PhoneLink';
+import HomeworkTab from './HomeworkTab';
 
 interface Student360ViewProps {
   email?: string;
@@ -43,16 +44,20 @@ interface Document {
   id: string;
   filename: string;
   file_type: string;
+  file_url: string | null;        // Drive public URL (new uploads)
+  file_storage_id: string | null;
   uploaded_at: string;
 }
 
+
 const Student360View: React.FC<Student360ViewProps> = ({ email, studentId, onClose, isModal = false, hidePayments = false, selfMode = false }) => {
-  const [activeTab, setActiveTab] = useState<'personal' | 'academic' | 'payment'>('personal');
+  const [activeTab, setActiveTab] = useState<'personal' | 'academic' | 'payment' | 'homework'>('personal');
   const [data, setData] = useState<Student360Data | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [documents, setDocuments] = useState<Document[]>([]);
   const [uploadSuccess, setUploadSuccess] = useState<string | null>(null);
+
 
   useEffect(() => {
     if (!selfMode && !email && !studentId) return;
@@ -68,7 +73,7 @@ const Student360View: React.FC<Student360ViewProps> = ({ email, studentId, onClo
         const result = await apiGet(url);
         setData(result);
 
-        // Fetch documents if we have the student ID (either from props or resolved from email)
+        // Fetch documents once we have the student ID
         const resolvedId = studentId || result.personal.details.id;
         if (resolvedId) {
           fetchDocuments(resolvedId);
@@ -117,6 +122,14 @@ const Student360View: React.FC<Student360ViewProps> = ({ email, studentId, onClo
   };
 
   const handleDownload = async (docId: string, filename: string) => {
+    // Fast path: Drive URL already in list state — open directly
+    const cached = documents.find(d => d.id === docId);
+    if (cached?.file_url) {
+      window.open(cached.file_url, '_blank');
+      return;
+    }
+
+    // Legacy path: fetch full row to get base64 file_data
     try {
       const doc = await apiGet(`/api/documents/${docId}`);
       const link = document.createElement('a');
@@ -139,6 +152,7 @@ const Student360View: React.FC<Student360ViewProps> = ({ email, studentId, onClo
       console.error('Delete failed', err);
     }
   };
+
 
   if (!selfMode && !email && !studentId) return null;
 
@@ -184,19 +198,19 @@ const Student360View: React.FC<Student360ViewProps> = ({ email, studentId, onClo
       {!loading && !error && data && (
         <>
           {/* Tabs */}
-          <div className="flex border-b px-6">
-            {(['personal', 'academic', 'payment'] as const)
+          <div className="flex border-b px-6 overflow-x-auto">
+            {(['personal', 'academic', 'payment', 'homework'] as const)
               .filter(tab => !(hidePayments && tab === 'payment'))
               .map((tab) => (
                 <button
                   key={tab}
                   onClick={() => setActiveTab(tab)}
-                  className={`mr-8 py-4 text-sm font-medium capitalize border-b-2 transition-colors ${activeTab === tab
+                  className={`mr-8 py-4 text-sm font-medium capitalize whitespace-nowrap border-b-2 transition-colors ${activeTab === tab
                       ? 'border-blue-500 text-blue-600'
                       : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                     }`}
                 >
-                  {tab} Details
+                  {tab === 'homework' ? 'Homework' : `${tab} Details`}
                 </button>
               ))}
           </div>
@@ -318,6 +332,14 @@ const Student360View: React.FC<Student360ViewProps> = ({ email, studentId, onClo
                   )}
                 </div>
               </div>
+            )}
+
+            {/* Homework Tab */}
+            {activeTab === 'homework' && (
+              <HomeworkTab
+                studentId={data.personal.details.id}
+                selfMode={selfMode}
+              />
             )}
 
             {/* Payment Tab */}
