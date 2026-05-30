@@ -4,6 +4,7 @@ export interface PickerStudent {
   id: string;
   name: string;
   instrument: string;
+  trinity_grade?: string;
 }
 
 interface StudentMultiSelectProps {

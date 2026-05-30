@@ -19,10 +19,9 @@ interface TeacherStudent {
 
 interface TeacherStudentListProps {
   students: TeacherStudent[];
-  teacherId: string;
 }
 
-const TeacherStudentList: React.FC<TeacherStudentListProps> = ({ students, teacherId }) => {
+const TeacherStudentList: React.FC<TeacherStudentListProps> = ({ students }) => {
   const [search, setSearch] = useState('');
   const [profileStudentId, setProfileStudentId] = useState<string | null>(null);
   const [attendanceBatchId, setAttendanceBatchId] = useState<string | null>(null);

@@ -249,7 +249,7 @@ const Teacher360View: React.FC<Teacher360ViewProps> = ({
                     Loading students…
                   </div>
                 ) : resolvedId ? (
-                  <TeacherStudentList students={students} teacherId={resolvedId} />
+                  <TeacherStudentList students={students} />
                 ) : null}
               </div>
             )}

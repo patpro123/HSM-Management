@@ -56,8 +56,25 @@ const LandingPage: React.FC<LandingPageProps> = ({ teachers, batches }) => {
     const [isScrolled, setIsScrolled] = useState(false);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [prefilledInstrument, setPrefilledInstrument] = useState('');
+    const [isDemoDayFlow, setIsDemoDayFlow] = useState(false);
     const [testimonialIndex, setTestimonialIndex] = useState(0);
     const [activeFaq, setActiveFaq] = useState<number | null>(null);
+    const [flashConfig, setFlashConfig] = useState<any>(null);
+
+    useEffect(() => {
+        const fetchConfig = async () => {
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/flash-banner`);
+                if (response.ok) {
+                    const data = await response.json();
+                    setFlashConfig(data);
+                }
+            } catch (err) {
+                console.error('Failed to fetch flash banner config:', err);
+            }
+        };
+        fetchConfig();
+    }, []);
 
     useEffect(() => {
         const handleScroll = () => { setIsScrolled(window.scrollY > 50); };
@@ -83,9 +100,10 @@ const LandingPage: React.FC<LandingPageProps> = ({ teachers, batches }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-    const handleOpenModal = (e: React.MouseEvent, instrument?: string) => {
+    const handleOpenModal = (e: React.MouseEvent, instrument?: string, isDemoDay?: boolean) => {
         e.preventDefault();
         setPrefilledInstrument(instrument || '');
+        setIsDemoDayFlow(!!isDemoDay);
         setIsModalOpen(true);
         document.body.style.overflow = 'hidden';
     };
@@ -95,7 +113,9 @@ const LandingPage: React.FC<LandingPageProps> = ({ teachers, batches }) => {
         document.body.style.overflow = '';
     };
 
-    const intakeSrc = `${PORTAL_URL}/intake?embed=1${prefilledInstrument ? `&instrument=${encodeURIComponent(prefilledInstrument)}` : ''}`;
+    const intakeSrc = `${PORTAL_URL}/intake?embed=1` +
+        (prefilledInstrument ? `&instrument=${encodeURIComponent(prefilledInstrument)}` : '') +
+        (isDemoDayFlow ? `&demo_type=demo_day` : '');
 
     return (
         <div className="landing-wrapper">
@@ -106,7 +126,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ teachers, batches }) => {
             />
 
             <main className="stacking-container">
-                <HeroSection onOpenModal={handleOpenModal} />
+                <HeroSection onOpenModal={handleOpenModal} flashConfig={flashConfig} />
                 <InstrumentShowcase onOpenModal={handleOpenModal} />
                 <WhyHSM />
                 <TeachersSection teachers={teachers} />

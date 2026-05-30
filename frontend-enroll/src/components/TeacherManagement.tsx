@@ -412,7 +412,21 @@ export default function TeacherManagement({ instruments, onRefresh }: TeacherMan
       fetchBatches();
       fetchTeachers();
       if (expandedTeacher) {
-        fetchTeacherBatches(expandedTeacher);
+        setTeacherBatches(prev => {
+          const list = prev[expandedTeacher] || [];
+          return {
+            ...prev,
+            [expandedTeacher]: list.map((b): Batch => b.id === selectedBatch.id ? {
+              ...b,
+              teacher_id: batchForm.teacher_id || null,
+              recurrence,
+              start_time: validTimings[0].start_time,
+              end_time: validTimings[0].end_time,
+              capacity: batchForm.capacity,
+              whatsapp_group_link: batchForm.whatsapp_group_link || undefined
+            } : b)
+          };
+        });
       }
       onRefresh();
       setTimeout(() => setSuccess(''), 3000);

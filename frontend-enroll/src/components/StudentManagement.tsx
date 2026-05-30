@@ -10,6 +10,7 @@ import StudentFilters from './StudentManagement/StudentFilters';
 import StudentCardGrid from './StudentManagement/StudentCardGrid';
 import StudentTableView from './StudentManagement/StudentTableView';
 import ProspectList from './StudentManagement/ProspectList';
+import DemoDayList from './StudentManagement/DemoDayList';
 
 interface StudentManagementProps {
   students: Student[];
@@ -43,8 +44,10 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students: propStu
   const [filterBatches, setFilterBatches] = useState<(string | number)[]>([]);
   const [filterTeacher, setFilterTeacher] = useState<string>('all');
   const [filterStatus, setFilterStatus] = useState<'active' | 'inactive' | 'all'>('active');
-  const [filterType, setFilterType] = useState<'permanent' | 'prospect'>('permanent');
+  const [filterType, setFilterType] = useState<'permanent' | 'prospect' | 'demoday'>('permanent');
+  const [demoDayDateFilter, setDemoDayDateFilter] = useState<string>('all');
   const [prospectList, setProspectList] = useState<any[]>([]);
+  const [flashConfig, setFlashConfig] = useState<any>(null);
   const [selectedProspect, setSelectedProspect] = useState<any | null>(null);
   const [ageFilter, setAgeFilter] = useState<string | null>(null);
   const [locationFilter, setLocationFilter] = useState<string>('all');
@@ -73,6 +76,7 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students: propStu
 
   useEffect(() => {
     apiGet('/api/teachers').then(res => setTeachers(res.teachers || []));
+    apiGet('/api/flash-banner').then(res => setFlashConfig(res)).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -83,7 +87,7 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students: propStu
   }, [filterInstruments, batches]);
 
   useEffect(() => {
-    if (filterType === 'prospect') {
+    if (filterType === 'prospect' || filterType === 'demoday') {
       apiGet('/api/prospects?include_inactive=true')
         .then(res => setProspectList(res.prospects || []))
         .catch(err => console.error('Failed to fetch prospects', err));
@@ -150,9 +154,29 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students: propStu
 
   const displayedProspects = prospectList
     .filter(p => {
+      if (filterType === 'demoday') {
+        const prospectDate = p.metadata?.demo_day_date || flashConfig?.demo_day_date;
+        if (demoDayDateFilter !== 'all') {
+          return p.metadata?.demo_type === 'demo_day' && prospectDate === demoDayDateFilter;
+        }
+        return p.metadata?.demo_type === 'demo_day';
+      } else {
+        return p.metadata?.demo_type !== 'demo_day';
+      }
+    })
+    .filter(p => {
       if (filterStatus === 'active') return p.is_active !== false;
       if (filterStatus === 'inactive') return p.is_active === false;
       return true;
+    })
+    .filter(p => {
+      if (filterInstruments.length === 0) return true;
+      const interestedName = p.metadata?.interested_instrument;
+      if (!interestedName) return false;
+      return filterInstruments.some(id => {
+        const inst = instruments.find(i => i.id === id);
+        return inst && inst.name.toLowerCase() === interestedName.toLowerCase();
+      });
     })
     .filter(p => {
       if (!searchTerm) return true;
@@ -169,6 +193,13 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students: propStu
       if (locationFilter === 'all') return true;
       return (p.metadata?.location || '') === locationFilter;
     });
+
+  const demoDayDates = Array.from(new Set(
+    prospectList
+      .filter(p => p.metadata?.demo_type === 'demo_day')
+      .map(p => p.metadata?.demo_day_date || flashConfig?.demo_day_date)
+      .filter(Boolean)
+  )).sort() as string[];
 
   const relevantBatches = batches.filter(b => filterInstruments.includes(b.instrument_id));
 
@@ -284,6 +315,11 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students: propStu
         const savedName = `${formData.first_name || ''} ${formData.last_name || ''}`.trim() || 'Student';
         setShowAddModal(false);
         onRefresh();
+        if (prospectId) {
+          apiGet('/api/prospects?include_inactive=true')
+            .then(res => setProspectList(res.prospects || []))
+            .catch(err => console.error('Failed to fetch prospects', err));
+        }
         if (!editingStudent && savedId && (feeTotal || 0) > 0) {
           // New enrollment — show payment step
           setPaymentStep({ studentId: savedId, studentName: savedName, amount: feeTotal || 0, credits: creditsTotal });
@@ -417,6 +453,32 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students: propStu
           onSelectProspect={setSelectedProspect}
           locationFilter={locationFilter}
           onLocationFilterChange={setLocationFilter}
+        />
+      )}
+
+      {filterType === 'demoday' && (
+        <DemoDayList
+          prospectList={prospectList}
+          displayedProspects={displayedProspects}
+          ageFilter={ageFilter}
+          ageBuckets={AGE_BUCKETS}
+          getAgeDays={getAgeDays}
+          getAgeBucket={getAgeBucket}
+          onAgeFilterChange={(key) => { setAgeFilter(key); }}
+          onSelectProspect={setSelectedProspect}
+          locationFilter={locationFilter}
+          onLocationFilterChange={setLocationFilter}
+          demoDayDateFilter={demoDayDateFilter}
+          onDemoDayDateFilterChange={setDemoDayDateFilter}
+          demoDayDates={demoDayDates}
+          flashConfig={flashConfig}
+          onUpdateProspect={(updated) => {
+            setProspectList(prev => prev.map(p => p.id === updated.id ? updated : p));
+          }}
+          onEnrollProspect={(id) => {
+            setInitialProspectId(id);
+            setShowAddModal(true);
+          }}
         />
       )}
 

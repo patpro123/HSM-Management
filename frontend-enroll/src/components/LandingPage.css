@@ -1564,3 +1564,179 @@ img {
         justify-content: center;
     }
 }
+
+/* ── Flash Section Announcements Styles ── */
+.flash-section {
+    padding: 5rem 0;
+    background-color: var(--bg-primary);
+    position: relative;
+    z-index: 10;
+}
+
+.flash-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 2.5rem;
+}
+
+@media (min-width: 768px) {
+    .flash-grid {
+        grid-template-columns: 1fr 1fr;
+    }
+}
+
+.flash-card {
+    position: relative;
+    border-radius: 24px;
+    padding: 3rem 2.5rem;
+    color: #ffffff;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    min-height: 380px;
+    box-shadow: 0 15px 35px rgba(0, 0, 0, 0.1);
+    transition: transform 0.4s cubic-bezier(0.165, 0.84, 0.44, 1), box-shadow 0.4s cubic-bezier(0.165, 0.84, 0.44, 1);
+    overflow: hidden;
+}
+
+.flash-card::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    right: -30%;
+    width: 250px;
+    height: 250px;
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 50%;
+    pointer-events: none;
+}
+
+.flash-card:hover {
+    transform: translateY(-8px);
+    box-shadow: 0 25px 50px rgba(0, 0, 0, 0.2);
+}
+
+.demo-card {
+    background: linear-gradient(135deg, #1e1b4b 0%, #312e81 100%);
+    border: 1px solid rgba(79, 70, 229, 0.3);
+}
+
+.piano-card {
+    background: linear-gradient(135deg, #064e3b 0%, #065f46 100%);
+    border: 1px solid rgba(5, 150, 105, 0.3);
+}
+
+.card-badge {
+    align-self: flex-start;
+    padding: 0.35rem 0.85rem;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.15);
+    backdrop-filter: blur(4px);
+    margin-bottom: 1.5rem;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.card-badge.badge-emerald {
+    background: rgba(52, 211, 153, 0.2);
+    border-color: rgba(52, 211, 153, 0.3);
+    color: #a7f3d0;
+}
+
+.flash-card .card-title {
+    font-family: var(--font-serif);
+    font-size: 2rem;
+    font-weight: 800;
+    line-height: 1.25;
+    margin-bottom: 1rem;
+    color: #ffffff;
+}
+
+.flash-card .card-desc {
+    font-size: 1rem;
+    line-height: 1.6;
+    color: rgba(255, 255, 255, 0.85);
+    margin-bottom: 2rem;
+    flex-grow: 1;
+}
+
+.flash-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem 2rem;
+    font-size: 1rem;
+    font-weight: 700;
+    border-radius: 16px;
+    border: none;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    text-align: center;
+    width: 100%;
+}
+
+.flash-btn-primary {
+    background: #f26b38;
+    color: #ffffff;
+    box-shadow: 0 8px 24px rgba(242, 107, 56, 0.4);
+}
+
+.flash-btn-primary:hover {
+    background: #ff7e4d;
+    transform: translateY(-2px);
+    box-shadow: 0 12px 30px rgba(242, 107, 56, 0.6);
+}
+
+.flash-btn-emerald {
+    background: #10b981;
+    color: #ffffff;
+    box-shadow: 0 8px 24px rgba(16, 185, 129, 0.4);
+}
+
+.flash-btn-emerald:hover {
+    background: #34d399;
+    transform: translateY(-2px);
+    box-shadow: 0 12px 30px rgba(16, 185, 129, 0.6);
+}
+
+/* Disabled State Styles */
+.demo-card.link-disabled {
+    border-color: rgba(255, 255, 255, 0.1);
+    background: linear-gradient(135deg, #111827 0%, #1f2937 100%);
+}
+
+.demo-card.link-disabled .card-title {
+    color: rgba(255, 255, 255, 0.6);
+}
+
+.demo-card.link-disabled .card-desc {
+    color: rgba(255, 255, 255, 0.45);
+}
+
+.disabled-notice-box {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px dashed rgba(255, 255, 255, 0.1);
+    border-radius: 16px;
+    padding: 1.25rem;
+    margin-top: auto;
+}
+
+.flash-btn-disabled {
+    background: rgba(255, 255, 255, 0.08);
+    color: rgba(255, 255, 255, 0.3);
+    cursor: not-allowed;
+    box-shadow: none;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.notice-text {
+    font-size: 0.75rem;
+    line-height: 1.4;
+    color: rgba(255, 255, 255, 0.35);
+    margin-top: 0.75rem;
+    text-align: center;
+    font-style: italic;
+}

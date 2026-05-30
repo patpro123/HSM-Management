@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { apiGet, apiPost } from '../api';
+import { apiGet, apiPost, apiPut, apiDelete } from '../api';
 import { getCurrentUser } from '../auth';
 import StudentMultiSelect, { PickerStudent } from './StudentMultiSelect';
 
@@ -62,6 +62,170 @@ export default function BulkHomeworkPanel({ mode, teacherId }: BulkHomeworkPanel
   const [habitLevel, setHabitLevel] = useState<'beginner' | 'intermediate' | 'advanced'>('beginner');
   const [habitAssigning, setHabitAssigning] = useState(false);
   const [habitError, setHabitError] = useState<string | null>(null);
+
+  // ── Predefined practice templates ─────────────────────────────────────────
+  const [habitTab, setHabitTab] = useState<'template' | 'custom' | 'manage'>('template');
+
+  // ── Manage active habits state ────────────────────────────────────────────
+  const [manageHabits, setManageHabits] = useState<{ id: string; student_id: string; title: string; icon: string; student_name: string }[]>([]);
+  const [loadingManage, setLoadingManage] = useState(false);
+  const [selectedManageIds, setSelectedManageIds] = useState<string[]>([]);
+  
+  // Bulk edit state
+  const [isBulkEditing, setIsBulkEditing] = useState(false);
+  const [bulkEditTitle, setBulkEditTitle] = useState('');
+  const [bulkEditIcon, setBulkEditIcon] = useState('🎵');
+
+  // Single edit state
+  const [editingHabitId, setEditingHabitId] = useState<string | null>(null);
+  const [editHabitTitle, setEditHabitTitle] = useState('');
+  const [editHabitIcon, setEditHabitIcon] = useState('🎵');
+
+  useEffect(() => {
+    if (habitTab !== 'manage' || selectedIds.length === 0) {
+      setManageHabits([]);
+      return;
+    }
+    const fetchManageHabits = async () => {
+      setLoadingManage(true);
+      try {
+        const res = await apiGet(`/api/habits/by-students?student_ids=${selectedIds.join(',')}`);
+        setManageHabits(res.habits || []);
+        setSelectedManageIds([]);
+        setEditingHabitId(null);
+        setIsBulkEditing(false);
+      } catch (err) {
+        console.error('Failed to fetch active habits:', err);
+      } finally {
+        setLoadingManage(false);
+      }
+    };
+    fetchManageHabits();
+  }, [habitTab, selectedIds]);
+
+  const handleDeleteHabit = async (habitId: string) => {
+    if (!confirm('Are you sure you want to delete this habit?')) return;
+    try {
+      await apiDelete(`/api/habits/${habitId}`);
+      setManageHabits(prev => prev.filter(h => h.id !== habitId));
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to delete habit');
+    }
+  };
+
+  const handleUpdateHabit = async (habitId: string) => {
+    if (!editHabitTitle.trim()) return;
+    try {
+      const res = await apiPut(`/api/habits/${habitId}`, { title: editHabitTitle, icon: editHabitIcon });
+      setManageHabits(prev => prev.map(h => h.id === habitId ? { ...h, title: res.habit.title, icon: res.habit.icon } : h));
+      setEditingHabitId(null);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to update habit');
+    }
+  };
+
+  const handleBulkDeleteHabits = async () => {
+    if (selectedManageIds.length === 0) return;
+    if (!confirm(`Are you sure you want to delete the ${selectedManageIds.length} selected habits?`)) return;
+    try {
+      await apiPost('/api/habits/archive-bulk', { habit_ids: selectedManageIds });
+      setManageHabits(prev => prev.filter(h => !selectedManageIds.includes(h.id)));
+      setSelectedManageIds([]);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to delete habits');
+    }
+  };
+
+  const handleBulkUpdateHabits = async () => {
+    if (selectedManageIds.length === 0 || !bulkEditTitle.trim()) return;
+    try {
+      await apiPost('/api/habits/update-bulk', { habit_ids: selectedManageIds, title: bulkEditTitle, icon: bulkEditIcon });
+      setManageHabits(prev => prev.map(h => selectedManageIds.includes(h.id) ? { ...h, title: bulkEditTitle, icon: bulkEditIcon } : h));
+      setIsBulkEditing(false);
+      setBulkEditTitle('');
+      setSelectedManageIds([]);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to update habits');
+    }
+  };
+  const [predefinedItems, setPredefinedItems] = useState<Record<string, { id: string; title: string; icon: string }[]>>({});
+  const [loadingPredefined, setLoadingPredefined] = useState(true);
+  const [predefinedInstrument, setPredefinedInstrument] = useState('');
+  const [selectedPredefinedIds, setSelectedPredefinedIds] = useState<string[]>([]);
+
+  // ── Fetch predefined items ────────────────────────────────────────────────
+  useEffect(() => {
+    const fetchPredefined = async () => {
+      try {
+        const res = await apiGet('/api/practice-items');
+        setPredefinedItems(res || {});
+      } catch (err) {
+        console.error('Failed to fetch predefined practice items:', err);
+      } finally {
+        setLoadingPredefined(false);
+      }
+    };
+    fetchPredefined();
+  }, []);
+
+  const getPredefinedKey = useCallback((instrumentName: string) => {
+    const norm = instrumentName.toLowerCase().trim();
+    if (norm.includes('piano') || norm.includes('keyboard')) return 'piano_keyboard';
+    if (norm.includes('guitar')) return 'guitar';
+    if (norm.includes('drum') || norm.includes('tabla') || norm.includes('octopad')) return 'drums';
+    if (norm.includes('violin')) return 'violin';
+    if (norm.includes('vocals') || norm.includes('singing') || norm.includes('carnatik') || norm.includes('carnatic') || norm.includes('hindustani')) return 'vocals_classical';
+    return null;
+  }, []);
+
+  // Auto-detect instrument filter based on selected students
+  useEffect(() => {
+    if (selectedIds.length > 0) {
+      const selectedStudents = students.filter(s => selectedIds.includes(s.id));
+      const instruments = Array.from(new Set(selectedStudents.map(s => s.instrument)));
+      if (instruments.length === 1) {
+        setPredefinedInstrument(instruments[0]);
+      }
+    }
+  }, [selectedIds, students]);
+
+  const key = getPredefinedKey(predefinedInstrument);
+  const itemsToRender = key ? (predefinedItems[key] || []) : [];
+
+  const handleAssignPredefinedHabits = async () => {
+    if (selectedIds.length === 0) { setHabitError('Select at least one student.'); return; }
+    if (selectedPredefinedIds.length === 0) { setHabitError('Select at least one practice template.'); return; }
+
+    setHabitAssigning(true); setHabitError(null);
+    try {
+      const selectedItems = itemsToRender.filter(item => selectedPredefinedIds.includes(item.id));
+      let created = 0;
+      let skipped = 0;
+
+      for (const item of selectedItems) {
+        const res = await apiPost('/api/habits/assign-bulk', {
+          student_ids: selectedIds,
+          title: item.title,
+          icon: item.icon,
+          type: 'practice',
+        });
+        created += res.created || 0;
+        skipped += res.skipped || 0;
+      }
+
+      setSelectedPredefinedIds([]);
+      setSelectedIds([]);
+      if (skipped > 0) {
+        setHabitError(`Assigned templates. ${created} succeeded, ${skipped} skipped (limit reached).`);
+      } else {
+        alert('Practice templates successfully assigned!');
+      }
+    } catch (err) {
+      setHabitError(err instanceof Error ? err.message : 'Failed to assign practice templates.');
+    } finally {
+      setHabitAssigning(false);
+    }
+  };
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
@@ -523,73 +687,385 @@ export default function BulkHomeworkPanel({ mode, teacherId }: BulkHomeworkPanel
 
       {/* ── Assign Habit form ── */}
       {subPanel === 'habit' && (
-        <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-5 space-y-4">
-          <h3 className="font-semibold text-sm text-emerald-900">Habit Details</h3>
-
-          <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Title *</label>
-            <input type="text" value={habitTitle} onChange={(e) => setHabitTitle(e.target.value)}
-              placeholder="e.g. Daily scales practice"
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400" />
+        <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-5 space-y-4 shadow-sm">
+          <div className="flex gap-2 border-b border-emerald-100 pb-3 mb-2">
+            {(['template', 'custom', 'manage'] as const).map(tab => (
+              <button
+                key={tab}
+                type="button"
+                onClick={() => {
+                  setHabitTab(tab);
+                  setHabitError(null);
+                }}
+                className={`text-xs font-semibold px-3 py-1.5 rounded-lg transition-all ${
+                  habitTab === tab
+                    ? 'bg-emerald-600 text-white shadow-sm'
+                    : 'text-emerald-700 hover:bg-emerald-100/50'
+                }`}
+              >
+                {tab === 'template' ? 'Practice Templates' : tab === 'custom' ? 'Custom Habit' : 'Manage Habits'}
+              </button>
+            ))}
           </div>
 
-          <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">
-              Icon <span className="font-normal text-gray-400">(emoji)</span>
-            </label>
-            <div className="flex items-center gap-2">
-              <input type="text" value={habitIcon} onChange={(e) => setHabitIcon(e.target.value)}
-                maxLength={2}
-                className="w-14 border border-gray-300 rounded-lg px-3 py-2 text-center text-lg focus:outline-none focus:ring-2 focus:ring-emerald-400" />
-              <div className="flex gap-1">
-                {['🎵', '🎸', '🎹', '🥁', '🎻', '📖', '🎯', '⭐'].map((e) => (
-                  <button key={e} type="button" onClick={() => setHabitIcon(e)}
-                    className={`text-xl p-1 rounded hover:bg-emerald-100 transition-colors ${habitIcon === e ? 'bg-emerald-200' : ''}`}>
-                    {e}
-                  </button>
-                ))}
+          {habitTab === 'template' && (
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Filter by Instrument</label>
+                <select
+                  value={predefinedInstrument}
+                  onChange={(e) => {
+                    setPredefinedInstrument(e.target.value);
+                    setSelectedPredefinedIds([]);
+                  }}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400 bg-white"
+                >
+                  <option value="">-- Select Instrument --</option>
+                  <option value="Keyboard">Keyboard / Piano</option>
+                  <option value="Guitar">Guitar</option>
+                  <option value="Drums">Drums / Tabla</option>
+                  <option value="Violin">Violin</option>
+                  <option value="Vocals">Vocals (Hindustani / Carnatic)</option>
+                </select>
               </div>
-            </div>
-          </div>
 
-          <div>
-            <label className="block text-xs font-medium text-gray-600 mb-2">Type</label>
-            <div className="flex gap-4">
-              {(['practice', 'theory'] as const).map((t) => (
-                <label key={t} className="flex items-center gap-2 cursor-pointer">
-                  <input type="radio" name="habitType" value={t} checked={habitType === t}
-                    onChange={() => setHabitType(t)}
-                    className="text-emerald-600 focus:ring-emerald-500" />
-                  <span className="text-sm text-gray-700 capitalize">{t}</span>
-                </label>
-              ))}
-            </div>
-          </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Select Practice Items</label>
+                {loadingPredefined ? (
+                  <p className="text-xs text-gray-400 animate-pulse">Loading templates...</p>
+                ) : itemsToRender.length === 0 ? (
+                  <p className="text-xs text-gray-400 italic bg-white border border-gray-200 rounded-lg p-4 text-center">
+                    Select an instrument to view its predefined practice curriculum templates.
+                  </p>
+                ) : (
+                  <div className="space-y-1.5 max-h-60 overflow-y-auto bg-white border border-gray-200 rounded-lg p-2.5 shadow-inner">
+                    {itemsToRender.map((item) => {
+                      const checked = selectedPredefinedIds.includes(item.id);
+                      return (
+                        <label
+                          key={item.id}
+                          className={`flex items-center gap-3 p-2 rounded-lg cursor-pointer transition-all border ${
+                            checked ? 'bg-emerald-50 border-emerald-200' : 'bg-transparent border-transparent hover:bg-slate-50'
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => {
+                              setSelectedPredefinedIds((prev) =>
+                                checked ? prev.filter((id) => id !== item.id) : [...prev, item.id]
+                              );
+                            }}
+                            className="rounded text-emerald-600 focus:ring-emerald-500 border-gray-300"
+                          />
+                          <span className="text-lg">{item.icon}</span>
+                          <span className="text-sm font-medium text-gray-700">{item.title}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
 
-          {habitType === 'theory' && (
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Level</label>
-              <select value={habitLevel} onChange={(e) => setHabitLevel(e.target.value as typeof habitLevel)}
-                className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400">
-                <option value="beginner">Beginner</option>
-                <option value="intermediate">Intermediate</option>
-                <option value="advanced">Advanced</option>
-              </select>
+              {habitError && <p className="text-xs text-red-500 font-medium">{habitError}</p>}
+
+              <button
+                onClick={handleAssignPredefinedHabits}
+                disabled={habitAssigning || selectedIds.length === 0 || selectedPredefinedIds.length === 0}
+                className="w-full sm:w-auto px-5 py-2 bg-emerald-600 text-white text-sm font-semibold rounded-lg hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm"
+              >
+                {habitAssigning
+                  ? 'Assigning…'
+                  : `Assign ${selectedPredefinedIds.length} Practice Item${selectedPredefinedIds.length !== 1 ? 's' : ''} to ${selectedIds.length} Student${selectedIds.length !== 1 ? 's' : ''}`}
+              </button>
             </div>
           )}
 
-          {habitError && <p className="text-xs text-red-500">{habitError}</p>}
+          {habitTab === 'custom' && (
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Title *</label>
+                <input
+                  type="text"
+                  value={habitTitle}
+                  onChange={(e) => setHabitTitle(e.target.value)}
+                  placeholder="e.g. Daily scales practice"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400 bg-white"
+                />
+              </div>
 
-          <button onClick={handleAssignHabit} disabled={habitAssigning || selectedIds.length === 0}
-            className="px-4 py-2 bg-emerald-600 text-white text-sm font-medium rounded-lg hover:bg-emerald-700 disabled:opacity-50 transition-colors">
-            {habitAssigning
-              ? 'Assigning…'
-              : `Assign to ${selectedIds.length} Student${selectedIds.length !== 1 ? 's' : ''}`}
-          </button>
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
+                  Icon <span className="font-normal text-gray-400">(emoji)</span>
+                </label>
+                <div className="flex flex-wrap items-center gap-2 bg-white border border-gray-200 rounded-lg p-2">
+                  <input
+                    type="text"
+                    value={habitIcon}
+                    onChange={(e) => setHabitIcon(e.target.value)}
+                    maxLength={2}
+                    className="w-12 border border-gray-300 rounded-lg py-1.5 text-center text-lg focus:outline-none focus:ring-2 focus:ring-emerald-400 bg-slate-50 font-bold"
+                  />
+                  <div className="flex flex-wrap gap-1">
+                    {['🎵', '🎸', '🎹', '🥁', '🎻', '📖', '🎯', '⭐'].map((e) => (
+                      <button
+                        key={e}
+                        type="button"
+                        onClick={() => setHabitIcon(e)}
+                        className={`text-xl p-1 rounded-md hover:bg-emerald-100 transition-colors ${habitIcon === e ? 'bg-emerald-200' : ''}`}
+                      >
+                        {e}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Type</label>
+                <div className="flex gap-4">
+                  {(['practice', 'theory'] as const).map((t) => (
+                    <label key={t} className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="habitType"
+                        value={t}
+                        checked={habitType === t}
+                        onChange={() => setHabitType(t)}
+                        className="text-emerald-600 focus:ring-emerald-500"
+                      />
+                      <span className="text-sm font-medium text-gray-700 capitalize">{t}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              {habitType === 'theory' && (
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Level</label>
+                  <select
+                    value={habitLevel}
+                    onChange={(e) => setHabitLevel(e.target.value as typeof habitLevel)}
+                    className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400 bg-white"
+                  >
+                    <option value="beginner">Beginner</option>
+                    <option value="intermediate">Intermediate</option>
+                    <option value="advanced">Advanced</option>
+                  </select>
+                </div>
+              )}
+
+              {habitError && <p className="text-xs text-red-500 font-medium">{habitError}</p>}
+
+              <button
+                onClick={handleAssignHabit}
+                disabled={habitAssigning || selectedIds.length === 0}
+                className="w-full sm:w-auto px-5 py-2 bg-emerald-600 text-white text-sm font-semibold rounded-lg hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm"
+              >
+                {habitAssigning
+                  ? 'Assigning…'
+                  : `Assign Habit to ${selectedIds.length} Student${selectedIds.length !== 1 ? 's' : ''}`}
+              </button>
+            </div>
+          )}
+
+          {habitTab === 'manage' && (
+            <div className="space-y-4">
+              {selectedIds.length === 0 ? (
+                <p className="text-xs text-gray-400 italic bg-white border border-gray-200 rounded-lg p-4 text-center">
+                  Select one or more students from the list above to manage their active habits.
+                </p>
+              ) : loadingManage ? (
+                <p className="text-xs text-gray-400 animate-pulse">Loading active habits...</p>
+              ) : manageHabits.length === 0 ? (
+                <p className="text-xs text-gray-400 italic bg-white border border-gray-200 rounded-lg p-4 text-center">
+                  No active habits found for the selected students.
+                </p>
+              ) : (
+                <div className="space-y-3 bg-white border border-gray-200 rounded-lg p-3 shadow-inner">
+                  {/* Bulk Actions Header */}
+                  {selectedManageIds.length > 0 && (
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-emerald-50 border border-emerald-100 rounded-lg p-2 mb-2">
+                      <span className="text-xs font-semibold text-emerald-800">
+                        {selectedManageIds.length} habit{selectedManageIds.length !== 1 ? 's' : ''} selected
+                      </span>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => {
+                            setIsBulkEditing(!isBulkEditing);
+                            if (!isBulkEditing) {
+                              setBulkEditTitle('');
+                            }
+                          }}
+                          className="px-2.5 py-1 bg-white border border-emerald-300 text-emerald-700 hover:bg-emerald-100 rounded text-xs font-medium transition-colors"
+                        >
+                          {isBulkEditing ? 'Cancel Edit' : '✏️ Bulk Edit'}
+                        </button>
+                        <button
+                          onClick={handleBulkDeleteHabits}
+                          className="px-2.5 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-xs font-medium transition-colors"
+                        >
+                          🗑️ Bulk Delete
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Bulk Edit Form */}
+                  {isBulkEditing && selectedManageIds.length > 0 && (
+                    <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 space-y-2 mb-2 animate-fadeIn">
+                      <p className="text-xs font-semibold text-amber-800">Bulk Edit Selected Habits</p>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                        <input
+                          type="text"
+                          value={bulkEditTitle}
+                          onChange={(e) => setBulkEditTitle(e.target.value)}
+                          placeholder="New habit title"
+                          className="col-span-2 border border-gray-300 rounded px-2 py-1 text-xs focus:ring-1 focus:ring-amber-400"
+                        />
+                        <select
+                          value={bulkEditIcon}
+                          onChange={(e) => setBulkEditIcon(e.target.value)}
+                          className="border border-gray-300 rounded px-2 py-1 text-xs focus:ring-1 focus:ring-amber-400"
+                        >
+                          {['🎵', '🎸', '🎹', '🥁', '🎻', '📖', '🎯', '⭐'].map(ic => (
+                            <option key={ic} value={ic}>{ic}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <button
+                        onClick={handleBulkUpdateHabits}
+                        disabled={!bulkEditTitle.trim()}
+                        className="px-3 py-1 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white rounded text-xs font-medium transition-colors"
+                      >
+                        Apply Changes
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Habit List Table */}
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse text-xs">
+                      <thead>
+                        <tr className="border-b border-gray-200 bg-slate-50 text-gray-500 font-semibold">
+                          <th className="p-2 w-8">
+                            <input
+                              type="checkbox"
+                              checked={manageHabits.length > 0 && selectedManageIds.length === manageHabits.length}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setSelectedManageIds(manageHabits.map(h => h.id));
+                                } else {
+                                  setSelectedManageIds([]);
+                                }
+                              }}
+                              className="rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+                            />
+                          </th>
+                          <th className="p-2">Student</th>
+                          <th className="p-2">Habit</th>
+                          <th className="p-2 text-right">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {manageHabits.map((h) => {
+                          const isSelected = selectedManageIds.includes(h.id);
+                          const isEditing = editingHabitId === h.id;
+                          return (
+                            <tr
+                              key={h.id}
+                              className={`border-b border-slate-100 hover:bg-slate-50/50 transition-colors ${
+                                isSelected ? 'bg-emerald-50/20' : ''
+                              }`}
+                            >
+                              <td className="p-2">
+                                <input
+                                  type="checkbox"
+                                  checked={isSelected}
+                                  onChange={() => {
+                                    setSelectedManageIds(prev =>
+                                      isSelected ? prev.filter(id => id !== h.id) : [...prev, h.id]
+                                    );
+                                  }}
+                                  className="rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+                                />
+                              </td>
+                              <td className="p-2 font-medium text-gray-900">{h.student_name}</td>
+                              <td className="p-2">
+                                {isEditing ? (
+                                  <div className="flex items-center gap-1.5">
+                                    <select
+                                      value={editHabitIcon}
+                                      onChange={(e) => setEditHabitIcon(e.target.value)}
+                                      className="border border-gray-300 rounded px-1 py-0.5 text-xs focus:outline-none"
+                                    >
+                                      {['🎵', '🎸', '🎹', '🥁', '🎻', '📖', '🎯', '⭐'].map(ic => (
+                                        <option key={ic} value={ic}>{ic}</option>
+                                      ))}
+                                    </select>
+                                    <input
+                                      type="text"
+                                      value={editHabitTitle}
+                                      onChange={(e) => setEditHabitTitle(e.target.value)}
+                                      className="border border-gray-300 rounded px-1.5 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500 flex-1 min-w-0"
+                                    />
+                                    <button
+                                      onClick={() => handleUpdateHabit(h.id)}
+                                      disabled={!editHabitTitle.trim()}
+                                      className="px-1.5 py-0.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded text-[10px] font-semibold"
+                                    >
+                                      Save
+                                    </button>
+                                    <button
+                                      onClick={() => setEditingHabitId(null)}
+                                      className="text-gray-400 hover:text-gray-600 text-[10px] font-semibold px-0.5"
+                                    >
+                                      ✕
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="text-sm">{h.icon}</span>
+                                    <span className="text-gray-700">{h.title}</span>
+                                  </div>
+                                )}
+                              </td>
+                              <td className="p-2 text-right space-x-1.5">
+                                {!isEditing && (
+                                  <>
+                                    <button
+                                      onClick={() => {
+                                        setEditingHabitId(h.id);
+                                        setEditHabitTitle(h.title);
+                                        setEditHabitIcon(h.icon);
+                                      }}
+                                      className="text-slate-400 hover:text-slate-600 p-0.5"
+                                      title="Edit Habit"
+                                    >
+                                      ✏️
+                                    </button>
+                                    <button
+                                      onClick={() => handleDeleteHabit(h.id)}
+                                      className="text-slate-400 hover:text-red-600 p-0.5"
+                                      title="Delete Habit"
+                                    >
+                                      🗑️
+                                    </button>
+                                  </>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
-      )}
-
-      {/* ── Recent Assignments ── */}
+      )}      {/* ── Recent Assignments ── */}
       <div>
         <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">Recent Assignments</p>
         {loadingRecent ? (

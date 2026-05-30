@@ -1,0 +1,62 @@
+{
+  "piano_keyboard": [
+    {"id": "pk_01", "title": "Open the Trinity grade book and set up the music stand", "icon": "📖"},
+    {"id": "pk_02", "title": "Check seating posture and verify hand positioning (curved fingers)", "icon": "🪑"},
+    {"id": "pk_03", "title": "2 minutes of gentle finger stretching and wrist rotations", "icon": "🙌"},
+    {"id": "pk_04", "title": "Play a simple 5-finger warm-up pattern up and down twice", "icon": "🎹"},
+    {"id": "pk_05", "title": "Run through the current weekly technical scale with a metronome", "icon": "⏱️"},
+    {"id": "pk_06", "title": "Practice a specific 4-bar challenging section slowly 3 times", "icon": "🎯"},
+    {"id": "pk_07", "title": "Play through your main Trinity exam piece from start to finish", "icon": "🎼"},
+    {"id": "pk_08", "title": "Spend 1 minute sight-reading a brand new 2-bar melodic phrase", "icon": "👁️"},
+    {"id": "pk_09", "title": "Listen to a professional recording of your grade piece for phrasing", "icon": "🎧"},
+    {"id": "pk_10", "title": "Close the keyboard dust cover neatly to protect the keys", "icon": "✨"}
+  ],
+  "guitar": [
+    {"id": "gt_01", "title": "Tune all 6 strings perfectly using a digital tuner app", "icon": "🎸"},
+    {"id": "gt_02", "title": "Verify proper sitting posture and fret-hand thumb positioning", "icon": "📐"},
+    {"id": "gt_03", "title": "2 minutes of chromatic finger exercises (1-2-3-4 walking drill)", "icon": "🏃"},
+    {"id": "gt_04", "title": "Practice switching smoothly between two difficult chords for 1 minute", "icon": "🔄"},
+    {"id": "gt_05", "title": "Run through the weekly scale at a controlled, slow tempo", "icon": "📈"},
+    {"id": "gt_06", "title": "Loop a challenging 2-bar rhythm or strumming pattern with a click", "icon": "🥁"},
+    {"id": "gt_07", "title": "Play through the assigned section of your Trinity grade piece", "icon": "🎵"},
+    {"id": "gt_08", "title": "Spend 1 minute isolating a tricky riff or solo passage cleanly", "icon": "🔍"},
+    {"id": "gt_09", "title": "Clean the strings with a dry microfiber cloth to prevent rust", "icon": "🧼"},
+    {"id": "gt_10", "title": "Place the guitar safely back on its stand or inside its gig bag", "icon": "🏡"}
+  ],
+  "drums": [
+    {"id": "dr_01", "title": "Adjust drum throne height and verify structural foot pedal placement", "icon": "🪑"},
+    {"id": "dr_02", "title": "Check stick grip relaxation and execute 10 slow practice pad rebounds", "icon": "🥢"},
+    {"id": "dr_03", "title": "2 minutes of single-stroke rolls (RLRL) to a steady metronome", "icon": "⏱️"},
+    {"id": "dr_04", "title": "2 minutes of double-stroke rolls (RRLL) focusing on even volume", "icon": "🔊"},
+    {"id": "dr_05", "title": "Practice the assigned weekly rudiment (e.g., Paradiddles) for 2 minutes", "icon": "🧠"},
+    {"id": "dr_06", "title": "Run through your current limb-independence coordination drill slowly", "icon": "🤹"},
+    {"id": "dr_07", "title": "Play along to the target Trinity groove track or standard click", "icon": "🎧"},
+    {"id": "dr_08", "title": "Spend 1 minute practicing dynamic control (moving quiet to loud)", "icon": "🌊"},
+    {"id": "dr_09", "title": "Air-drum or mentally map out the arrangement of your performance track", "icon": "💭"},
+    {"id": "dr_10", "title": "Wipe down the snare/pad and store your drumsticks in their bag", "icon": "🎒"}
+  ],
+  "violin": [
+    {"id": "vn_01", "title": "Apply rosin to the bow hairs cleanly from frog to tip", "icon": "🎻"},
+    {"id": "vn_02", "title": "Tune all 4 strings meticulously using a fine-tuner app", "icon": "🎯"},
+    {"id": "vn_03", "title": "Check shoulder rest placement and adjust jaw/chin comfort alignment", "icon": "📐"},
+    {"id": "vn_04", "title": "2 minutes of open-string bowing drills targeting a straight bow path", "icon": "🏹"},
+    {"id": "vn_05", "title": "Practice a finger-placement shifting or left-hand intonation exercise", "icon": "🤚"},
+    {"id": "vn_06", "title": "Play through the current weekly scale, focusing on pristine intonation", "icon": "🌟"},
+    {"id": "vn_07", "title": "Isolate and repeat a specific 2-bar difficult bow-crossing pattern", "icon": "🔄"},
+    {"id": "vn_08", "title": "Play your full Trinity exam piece with deep focus on expression", "icon": "🎼"},
+    {"id": "vn_09", "title": "Gently wipe rosin dust off the violin body and strings with a soft cloth", "icon": "🧼"},
+    {"id": "vn_10", "title": "Loosen the bow hair completely before packing it safely away", "icon": "🔒"}
+  ],
+  "vocals_classical": [
+    {"id": "vc_01", "title": "Sip a glass of lukewarm water to properly hydrate the vocal folds", "icon": "💧"},
+    {"id": "vc_02", "title": "Spend 1 minute practicing deep, steady diaphragmatic breathing", "icon": "🫁"},
+    {"id": "vc_03", "title": "Do gentle jaw-relaxation stretches and hummed lip trills to warm up", "icon": "🗣️"},
+    {"id": "vc_04", "title": "Practice singing a steady, sustained 'Sa' to lock onto the tanpura drone", "icon": "🪕"},
+    {"id": "vc_05", "title": "Run through basic vocal patterns (Sarali Varisai / Alankars) at slow speed", "icon": "📈"},
+    {"id": "vc_06", "title": "Repeat basic vocal patterns at medium and fast speeds with clean pitch", "icon": "⚡"},
+    {"id": "vc_07", "title": "Isolate a specific complex phrasing, Sangati, or Taan passage slowly", "icon": "🔍"},
+    {"id": "vc_08", "title": "Sing through the assigned composition with accurate talam / steady rhythm", "icon": "👏"},
+    {"id": "vc_09", "title": "Record a 30-second audio clip of your singing to listen back for tone", "icon": "🎙️"},
+    {"id": "vc_10", "title": "Commit to avoiding cold drinks for the next 30 minutes to protect your voice", "icon": "🚫"}
+  ]
+}

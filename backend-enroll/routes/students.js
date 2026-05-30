@@ -12,6 +12,7 @@ router.get('/active-with-instruments', authenticateJWT, authorizeRole(['admin', 
       `SELECT
          s.id, s.name, s.phone,
          i.name AS instrument,
+         MIN(eb.trinity_grade) AS trinity_grade,
          MIN(b.id::text) AS batch_id,
          STRING_AGG(b.recurrence, ', ' ORDER BY b.recurrence) AS recurrence
        FROM students s

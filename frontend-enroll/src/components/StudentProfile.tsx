@@ -260,7 +260,7 @@ const StudentProfile: React.FC = () => {
           <div>
             <h3 className="font-semibold text-slate-700 mb-2">Last 3 Months</h3>
             <div className="space-y-2">
-              {profile.attendance.last_3_months.map((month, index) => (
+              {profile.attendance.last_3_months.map((month) => (
                 <div key={month.month} className="flex justify-between items-center p-3 bg-slate-50 rounded-lg">
                   <span className="text-slate-600 text-sm">
                     {new Date(month.month + '-01').toLocaleDateString('en-US', { year: 'numeric', month: 'long' })}

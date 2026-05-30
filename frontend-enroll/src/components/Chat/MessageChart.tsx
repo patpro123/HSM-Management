@@ -38,7 +38,7 @@ export function MessageChart({ title, chartType, data, xKey, series }: MessageCh
               cx="50%"
               cy="45%"
               outerRadius={70}
-              label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+              label={({ name, percent }) => `${name} ${percent != null ? (percent * 100).toFixed(0) : '0'}%`}
               labelLine={false}
             >
               {data.map((_, i) => (

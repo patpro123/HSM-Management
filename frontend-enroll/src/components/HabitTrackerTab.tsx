@@ -149,6 +149,25 @@ const HabitTrackerTab: React.FC<HabitTrackerTabProps> = ({ studentId, selfMode }
     const [stats, setStats]       = useState<UserStats>({ currentStreak: 0, longestStreak: 0, totalCompletions: 0 });
     const [xp, setXP]             = useState<XPSummary>({ totalXP: 0, recentEvents: [] });
     const [loading, setLoading]   = useState(true);
+    const [studentInfo, setStudentInfo] = useState<{ instrument: string; trinity_grade: string } | null>(null);
+    const [predefinedItems, setPredefinedItems] = useState<{ id: string; title: string; icon: string }[]>([]);
+    const [loadingPredefined, setLoadingPredefined] = useState(false);
+
+    useEffect(() => {
+        if (!studentInfo?.instrument) return;
+        const fetchPredefined = async () => {
+            setLoadingPredefined(true);
+            try {
+                const res = await apiGet(`/api/practice-items?instrument=${encodeURIComponent(studentInfo.instrument)}`);
+                setPredefinedItems(res.items || []);
+            } catch (err) {
+                console.error('Failed to fetch predefined practice items for student:', err);
+            } finally {
+                setLoadingPredefined(false);
+            }
+        };
+        fetchPredefined();
+    }, [studentInfo]);
 
     const [saving, setSaving] = useState(false);
 
@@ -203,6 +222,7 @@ const HabitTrackerTab: React.FC<HabitTrackerTabProps> = ({ studentId, selfMode }
             setLogMeta(habitsRes.logMeta || {});
             setStats(habitsRes.stats || { currentStreak: 0, longestStreak: 0, totalCompletions: 0 });
             setXP({ totalXP: xpRes.totalXP ?? 0, recentEvents: xpRes.recentEvents || [] });
+            setStudentInfo(habitsRes.studentInfo || null);
         } catch (err) {
             console.error('Failed to fetch habits', err);
         } finally {
@@ -825,43 +845,91 @@ const HabitTrackerTab: React.FC<HabitTrackerTabProps> = ({ studentId, selfMode }
                             </div>
 
                             {teacherAddTab === 'catalogue' && (
-                                <div className="space-y-3">
-                                    {CATALOGUE.map(group => {
-                                        const available = group.habits.filter(
-                                            h => !habits.some(existing => existing.title === h.title)
-                                        );
-                                        if (!available.length) return null;
-                                        return (
-                                            <div key={group.category}>
-                                                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1.5">{group.category}</p>
+                                <div className="space-y-4">
+                                    {/* Predefined practice curriculum templates */}
+                                    {studentInfo && (
+                                        <div className="border border-emerald-200 bg-emerald-50/50 rounded-xl p-3.5 space-y-2.5">
+                                            <p className="text-xs font-semibold text-emerald-800 uppercase tracking-wider">
+                                                🎯 Predefined Curriculum: {studentInfo.instrument} ({studentInfo.trinity_grade || 'All Grades'})
+                                            </p>
+                                            {loadingPredefined ? (
+                                                <p className="text-xs text-slate-400 animate-pulse">Loading curriculum...</p>
+                                            ) : predefinedItems.length === 0 ? (
+                                                <p className="text-xs text-slate-400 italic">No predefined practice items found for this instrument.</p>
+                                            ) : (
                                                 <div className="flex flex-wrap gap-2">
-                                                    {available.map(h => (
-                                                        <button
-                                                            key={h.title}
-                                                            onClick={async () => {
-                                                                if (saving) return;
-                                                                setSaving(true);
-                                                                try {
-                                                                    const res = await apiPost(`/api/students/${studentId}/habits`, { title: h.title, icon: h.icon });
-                                                                    setHabits(prev => [...prev, res.habit]);
-                                                                    setTeacherAddOpen(false);
-                                                                } catch (err: unknown) {
-                                                                    alert(err instanceof Error ? err.message : 'Failed to add habit');
-                                                                } finally { setSaving(false); }
-                                                            }}
-                                                            disabled={saving}
-                                                            className="flex items-center gap-1.5 px-3 py-1.5 bg-white rounded-lg border border-slate-200 text-sm text-slate-700 hover:border-orange-400 hover:text-orange-600 hover:bg-orange-50 transition-colors"
-                                                        >
-                                                            <span>{h.icon}</span> {h.title}
-                                                        </button>
-                                                    ))}
+                                                    {predefinedItems
+                                                        .filter(item => !habits.some(existing => existing.title === item.title))
+                                                        .map(item => (
+                                                            <button
+                                                                key={item.id}
+                                                                onClick={async () => {
+                                                                    if (saving) return;
+                                                                    setSaving(true);
+                                                                    try {
+                                                                        const res = await apiPost(`/api/students/${studentId}/habits`, {
+                                                                            title: item.title,
+                                                                            icon: item.icon,
+                                                                            type: 'practice'
+                                                                        });
+                                                                        setHabits(prev => [...prev, res.habit]);
+                                                                        setTeacherAddOpen(false);
+                                                                    } catch (err: unknown) {
+                                                                        alert(err instanceof Error ? err.message : 'Failed to add habit');
+                                                                    } finally { setSaving(false); }
+                                                                }}
+                                                                disabled={saving}
+                                                                className="flex items-center gap-1.5 px-3 py-1.5 bg-white rounded-lg border border-emerald-200 text-xs text-slate-700 hover:border-emerald-500 hover:text-emerald-800 hover:bg-emerald-50 transition-colors shadow-sm font-semibold"
+                                                            >
+                                                                <span>{item.icon}</span> {item.title}
+                                                            </button>
+                                                        ))}
                                                 </div>
-                                            </div>
-                                        );
-                                    })}
+                                            )}
+                                        </div>
+                                    )}
+
+                                    {/* General catalogue */}
+                                    <div className="space-y-3">
+                                        <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                                            🌍 General Practice Catalogue
+                                        </p>
+                                        {CATALOGUE.map(group => {
+                                            const available = group.habits.filter(
+                                                h => !habits.some(existing => existing.title === h.title)
+                                            );
+                                            if (!available.length) return null;
+                                            return (
+                                                <div key={group.category}>
+                                                    <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1.5">{group.category}</p>
+                                                    <div className="flex flex-wrap gap-2">
+                                                        {available.map(h => (
+                                                            <button
+                                                                key={h.title}
+                                                                onClick={async () => {
+                                                                    if (saving) return;
+                                                                    setSaving(true);
+                                                                    try {
+                                                                        const res = await apiPost(`/api/students/${studentId}/habits`, { title: h.title, icon: h.icon });
+                                                                        setHabits(prev => [...prev, res.habit]);
+                                                                        setTeacherAddOpen(false);
+                                                                    } catch (err: unknown) {
+                                                                        alert(err instanceof Error ? err.message : 'Failed to add habit');
+                                                                    } finally { setSaving(false); }
+                                                                }}
+                                                                disabled={saving}
+                                                                className="flex items-center gap-1.5 px-3 py-1.5 bg-white rounded-lg border border-slate-200 text-xs text-slate-700 hover:border-orange-400 hover:text-orange-600 hover:bg-orange-50 transition-colors font-medium"
+                                                            >
+                                                                <span>{h.icon}</span> {h.title}
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
                                 </div>
                             )}
-
                             {teacherAddTab === 'custom' && (
                                 <div className="space-y-3">
                                     <div>

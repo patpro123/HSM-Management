@@ -2,7 +2,7 @@ import React from 'react';
 import { Instrument, Batch } from '../../types';
 
 interface StudentFiltersProps {
-  filterType: 'permanent' | 'prospect';
+  filterType: 'permanent' | 'prospect' | 'demoday';
   filterStatus: 'active' | 'inactive' | 'all';
   filterTeacher: string;
   filterInstruments: (string | number)[];
@@ -12,7 +12,7 @@ interface StudentFiltersProps {
   teachers: any[];
   prospects: any[];
   relevantBatches: Batch[];
-  onFilterTypeChange: (type: 'permanent' | 'prospect') => void;
+  onFilterTypeChange: (type: 'permanent' | 'prospect' | 'demoday') => void;
   onFilterStatusChange: (status: 'active' | 'inactive' | 'all') => void;
   onFilterTeacherChange: (teacher: string) => void;
   onInstrumentToggle: (instrumentId: string | number) => void;
@@ -46,23 +46,35 @@ const StudentFilters: React.FC<StudentFiltersProps> = ({
         <div>
           <h3 className="text-sm font-bold text-slate-700 mb-3">Student Type</h3>
           <div className="flex gap-4">
-            {([['permanent', 'Students'], ['prospect', 'Prospects']] as const).map(([type, label]) => (
-              <label key={type} className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="radio"
-                  name="filterType"
-                  checked={filterType === type}
-                  onChange={() => onFilterTypeChange(type)}
-                  className="text-orange-600 focus:ring-orange-500"
-                />
-                <span className="text-sm text-slate-700">
-                  {label}
-                  {type === 'prospect' && prospects.length > 0 && (
-                    <span className="ml-1 px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded-full text-xs font-bold">{prospects.length}</span>
-                  )}
-                </span>
-              </label>
-            ))}
+            {([['permanent', 'Students'], ['prospect', 'Prospects'], ['demoday', 'Demo Day']] as const).map(([type, label]) => {
+              const count = type === 'prospect'
+                ? prospects.filter(p => p.metadata?.demo_type !== 'demo_day').length
+                : type === 'demoday'
+                ? prospects.filter(p => p.metadata?.demo_type === 'demo_day').length
+                : 0;
+
+              return (
+                <label key={type} className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="filterType"
+                    checked={filterType === type}
+                    onChange={() => onFilterTypeChange(type)}
+                    className="text-orange-600 focus:ring-orange-500"
+                  />
+                  <span className="text-sm text-slate-700">
+                    {label}
+                    {count > 0 && (
+                      <span className={`ml-1 px-1.5 py-0.5 rounded-full text-xs font-bold ${
+                        type === 'demoday' ? 'bg-orange-100 text-orange-700' : 'bg-purple-100 text-purple-700'
+                      }`}>
+                        {count}
+                      </span>
+                    )}
+                  </span>
+                </label>
+              );
+            })}
           </div>
         </div>
         {/* Status filter */}

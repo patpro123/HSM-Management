@@ -6,7 +6,6 @@ import {
   Batch,
   AttendanceRecord,
   PaymentRecord,
-  BatchAssignment,
   Instrument
 } from './types';
 import { API_BASE_URL } from './config';
@@ -29,23 +28,21 @@ import LandingPage from './components/LandingPage';
 import NotificationsPanel from './components/NotificationsPanel';
 import MigrationTools from './components/MigrationTools';
 import BulkHomeworkPanel from './components/BulkHomeworkPanel';
+import SettingsPanel from './components/SettingsPanel';
 import { ChatFAB, ChatPanel, ChatUserRole } from './components/Chat';
 
 const App: React.FC = () => {
   const [chatOpen, setChatOpen] = useState(false);
   // Add new profile page states
-  const [activeTab, setActiveTab] = useState<'stats' | 'students' | 'attendance' | 'payments' | 'finance' | 'teachers' | 'homework' | 'batch-manager' | 'users' | 'migration' | 'student-profile' | 'teacher-profile' | 'enrollment'>(
+  const [activeTab, setActiveTab] = useState<'stats' | 'students' | 'attendance' | 'payments' | 'finance' | 'teachers' | 'homework' | 'batch-manager' | 'users' | 'migration' | 'student-profile' | 'teacher-profile' | 'enrollment' | 'settings'>(
     getCurrentUser()?.roles?.includes('admin') ? 'stats' : getCurrentUser()?.roles?.includes('teacher') ? 'teacher-profile' : 'student-profile'
   );
   const [students, setStudents] = useState<Student[]>([]);
   const [batches, setBatches] = useState<Batch[]>([]);
   const [instruments, setInstruments] = useState<Instrument[]>([]);
-  const [enrollments, setEnrollments] = useState<BatchAssignment[]>([]);
   const [prospects, setProspects] = useState<any[]>([]);
   const [attendance, setAttendance] = useState<AttendanceRecord[]>([]);
   const [payments, setPayments] = useState<PaymentRecord[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
   const [user, setUser] = useState(getCurrentUser());
   const [authChecked, setAuthChecked] = useState(false);
@@ -108,9 +105,6 @@ const App: React.FC = () => {
 
   const fetchData = async () => {
     try {
-      setLoading(true);
-      setError(null);
-
       const currentUser = getCurrentUser();
       const isAdminOrTeacher = currentUser && (currentUser.roles.includes('admin') || currentUser.roles.includes('teacher'));
 
@@ -154,13 +148,8 @@ const App: React.FC = () => {
     } catch (err) {
       console.error('Error fetching data:', err);
       if (err instanceof Error && err.message.includes('401')) {
-        setError('Session expired. Please login again.');
         setTimeout(() => login(API_BASE_URL), 2000);
-      } else {
-        setError('Failed to load data. Please check if the backend server is running.');
       }
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -168,8 +157,6 @@ const App: React.FC = () => {
     // Only fetch data if authenticated
     if (authChecked && isAuthenticated()) {
       fetchData();
-    } else if (authChecked) {
-      setLoading(false);
     }
   }, [authChecked, user]);
 
@@ -257,7 +244,6 @@ const App: React.FC = () => {
   // Main app UI
   const isAdmin = user && user.roles.includes('admin');
   const isTeacherOnly = user && !isAdmin && user.roles.includes('teacher');
-  const isStudentOrParent = user && !isAdmin && !isTeacherOnly && (user.roles.includes('student') || user.roles.includes('parent'));
 
   // Menu items by role
   const menuItems = isAdmin
@@ -272,6 +258,7 @@ const App: React.FC = () => {
       { key: 'batch-manager', label: 'Batch Manager', icon: 'M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4' },
       { key: 'users', label: 'Users', icon: 'M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z' },
       { key: 'migration', label: 'Data Correction', icon: 'M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z' },
+      { key: 'settings', label: 'Landing Settings', icon: 'M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z M15 12a3 3 0 11-6 0 3 3 0 016 0z' },
     ]
     : isTeacherOnly
       ? [
@@ -419,6 +406,9 @@ const App: React.FC = () => {
               )}
               {activeTab === 'migration' && (
                 <MigrationTools onRefresh={fetchData} />
+              )}
+              {activeTab === 'settings' && (
+                <SettingsPanel />
               )}
               {activeTab === 'enrollment' && (
                 <EnrollmentForm

@@ -4,6 +4,7 @@ import './LandingPage.css';
 import { PublicCleffChat } from './Chat/PublicCleffChat';
 import Navbar from './LandingPage/Navbar';
 import HeroSection from './LandingPage/HeroSection';
+import FlashSection from './LandingPage/FlashSection';
 import InstrumentShowcase from './LandingPage/InstrumentShowcase';
 import WhyHSM from './LandingPage/WhyHSM';
 import TeachersSection from './LandingPage/TeachersSection';
@@ -24,7 +25,6 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLogin, authError }) => {
     const [isDark, setIsDark] = useState(false);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [prefilledInstrument, setPrefilledInstrument] = useState('');
-    const [prefilledSource, setPrefilledSource] = useState('');
     const [teachers, setTeachers] = useState<any[]>([]);
     const [batches, setBatches] = useState<any[]>([]);
     const [testimonialIndex, setTestimonialIndex] = useState(0);
@@ -53,11 +53,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLogin, authError }) => {
         return () => window.removeEventListener('scroll', handleScroll);
     }, []);
 
-    useEffect(() => {
-        const urlParams = new URLSearchParams(window.location.search);
-        const source = urlParams.get('utm_source');
-        if (source) setPrefilledSource(source);
-    }, []);
+
 
     useEffect(() => {
         const savedTheme = localStorage.getItem('theme');
@@ -173,6 +169,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLogin, authError }) => {
 
             <main className="stacking-container">
                 <HeroSection onOpenModal={handleOpenModal} />
+                <FlashSection onOpenModal={handleOpenModal} />
                 <InstrumentShowcase onOpenModal={handleOpenModal} />
                 <WhyHSM />
                 <TeachersSection teachers={teachers} />
@@ -214,7 +211,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLogin, authError }) => {
                             &times;
                         </button>
                         <iframe
-                            src={`/intake?embed=1${prefilledInstrument ? `&instrument=${encodeURIComponent(prefilledInstrument)}` : ''}`}
+                            src={`/intake?embed=1${(prefilledInstrument && prefilledInstrument !== 'Demo Day') ? `&instrument=${encodeURIComponent(prefilledInstrument)}` : ''}${prefilledInstrument === 'Demo Day' ? '&demo_type=demo_day' : ''}`}
                             style={{ width: '100%', height: '100%', border: 'none', display: 'block' }}
                             title="Book a Free Demo"
                         />

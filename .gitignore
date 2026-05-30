@@ -7,6 +7,7 @@ node_modules/
 .env.development.local
 .env.test.local
 .env.production.local
+.env.render-drive
 
 # IDEs and Editors
 .idea/
@@ -27,3 +28,9 @@ logs
 *.log
 npm-debug.log*
 yarn-debug.log*
+
+# Scratch folder
+scratch/
+
+# Graphify cache
+graphify-out/cache/

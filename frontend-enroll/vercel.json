@@ -5,6 +5,7 @@
   "devCommand": "npm run dev",
   "rewrites": [
     { "source": "/intake", "destination": "/intake.html" },
+    { "source": "/demoday", "destination": "/demoday.html" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }

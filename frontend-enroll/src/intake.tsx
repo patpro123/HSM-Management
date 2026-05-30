@@ -210,6 +210,9 @@ function SectionHeading({ children }: { children: React.ReactNode }) {
 function IntakeForm() {
   const params = new URLSearchParams(window.location.search);
   const isEmbed = params.get('embed') === '1';
+  const isDemoDay = params.get('demo_type') === 'demo_day' ||
+                    window.location.pathname === '/demoday' ||
+                    window.location.pathname === '/demoday.html';
 
   const [instruments, setInstruments] = useState<Instrument[]>([]);
   const [batches, setBatches] = useState<RawBatch[]>([]);
@@ -218,12 +221,19 @@ function IntakeForm() {
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(false);
   const [serverError, setServerError] = useState('');
+  const [flashConfig, setFlashConfig] = useState<any>(null);
 
   // Pre-fill instrument from ?instrument= query param
   useEffect(() => {
     const param = params.get('instrument');
     if (param) setForm(prev => ({ ...prev, instrument_id: param }));
   }, []);
+
+  useEffect(() => {
+    if (isDemoDay && flashConfig?.demo_day_location) {
+      setForm(prev => ({ ...prev, location: flashConfig.demo_day_location }));
+    }
+  }, [isDemoDay, flashConfig]);
 
   useEffect(() => {
     fetch(`${API_BASE}/api/instruments`)
@@ -234,6 +244,11 @@ function IntakeForm() {
     fetch(`${API_BASE}/api/batches`)
       .then(r => r.json())
       .then(data => setBatches(data.batches || []))
+      .catch(() => {});
+
+    fetch(`${API_BASE}/api/flash-banner`)
+      .then(r => r.json())
+      .then(data => setFlashConfig(data))
       .catch(() => {});
   }, []);
 
@@ -270,6 +285,8 @@ function IntakeForm() {
       guardian_name: form.guardian_name.trim() || undefined,
       guardian_phone: form.guardian_phone.trim() || undefined,
       notes: form.notes.trim() || undefined,
+      demo_type: isDemoDay ? 'demo_day' : 'normal',
+      demo_day_date: isDemoDay ? flashConfig?.demo_day_date : undefined,
     };
 
     setSubmitting(true);
@@ -304,16 +321,47 @@ function IntakeForm() {
               <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
             </svg>
           </div>
-          <span className="section-label" style={{ display: 'block', textAlign: 'center', marginBottom: 4 }}>You're all set!</span>
-          <h2 className="serif-heading" style={{ fontSize: '1.8rem', marginBottom: '1rem', textAlign: 'center' }}>
-            We'll be in touch soon
-          </h2>
-          <p style={{ color: 'var(--text-body)', marginBottom: '0.5rem' }}>
-            Thank you for your interest in Hyderabad School of Music.
-          </p>
-          <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>
-            Our team will reach out to you within 24 hours to schedule your free demo class.
-          </p>
+          {isDemoDay ? (
+            <>
+              <span className="section-label" style={{ display: 'block', textAlign: 'center', marginBottom: 4 }}>Registration Complete!</span>
+              <h2 className="serif-heading" style={{ fontSize: '1.8rem', marginBottom: '1rem', textAlign: 'center' }}>
+                Spot Confirmed
+              </h2>
+              <p style={{ color: 'var(--text-body)', marginBottom: '0.8rem', fontSize: '0.95rem', lineHeight: 1.5 }}>
+                Your Demo Day registration has been saved successfully.
+              </p>
+              <p style={{ color: 'var(--text-body)', fontWeight: 600, marginBottom: '1rem', fontSize: '0.9rem' }}>
+                💬 Your specific slot details will be confirmed over WhatsApp shortly.
+              </p>
+              <div style={{
+                background: 'rgba(242,107,56,0.05)',
+                border: '1px solid rgba(242,107,56,0.15)',
+                borderRadius: '12px',
+                padding: '0.85rem',
+                marginTop: '1rem',
+              }}>
+                <p style={{ color: 'var(--text-muted)', fontSize: '0.82rem', margin: 0 }}>
+                  For any immediate clarifications or support, please call us at:
+                </p>
+                <a href="tel:+919652444188" style={{ color: 'var(--brand-orange)', fontWeight: 800, fontSize: '1.05rem', textDecoration: 'none', display: 'inline-block', marginTop: '0.25rem' }}>
+                  📞 +91 96524 44188
+                </a>
+              </div>
+            </>
+          ) : (
+            <>
+              <span className="section-label" style={{ display: 'block', textAlign: 'center', marginBottom: 4 }}>You're all set!</span>
+              <h2 className="serif-heading" style={{ fontSize: '1.8rem', marginBottom: '1rem', textAlign: 'center' }}>
+                We'll be in touch soon
+              </h2>
+              <p style={{ color: 'var(--text-body)', marginBottom: '0.5rem' }}>
+                Thank you for your interest in Hyderabad School of Music.
+              </p>
+              <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>
+                Our team will reach out to you within 24 hours to schedule your free demo class.
+              </p>
+            </>
+          )}
         </div>
       </div>
     );
@@ -347,6 +395,15 @@ function IntakeForm() {
     marginTop: '0.35rem',
   };
 
+  const displayedInstruments = isDemoDay && Array.isArray(flashConfig?.demo_day_instruments)
+    ? instruments.filter(instr => flashConfig.demo_day_instruments.includes(instr.name))
+    : instruments;
+
+  const fallbackInstrumentNames = ['Keyboard','Guitar','Bass Guitar','Piano','Drums','Tabla','Violin','Hindustani Vocals','Carnatic Vocals'];
+  const displayedFallbackNames = isDemoDay && Array.isArray(flashConfig?.demo_day_instruments)
+    ? fallbackInstrumentNames.filter(n => flashConfig.demo_day_instruments.includes(n))
+    : fallbackInstrumentNames;
+
   return (
     <div className="landing-wrapper" style={{ minHeight: '100vh', paddingBottom: isEmbed ? '1rem' : '4rem' }}>
 
@@ -374,14 +431,127 @@ function IntakeForm() {
 
         {/* Page heading */}
         <div style={{ textAlign: 'center', marginBottom: '1rem' }}>
-          <span className="section-label" style={{ fontSize: '1.5rem' }}>Let's get started</span>
+          <span className="section-label" style={{ fontSize: '1.5rem' }}>
+            {isDemoDay ? 'Demo Day Special' : "Let's get started"}
+          </span>
           <h1 className="serif-heading" style={{ fontSize: 'clamp(2rem, 5vw, 2.8rem)', marginBottom: '0.75rem' }}>
-            Book a Free Demo Class
+            {isDemoDay ? 'Register for Demo Day' : 'Book a Free Demo Class'}
           </h1>
           <p style={{ color: 'var(--text-muted)', fontSize: '0.925rem', maxWidth: 480, margin: '0 auto' }}>
-            This form is for <strong>enquiry purposes only</strong>. Our team will review your details and reach out within 24 hours to confirm your slot.
+            This form is for <strong>enquiry and registration purposes</strong>. Our team will review your details and reach out within 24 hours to confirm your slot.
           </p>
         </div>
+
+        {isDemoDay && (() => {
+          const formatDemoDate = (dateStr?: string) => {
+            if (!dateStr) return '';
+            try {
+              const d = new Date(dateStr);
+              if (isNaN(d.getTime())) return dateStr;
+              return d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+            } catch (e) {
+              return dateStr;
+            }
+          };
+
+          const campusLabels: Record<string, string> = {
+            hsm_main: 'HSM Kismatpur (Main Branch)',
+            pbel_city: 'HSM PBEL City Campus',
+          };
+
+          const mapUrls: Record<string, string> = {
+            hsm_main: 'https://maps.google.com/maps?q=17.3471995,78.3909525&z=17&output=embed',
+            pbel_city: 'https://maps.google.com/maps?q=PBEL+City,+Hyderabad&z=17&output=embed',
+          };
+
+          const configuredCampus = campusLabels[flashConfig?.demo_day_location] || flashConfig?.demo_day_location || 'HSM Main Branch';
+          const configuredDate = formatDemoDate(flashConfig?.demo_day_date);
+          const currentMapUrl = mapUrls[flashConfig?.demo_day_location] || mapUrls.hsm_main;
+
+          return (
+            <div style={{
+              background: 'linear-gradient(135deg, rgba(242,107,56,0.08) 0%, rgba(251,191,36,0.08) 100%)',
+              border: '1px solid rgba(242, 107, 56, 0.2)',
+              borderRadius: '16px',
+              padding: '1.5rem',
+              marginBottom: '1.5rem',
+              textAlign: 'left',
+              boxShadow: '0 4px 12px rgba(0,0,0,0.02)',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '1rem',
+            }}>
+              {/* Header */}
+              <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+                <span style={{ fontSize: '1.5rem' }}>🎁</span>
+                <h4 style={{ margin: 0, color: 'var(--brand-orange)', fontWeight: 800, fontSize: '1.1rem' }}>
+                  About HSM Demo Day
+                </h4>
+              </div>
+
+              {/* Dynamic Verbiage Section */}
+              {flashConfig?.demo_day_description && (
+                <div style={{ 
+                  fontSize: '0.9rem', 
+                  color: 'var(--text-body)', 
+                  lineHeight: 1.5,
+                  whiteSpace: 'pre-wrap',
+                }}>
+                  {flashConfig.demo_day_description}
+                </div>
+              )}
+
+              {/* Event Details Grid */}
+              <div style={{
+                display: 'flex',
+                flexWrap: 'wrap',
+                gap: '1rem',
+                background: 'rgba(255, 255, 255, 0.6)',
+                border: '1px solid rgba(0, 0, 0, 0.05)',
+                borderRadius: '12px',
+                padding: '1rem',
+              }}>
+                <div style={{ flex: '1 1 200px' }}>
+                  <div style={{ fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-muted)', fontWeight: 700 }}>
+                    📅 Date &amp; Time
+                  </div>
+                  <div style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--text-heading)', marginTop: '0.25rem' }}>
+                    {configuredDate || 'To be announced'}
+                  </div>
+                </div>
+
+                <div style={{ flex: '1 1 200px' }}>
+                  <div style={{ fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-muted)', fontWeight: 700 }}>
+                    📍 Location / Venue
+                  </div>
+                  <div style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--text-heading)', marginTop: '0.25rem' }}>
+                    {configuredCampus}
+                  </div>
+                </div>
+              </div>
+
+              {/* Google Maps Iframe */}
+              <div style={{
+                width: '100%',
+                height: '180px',
+                borderRadius: '12px',
+                overflow: 'hidden',
+                border: '1px solid rgba(0,0,0,0.1)',
+              }}>
+                <iframe
+                  title="Demo Day Location Map"
+                  src={currentMapUrl}
+                  width="100%"
+                  height="100%"
+                  style={{ border: 0 }}
+                  allowFullScreen={false}
+                  loading="lazy"
+                  referrerPolicy="no-referrer-when-downgrade"
+                />
+              </div>
+            </div>
+          );
+        })()}
 
         {/* Card */}
         {/* maxHeight/overflow override: prevents .modal-content CSS from creating a second scrollbar */}
@@ -443,10 +613,13 @@ function IntakeForm() {
 
             {/* ── Instrument ── */}
             <div>
-              <SectionHeading>Stream / Instrument <span style={{ color: '#ef4444' }}>*</span></SectionHeading>
-              {instruments.length > 0 ? (
+              <SectionHeading>
+                {isDemoDay ? 'Primary instrument you are interested in trying' : 'Stream / Instrument'}{' '}
+                <span style={{ color: '#ef4444' }}>*</span>
+              </SectionHeading>
+              {displayedInstruments.length > 0 ? (
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.6rem' }}>
-                  {instruments.map(instr => (
+                  {displayedInstruments.map(instr => (
                     <Pill
                       key={instr.id}
                       label={instr.name}
@@ -457,8 +630,8 @@ function IntakeForm() {
                 </div>
               ) : (
                 <select value={form.instrument_id} onChange={e => set('instrument_id', e.target.value)} style={inputStyle}>
-                  <option value="">Select an instrument...</option>
-                  {['Keyboard','Guitar','Bass Guitar','Piano','Drums','Tabla','Violin','Hindustani Vocals','Carnatic Vocals'].map(n => (
+                  <option value="">Choose your primary instrument...</option>
+                  {displayedFallbackNames.map(n => (
                     <option key={n} value={n}>{n}</option>
                   ))}
                 </select>
@@ -467,7 +640,7 @@ function IntakeForm() {
             </div>
 
             {/* ── Class Schedule ── */}
-            {batches.length > 0 && (
+            {!isDemoDay && batches.length > 0 && (
               <div>
                 <SectionHeading>When do classes run?</SectionHeading>
                 <p style={{ color: 'var(--text-muted)', fontSize: '0.825rem', marginBottom: '0.75rem' }}>
@@ -482,31 +655,53 @@ function IntakeForm() {
             {/* ── Branch ── */}
             <div>
               <SectionHeading>Which branch? <span style={{ color: '#ef4444' }}>*</span></SectionHeading>
-              <div className="form-grid">
-                {LOCATIONS.map(loc => {
-                  const active = form.location === loc.value;
-                  return (
-                    <button
-                      key={loc.value}
-                      type="button"
-                      onClick={() => set('location', loc.value)}
+              {isDemoDay ? (() => {
+                const loc = LOCATIONS.find(l => l.value === (flashConfig?.demo_day_location || 'hsm_main')) || LOCATIONS[0];
+                return (
+                  <div style={{ display: 'flex', gap: '12px' }}>
+                    <div
                       style={{
                         padding: '1rem 1.25rem',
                         borderRadius: 12,
-                        border: `2px solid ${active ? 'var(--brand-orange)' : 'rgba(150,150,150,0.25)'}`,
-                        background: active ? 'var(--brand-orange)' : 'var(--bg-secondary)',
-                        color: active ? '#fff' : 'var(--text-heading)',
+                        border: '2px solid var(--brand-orange)',
+                        background: 'var(--brand-orange)',
+                        color: '#fff',
                         textAlign: 'left',
-                        cursor: 'pointer',
-                        transition: 'all 0.18s',
+                        minWidth: '220px'
                       }}
                     >
                       <p style={{ fontWeight: 700, fontSize: '0.9rem', margin: 0 }}>{loc.label}</p>
                       <p style={{ fontSize: '0.775rem', margin: '3px 0 0', opacity: 0.75 }}>{loc.sub}</p>
-                    </button>
-                  );
-                })}
-              </div>
+                    </div>
+                  </div>
+                );
+              })() : (
+                <div className="form-grid">
+                  {LOCATIONS.map(loc => {
+                    const active = form.location === loc.value;
+                    return (
+                      <button
+                        key={loc.value}
+                        type="button"
+                        onClick={() => set('location', loc.value)}
+                        style={{
+                          padding: '1rem 1.25rem',
+                          borderRadius: 12,
+                          border: `2px solid ${active ? 'var(--brand-orange)' : 'rgba(150,150,150,0.25)'}`,
+                          background: active ? 'var(--brand-orange)' : 'var(--bg-secondary)',
+                          color: active ? '#fff' : 'var(--text-heading)',
+                          textAlign: 'left',
+                          cursor: 'pointer',
+                          transition: 'all 0.18s',
+                        }}
+                      >
+                        <p style={{ fontWeight: 700, fontSize: '0.9rem', margin: 0 }}>{loc.label}</p>
+                        <p style={{ fontSize: '0.775rem', margin: '3px 0 0', opacity: 0.75 }}>{loc.sub}</p>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
               {errors.location && <p style={errorStyle}>{errors.location}</p>}
             </div>
 
@@ -560,7 +755,7 @@ function IntakeForm() {
               className="btn btn-cta"
               style={{ width: '100%', fontSize: '1.05rem', padding: '0.9rem', opacity: submitting ? 0.7 : 1 }}
             >
-              {submitting ? 'Submitting...' : 'Book My Free Demo →'}
+              {submitting ? 'Submitting...' : isDemoDay ? 'Register for Demo Day →' : 'Book My Free Demo →'}
             </button>
 
             <p style={{ textAlign: 'center', fontSize: '0.775rem', color: 'var(--text-muted)', marginTop: '-0.5rem' }}>

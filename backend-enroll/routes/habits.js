@@ -131,6 +131,22 @@ router.get('/students/:studentId/habits', resolveUser, async (req, res) => {
             [studentId]
         );
 
+        // Get student's primary instrument and grade for predefined catalogue/matching
+        const studentInfoRes = await pool.query(
+            `SELECT inst.name AS instrument, eb.trinity_grade
+             FROM enrollments e
+             JOIN enrollment_batches eb ON eb.enrollment_id = e.id
+             JOIN batches b ON eb.batch_id = b.id AND b.is_makeup = false
+             JOIN instruments inst ON inst.id = b.instrument_id
+             WHERE e.student_id = $1 AND e.status = 'active'
+             ORDER BY inst.name NULLS LAST LIMIT 1`,
+            [studentId]
+        );
+        const studentInfo = studentInfoRes.rows[0] ? {
+            instrument: studentInfoRes.rows[0].instrument,
+            trinityGrade: studentInfoRes.rows[0].trinity_grade || 'Initial'
+        } : null;
+
         // For each theory-type habit, pick today's question (if not already logged today)
         const today = new Date().toISOString().slice(0, 10);
         const habits = habitsResult.rows;
@@ -139,18 +155,7 @@ router.get('/students/:studentId/habits', resolveUser, async (req, res) => {
             const alreadyLogged = (logs[today] || []).includes(habit.id);
             if (alreadyLogged) continue;
 
-            // Get student's primary instrument for question matching
-            const instrRes = await pool.query(
-                `SELECT inst.name AS instrument
-                 FROM enrollments e
-                 JOIN enrollment_batches eb ON eb.enrollment_id = e.id
-                 JOIN batches b ON b.id = eb.batch_id
-                 JOIN instruments inst ON inst.id = b.instrument_id
-                 WHERE e.student_id = $1 AND e.status = 'active'
-                 ORDER BY inst.name NULLS LAST LIMIT 1`,
-                [studentId]
-            );
-            const instrument = instrRes.rows[0]?.instrument || null;
+            const instrument = studentInfo?.instrument || null;
             const level = habit.habit_level || 'beginner';
 
             // Pick a random question, avoiding the last 10 answered for this habit
@@ -177,6 +182,7 @@ router.get('/students/:studentId/habits', resolveUser, async (req, res) => {
             habits,
             logs,
             logMeta,
+            studentInfo,
             stats: {
                 currentStreak,
                 longestStreak,
@@ -550,6 +556,112 @@ router.put('/habits/logs/:logId/theory-answer', resolveUser, async (req, res) =>
     } catch (err) {
         console.error('[PUT /habits/logs/:id/theory-answer]', err);
         res.status(500).json({ error: 'Failed to update theory answer' });
+    }
+});
+
+// POST /api/habits/archive-bulk — bulk soft-delete/archive habits
+router.post('/habits/archive-bulk', resolveUser, async (req, res) => {
+    const { habit_ids } = req.body;
+    if (!Array.isArray(habit_ids) || !habit_ids.length) {
+        return res.status(400).json({ error: 'habit_ids must be a non-empty array' });
+    }
+    try {
+        const result = await pool.query(
+            `UPDATE habits SET archived_at = NOW()
+             WHERE id = ANY($1) AND archived_at IS NULL
+             RETURNING id`,
+            [habit_ids]
+        );
+        res.json({ success: true, archived: result.rows.length });
+    } catch (err) {
+        console.error('[POST /habits/archive-bulk]', err);
+        res.status(500).json({ error: 'Failed to bulk archive habits' });
+    }
+});
+
+// POST /api/habits/update-bulk — bulk update habits (title and/or icon)
+router.post('/habits/update-bulk', resolveUser, async (req, res) => {
+    const { habit_ids, title, icon } = req.body;
+    if (!Array.isArray(habit_ids) || !habit_ids.length) {
+        return res.status(400).json({ error: 'habit_ids must be a non-empty array' });
+    }
+    if (!title?.trim()) return res.status(400).json({ error: 'title is required' });
+    try {
+        const result = await pool.query(
+            `UPDATE habits SET title = $1, icon = COALESCE($2, icon)
+             WHERE id = ANY($3) AND archived_at IS NULL
+             RETURNING id`,
+            [title.trim(), icon || null, habit_ids]
+        );
+        res.json({ success: true, updated: result.rows.length });
+    } catch (err) {
+        console.error('[POST /habits/update-bulk]', err);
+        res.status(500).json({ error: 'Failed to bulk update habits' });
+    }
+});
+
+// GET /api/habits/by-students — get active habits for multiple students
+router.get('/habits/by-students', resolveUser, async (req, res) => {
+    const { student_ids } = req.query;
+    if (!student_ids) return res.json({ habits: [] });
+    const ids = student_ids.split(',');
+    try {
+        const result = await pool.query(
+            `SELECT h.id, h.student_id, h.title, h.icon, h.metadata, s.name as student_name
+             FROM habits h
+             JOIN students s ON h.student_id = s.id
+             WHERE h.student_id = ANY($1) AND h.archived_at IS NULL
+             ORDER BY s.name, h.title`,
+            [ids]
+        );
+        res.json({ habits: result.rows });
+    } catch (err) {
+        console.error('[GET /habits/by-students]', err);
+        res.status(500).json({ error: 'Failed to fetch habits' });
+    }
+});
+
+// GET /api/practice-items — list predefined practice items from config, optionally filtered by instrument
+router.get('/practice-items', resolveUser, async (req, res) => {
+    const { instrument } = req.query;
+    try {
+        const fs = require('fs');
+        const path = require('path');
+        const configPath = path.join(__dirname, '../config/practice_items.json');
+        
+        if (!fs.existsSync(configPath)) {
+            return res.json({ items: [] });
+        }
+        
+        const raw = fs.readFileSync(configPath, 'utf8');
+        const data = JSON.parse(raw);
+        
+        if (instrument) {
+            // Normalise instrument names to practice item keys
+            const norm = instrument.toLowerCase().trim();
+            let key = null;
+            if (norm.includes('piano') || norm.includes('keyboard')) {
+                key = 'piano_keyboard';
+            } else if (norm.includes('guitar')) {
+                key = 'guitar';
+            } else if (norm.includes('drum') || norm.includes('tabla') || norm.includes('octopad')) {
+                key = 'drums';
+            } else if (norm.includes('violin')) {
+                key = 'violin';
+            } else if (norm.includes('vocals') || norm.includes('singing') || norm.includes('carnatik') || norm.includes('carnatic') || norm.includes('hindustani')) {
+                key = 'vocals_classical';
+            }
+            
+            if (key && data[key]) {
+                return res.json({ items: data[key] });
+            }
+            return res.json({ items: [] });
+        }
+        
+        res.json(data);
+    } catch (err) {
+        console.error('[GET /api/practice-items]', err);
+        res.status(500).json({ error: 'Failed to fetch practice items' });
     }
 });
 

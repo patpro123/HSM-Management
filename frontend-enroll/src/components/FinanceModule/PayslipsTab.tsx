@@ -5,12 +5,6 @@ import { Teacher, TeacherPayslip } from './types';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-const VOCAL_KEYWORDS = ['hindustani vocals', 'carnatic vocals'];
-
-function isVocalInstrument(name: string) {
-  return VOCAL_KEYWORDS.includes(name.toLowerCase());
-}
-
 function fmt(val: number) {
   return `₹${Math.round(val).toLocaleString('en-IN')}`;
 }

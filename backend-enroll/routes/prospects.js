@@ -24,13 +24,22 @@ async function sendProspectNotification(prospect) {
     const guardianName = metadata?.guardian_name || '';
     const guardianPhone = metadata?.guardian_phone || '';
     const notes = metadata?.notes || '';
+    const demoType = metadata?.demo_type || 'normal';
+
+    const isDemoDay = demoType === 'demo_day';
+    const subject = isDemoDay
+        ? `New Enquiry (Demo Day): ${name} — ${instrument}`
+        : `New Enquiry: ${name} — ${instrument}`;
+    const headerTitle = isDemoDay
+        ? `New Student Enquiry (Demo Day)`
+        : `New Student Enquiry`;
 
     const mailOptions = {
         from: `"HSM Admissions" <${process.env.SMTP_USER}>`,
         to: NOTIFY_EMAILS.join(', '),
-        subject: `New Enquiry: ${name} — ${instrument}`,
+        subject: subject,
         html: `
-            <h2>New Student Enquiry</h2>
+            <h2>${headerTitle}</h2>
             <p>A new prospect has submitted an enquiry via the HSM intake form.</p>
             <table style="border-collapse:collapse;width:100%;max-width:560px;">
                 <tr><td style="padding:8px;border:1px solid #e2e8f0;font-weight:600;background:#f8fafc;">Name</td><td style="padding:8px;border:1px solid #e2e8f0;">${name}</td></tr>
@@ -38,6 +47,7 @@ async function sendProspectNotification(prospect) {
                 <tr><td style="padding:8px;border:1px solid #e2e8f0;font-weight:600;background:#f8fafc;">Email</td><td style="padding:8px;border:1px solid #e2e8f0;">${email}</td></tr>
                 <tr><td style="padding:8px;border:1px solid #e2e8f0;font-weight:600;background:#f8fafc;">Branch</td><td style="padding:8px;border:1px solid #e2e8f0;">${location}</td></tr>
                 <tr><td style="padding:8px;border:1px solid #e2e8f0;font-weight:600;background:#f8fafc;">Instrument / Stream</td><td style="padding:8px;border:1px solid #e2e8f0;">${instrument}</td></tr>
+                <tr><td style="padding:8px;border:1px solid #e2e8f0;font-weight:600;background:#f8fafc;">Enquiry Type</td><td style="padding:8px;border:1px solid #e2e8f0;">${isDemoDay ? 'Demo Day Spot Booking' : 'Regular Trial Class'}</td></tr>
                 ${guardianName ? `<tr><td style="padding:8px;border:1px solid #e2e8f0;font-weight:600;background:#f8fafc;">Guardian Name</td><td style="padding:8px;border:1px solid #e2e8f0;">${guardianName}</td></tr>` : ''}
                 ${guardianPhone ? `<tr><td style="padding:8px;border:1px solid #e2e8f0;font-weight:600;background:#f8fafc;">Guardian Phone</td><td style="padding:8px;border:1px solid #e2e8f0;">${guardianPhone}</td></tr>` : ''}
                 <tr><td style="padding:8px;border:1px solid #e2e8f0;font-weight:600;background:#f8fafc;">How they found us</td><td style="padding:8px;border:1px solid #e2e8f0;">${source}</td></tr>
@@ -80,25 +90,24 @@ router.get('/:id', async (req, res) => {
     }
 });
 
-// PUT /api/prospects/:id - Update prospect (is_active, metadata.status)
+// PUT /api/prospects/:id - Update prospect (is_active, metadata, status)
 router.put('/:id', async (req, res) => {
-    const { is_active, status } = req.body;
+    const { is_active, status, metadata } = req.body;
     try {
-        // Build update: optionally update is_active and/or merge metadata.status
         let query, params;
         if (is_active !== undefined && status !== undefined) {
-            query = `UPDATE students SET is_active = $1, metadata = metadata || jsonb_build_object('status', $2::text), updated_at = NOW()
-                     WHERE id = $3 AND student_type = 'prospect' RETURNING *`;
-            params = [is_active, status, req.params.id];
+            query = `UPDATE students SET is_active = $1, metadata = metadata || jsonb_build_object('status', $2::text) || $3::jsonb, updated_at = NOW()
+                     WHERE id = $4 AND student_type = 'prospect' RETURNING *`;
+            params = [is_active, status, JSON.stringify(metadata || {}), req.params.id];
         } else if (is_active !== undefined) {
-            query = `UPDATE students SET is_active = $1, updated_at = NOW() WHERE id = $2 AND student_type = 'prospect' RETURNING *`;
-            params = [is_active, req.params.id];
-        } else if (status !== undefined) {
-            query = `UPDATE students SET metadata = metadata || jsonb_build_object('status', $1::text), updated_at = NOW()
-                     WHERE id = $2 AND student_type = 'prospect' RETURNING *`;
-            params = [status, req.params.id];
+            query = `UPDATE students SET is_active = $1, metadata = metadata || $2::jsonb, updated_at = NOW() WHERE id = $3 AND student_type = 'prospect' RETURNING *`;
+            params = [is_active, JSON.stringify(metadata || {}), req.params.id];
         } else {
-            return res.status(400).json({ error: 'Nothing to update' });
+            const metaObj = { ...metadata };
+            if (status !== undefined) metaObj.status = status;
+            query = `UPDATE students SET metadata = metadata || $1::jsonb, updated_at = NOW()
+                     WHERE id = $2 AND student_type = 'prospect' RETURNING *`;
+            params = [JSON.stringify(metaObj), req.params.id];
         }
         const result = await pool.query(query, params);
         if (result.rows.length === 0) return res.status(404).json({ error: 'Prospect not found' });
@@ -144,7 +153,7 @@ router.post('/', async (req, res) => {
     console.log('[POST /api/prospects] Incoming prospect form:', req.body);
     const {
         name, address, phone, email, instrument, location, source,
-        dob, guardian_name, guardian_phone, notes
+        dob, guardian_name, guardian_phone, notes, demo_type, demo_day_date
     } = req.body;
 
     if (!name || !phone) {
@@ -166,7 +175,9 @@ router.post('/', async (req, res) => {
             guardian_name: guardian_name || undefined,
             guardian_phone: guardian_phone || undefined,
             notes: notes || undefined,
-            status: 'new'
+            status: 'new',
+            demo_type: demo_type || 'normal',
+            demo_day_date: demo_day_date || undefined
         };
 
         // Insert student explicitly as a prospect
@@ -188,14 +199,20 @@ router.post('/', async (req, res) => {
 
         // Notify admins via database notification
         try {
+            const isDemoDay = demo_type === 'demo_day';
+            const notifTitle = isDemoDay ? 'New Demo Day Sign-up' : 'New Demo Sign-up';
+            const notifMsg = isDemoDay
+                ? `${name} recently booked a trial class for ${instrument || 'a program'} during Demo Day.`
+                : `${name} recently booked a trial class for ${instrument || 'a program'}.`;
+
             await pool.query(`
                 INSERT INTO notifications (type, title, message, metadata, action_link) 
                 VALUES ($1, $2, $3, $4::jsonb, $5)
             `, [
                 'NEW_PROSPECT',
-                'New Demo Sign-up',
-                `${name} recently booked a trial class for ${instrument || 'a program'}.`,
-                JSON.stringify({ prospect_id: prospect.id, phone, email }),
+                notifTitle,
+                notifMsg,
+                JSON.stringify({ prospect_id: prospect.id, phone, email, demo_type: demo_type || 'normal' }),
                 '/students'
             ]);
             console.log('[POST /api/prospects] Notification inserted successfully.');
@@ -205,9 +222,9 @@ router.post('/', async (req, res) => {
             if (notificationsRouter.emitNotification) {
                 notificationsRouter.emitNotification({
                     type: 'NEW_PROSPECT',
-                    title: 'New Demo Sign-up',
-                    message: `${name} recently booked a trial class for ${instrument || 'a program'}.`,
-                    metadata: { prospect_id: prospect.id, phone, email },
+                    title: notifTitle,
+                    message: notifMsg,
+                    metadata: { prospect_id: prospect.id, phone, email, demo_type: demo_type || 'normal' },
                     action_link: '/students',
                     created_at: new Date().toISOString()
                 });
