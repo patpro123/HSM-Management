@@ -4,6 +4,31 @@ const pool = require('../db');
 const { authenticateJWT } = require('../auth/jwtMiddleware');
 const { authorizeRole } = require('../auth/rbacMiddleware');
 
+// GET /api/students/active-with-instruments — all active enrolled students with instrument info
+// Used by admin bulk-homework panel. Must be defined before any /:studentId route.
+router.get('/active-with-instruments', authenticateJWT, authorizeRole(['admin', 'teacher']), async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT
+         s.id, s.name, s.phone,
+         i.name AS instrument,
+         MIN(b.id::text) AS batch_id,
+         STRING_AGG(b.recurrence, ', ' ORDER BY b.recurrence) AS recurrence
+       FROM students s
+       JOIN enrollments e ON s.id = e.student_id AND e.status = 'active'
+       JOIN enrollment_batches eb ON e.id = eb.enrollment_id
+       JOIN batches b ON eb.batch_id = b.id AND b.is_makeup = false
+       JOIN instruments i ON b.instrument_id = i.id
+       GROUP BY s.id, s.name, s.phone, i.name
+       ORDER BY i.name, s.name`
+    );
+    res.json({ students: result.rows });
+  } catch (err) {
+    console.error('Error fetching active students with instruments:', err);
+    res.status(500).json({ error: 'Failed to fetch students' });
+  }
+});
+
 // GET /api/students - List all permanent students with enrollments
 router.get('/', async (req, res) => {
   try {
@@ -235,9 +260,22 @@ router.post('/:studentId/image', async (req, res) => {
       const ext        = mimeType.split('/')[1] || 'jpg';
       const buffer     = Buffer.from(base64Part, 'base64');
 
+      // Build a descriptive filename: StudentName_profile_YYYY-MM-DD.ext
+      let profileFileName = `profile_${studentId}_${Date.now()}.${ext}`;
+      try {
+        const meta = await pool.query('SELECT name FROM students WHERE id = $1', [studentId]);
+        if (meta.rows.length > 0) {
+          profileFileName = driveService.buildDriveFileName({
+            studentName:  meta.rows[0].name,
+            instrument:   null,
+            originalName: `profile.${ext}`,
+          });
+        }
+      } catch (_) { /* fallback */ }
+
       const result = await driveService.upload({
         buffer,
-        fileName:   `profile_${studentId}_${Date.now()}.${ext}`,
+        fileName:   profileFileName,
         mimeType,
         category:   'profile_image',
         entityType: 'student',

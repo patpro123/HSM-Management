@@ -3,6 +3,7 @@ import { apiGet } from '../api';
 import { Teacher360Data } from '../types';
 import PhoneLink from './PhoneLink';
 import TeacherStudentList from './TeacherStudentList';
+import BulkHomeworkPanel from './BulkHomeworkPanel';
 
 interface Teacher360ViewProps {
   teacherId?: string;
@@ -11,7 +12,7 @@ interface Teacher360ViewProps {
   isModal?: boolean;
 }
 
-type TabType = 'profile' | 'attendance' | 'payout' | 'students';
+type TabType = 'profile' | 'attendance' | 'payout' | 'students' | 'homework';
 
 const PAYOUT_TYPE_LABELS: Record<string, string> = {
   fixed: 'Fixed Monthly Salary',
@@ -146,7 +147,7 @@ const Teacher360View: React.FC<Teacher360ViewProps> = ({
         <>
           {/* Tabs */}
           <div className="flex border-b px-6">
-            {(['profile', 'students', 'attendance', 'payout'] as TabType[]).map(tab => (
+            {(['profile', 'students', 'attendance', 'payout', 'homework'] as TabType[]).map(tab => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
@@ -155,7 +156,7 @@ const Teacher360View: React.FC<Teacher360ViewProps> = ({
                     : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                   }`}
               >
-                {tab === 'payout' ? 'Payout' : tab === 'attendance' ? 'Attendance' : tab === 'students' ? 'My Students' : 'Profile'}
+                {tab === 'payout' ? 'Payout' : tab === 'attendance' ? 'Attendance' : tab === 'students' ? 'My Students' : tab === 'homework' ? 'Homework' : 'Profile'}
               </button>
             ))}
           </div>
@@ -251,6 +252,11 @@ const Teacher360View: React.FC<Teacher360ViewProps> = ({
                   <TeacherStudentList students={students} teacherId={resolvedId} />
                 ) : null}
               </div>
+            )}
+
+            {/* ── HOMEWORK TAB ── */}
+            {activeTab === 'homework' && resolvedId && (
+              <BulkHomeworkPanel mode="teacher" teacherId={resolvedId} />
             )}
 
             {/* ── ATTENDANCE TAB ── */}

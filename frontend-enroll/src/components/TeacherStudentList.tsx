@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import Student360View from './Student360View';
 import TeacherBatchAttendance from './TeacherBatchAttendance';
 import PhoneLink from './PhoneLink';
+import XPBadge from './XPBadge';
 
 interface TeacherStudent {
   id: string;
@@ -13,6 +14,7 @@ interface TeacherStudent {
   recurrence: string;
   enrollment_status?: string;
   classes_remaining?: number | null;
+  total_xp?: number;
 }
 
 interface TeacherStudentListProps {
@@ -63,7 +65,12 @@ const TeacherStudentList: React.FC<TeacherStudentListProps> = ({ students, teach
             <tbody className="divide-y divide-gray-100 bg-white">
               {filtered.map(s => (
                 <tr key={s.id} className="hover:bg-gray-50">
-                  <td className="py-3 pl-4 pr-3 text-sm font-medium text-gray-900">{s.name}</td>
+                  <td className="py-3 pl-4 pr-3 text-sm font-medium text-gray-900">
+                    <div className="flex flex-col gap-0.5">
+                      <span>{s.name}</span>
+                      {s.total_xp != null && <XPBadge totalXP={s.total_xp} compact />}
+                    </div>
+                  </td>
                   <td className="px-3 py-3 text-sm text-gray-600">{s.instrument}</td>
                   <td className="px-3 py-3 text-sm text-gray-500">{s.recurrence}</td>
                   <td className="px-3 py-3 text-sm text-gray-500">

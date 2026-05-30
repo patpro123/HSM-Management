@@ -52,6 +52,38 @@ function getDriveClient() {
   return google.drive({ version: 'v3', auth: getAuthClient() });
 }
 
+// ── Filename builder ──────────────────────────────────────────────────────────
+
+function _safePart(str) {
+  return (str || '').trim()
+    .replace(/[^a-zA-Z0-9]/g, '_')
+    .replace(/_+/g, '_')
+    .replace(/^_+|_+$/g, '');
+}
+
+/**
+ * Builds a human-readable Drive filename.
+ *
+ * @param {object} opts
+ * @param {string}      opts.studentName   - e.g. "Ramesh Kumar"
+ * @param {string|null} opts.instrument    - e.g. "Guitar" (optional)
+ * @param {string}      opts.originalName  - original file name (for extension)
+ * @param {Date}        [opts.date]        - defaults to now
+ * @returns {string}  e.g. "Ramesh_Kumar_Guitar_2026-05-29.webm"
+ */
+function buildDriveFileName({ studentName, instrument, originalName, date }) {
+  const d       = date || new Date();
+  const dateStr = d.toISOString().slice(0, 10);                          // YYYY-MM-DD
+  const timeStr = d.toISOString().slice(11, 19).replace(/:/g, '');       // HHMMSS
+  const ext     = (originalName || 'file').split('.').pop().toLowerCase() || 'bin';
+  const parts   = [
+    _safePart(studentName),
+    instrument ? _safePart(instrument) : null,
+    `${dateStr}_${timeStr}`,
+  ].filter(Boolean);
+  return `${parts.join('_')}.${ext}`;
+}
+
 // ── Category configuration ────────────────────────────────────────────────────
 
 const CATEGORY_CONFIG = {
@@ -241,4 +273,4 @@ function validCategories() {
   return Object.keys(CATEGORY_CONFIG);
 }
 
-module.exports = { upload, setEntityId, deleteFile, cleanupExpired, validCategories, getDriveClient };
+module.exports = { upload, setEntityId, deleteFile, cleanupExpired, validCategories, getDriveClient, buildDriveFileName };

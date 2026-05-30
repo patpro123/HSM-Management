@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { authenticatedFetch, getCurrentUser } from '../auth';
 import { API_BASE_URL } from '../config';
+import { apiGet } from '../api';
+import XPBadge from './XPBadge';
 
 interface StudentProfile {
   student: {
@@ -58,6 +60,7 @@ const StudentProfile: React.FC = () => {
   const [profile, setProfile] = useState<StudentProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [totalXP, setTotalXP] = useState<number | null>(null);
 
   const user = getCurrentUser();
   const userEmail = user?.email;
@@ -90,6 +93,11 @@ const StudentProfile: React.FC = () => {
 
       const data = await response.json();
       setProfile(data);
+      if (data.student?.id) {
+        apiGet(`/api/students/${data.student.id}/xp`)
+          .then(xp => setTotalXP(xp.totalXP ?? 0))
+          .catch(() => {});
+      }
     } catch (err) {
       console.error('Error fetching student profile:', err);
       setError('Error loading profile');
@@ -175,6 +183,11 @@ const StudentProfile: React.FC = () => {
             <p className="text-sm text-orange-100">
               Member since {formatDate(profile.student.enrolled_since)}
             </p>
+            {totalXP !== null && (
+              <div className="mt-2">
+                <XPBadge totalXP={totalXP} />
+              </div>
+            )}
           </div>
         </div>
       </div>

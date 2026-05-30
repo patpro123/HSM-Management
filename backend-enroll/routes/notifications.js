@@ -1,29 +1,41 @@
 const express = require('express');
 const router = express.Router();
 const pool = require('../db');
+const jwt = require('jsonwebtoken');
+const JWT_SECRET = process.env.JWT_SECRET || 'default-secret-key-change-in-prod';
 
 // In-memory store of connected SSE clients
 const clients = new Set();
 
-// Function to broadcast a notification to all connected clients
-// We attach this to the router so other files can require it and call it
+// Emit a notification to relevant SSE clients.
+// If notification.user_id is set, only send to that user's connections.
+// If null (global), send to all connected clients.
 router.emitNotification = (notification) => {
     const payload = `data: ${JSON.stringify(notification)}\n\n`;
     clients.forEach(client => {
-        // Simple global emit; in a very advanced app you might filter by user_id
-        client.res.write(payload);
+        if (!notification.user_id || client.userId === notification.user_id) {
+            client.res.write(payload);
+        }
     });
 };
 
 // GET /api/notifications/stream - Server-Sent Events (SSE) stream
+// EventSource can't send headers, so we accept the JWT via ?token= query param
 router.get('/stream', (req, res) => {
+    // Resolve user: dev-bypass already set req.user; otherwise verify ?token=
+    if (!req.user && req.query.token) {
+        try {
+            req.user = jwt.verify(req.query.token, JWT_SECRET);
+        } catch (_) { /* invalid token — stream proceeds as unauthenticated */ }
+    }
+
     // Set headers for SSE
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
 
-    // Add this client to the pool
-    const client = { id: Date.now(), res };
+    // Add this client to the pool, tagged with the user so we can filter emits
+    const client = { id: Date.now(), res, userId: req.user?.id || null };
     clients.add(client);
 
     // Send initial connection heartbeat
@@ -41,14 +53,28 @@ router.get('/stream', (req, res) => {
     });
 });
 
-// GET /api/notifications - List relevant notifications (Admin views all global ones)
-router.get('/', async (req, res) => {
+// Lightweight auth resolver used by polling endpoints.
+// In DISABLE_AUTH mode req.user is already set by global middleware.
+// In production, we read the Bearer token here so polling always works.
+function resolveUser(req, res, next) {
+    if (req.user) return next(); // already set (dev bypass or prior middleware)
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+        try {
+            req.user = jwt.verify(authHeader.slice(7), JWT_SECRET);
+        } catch (_) { /* expired/invalid — proceed as unauthenticated */ }
+    }
+    next();
+}
+
+// GET /api/notifications - List relevant notifications
+router.get('/', resolveUser, async (req, res) => {
     try {
         // user_id IS NULL means global notification (e.g. for all admins)
         const result = await pool.query(`
-            SELECT * FROM notifications 
-            WHERE user_id IS NULL OR user_id = $1::uuid 
-            ORDER BY created_at DESC 
+            SELECT * FROM notifications
+            WHERE user_id IS NULL OR user_id = $1::uuid
+            ORDER BY created_at DESC
             LIMIT 50
         `, [req.user?.id || null]);
 
@@ -60,7 +86,7 @@ router.get('/', async (req, res) => {
 });
 
 // GET /api/notifications/unread/count - Fast polling endpoint
-router.get('/unread/count', async (req, res) => {
+router.get('/unread/count', resolveUser, async (req, res) => {
     try {
         const result = await pool.query(`
             SELECT COUNT(*) FROM notifications 
@@ -96,7 +122,7 @@ router.put('/:id/read', async (req, res) => {
 });
 
 // PUT /api/notifications/read-all - Mark all as read
-router.put('/read-all', async (req, res) => {
+router.put('/read-all', resolveUser, async (req, res) => {
     try {
         await pool.query(`
             UPDATE notifications 

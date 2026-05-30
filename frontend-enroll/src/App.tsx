@@ -28,12 +28,13 @@ import hsmLogo from './images/hsmLogo.jpg';
 import LandingPage from './components/LandingPage';
 import NotificationsPanel from './components/NotificationsPanel';
 import MigrationTools from './components/MigrationTools';
+import BulkHomeworkPanel from './components/BulkHomeworkPanel';
 import { ChatFAB, ChatPanel, ChatUserRole } from './components/Chat';
 
 const App: React.FC = () => {
   const [chatOpen, setChatOpen] = useState(false);
   // Add new profile page states
-  const [activeTab, setActiveTab] = useState<'stats' | 'students' | 'attendance' | 'payments' | 'finance' | 'teachers' | 'batch-manager' | 'users' | 'migration' | 'student-profile' | 'teacher-profile' | 'enrollment'>(
+  const [activeTab, setActiveTab] = useState<'stats' | 'students' | 'attendance' | 'payments' | 'finance' | 'teachers' | 'homework' | 'batch-manager' | 'users' | 'migration' | 'student-profile' | 'teacher-profile' | 'enrollment'>(
     getCurrentUser()?.roles?.includes('admin') ? 'stats' : getCurrentUser()?.roles?.includes('teacher') ? 'teacher-profile' : 'student-profile'
   );
   const [students, setStudents] = useState<Student[]>([]);
@@ -267,6 +268,7 @@ const App: React.FC = () => {
       { key: 'payments', label: 'Payments', icon: 'M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z' },
       { key: 'finance', label: 'Finance', icon: 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z' },
       { key: 'teachers', label: 'Teachers', icon: 'M12 14l9-5-9-5-9 5 9 5zm0 0l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0012 20.055a11.952 11.952 0 00-6.824-2.998 12.078 12.078 0 01.665-6.479L12 14z' },
+      { key: 'homework', label: 'Homework', icon: 'M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253' },
       { key: 'batch-manager', label: 'Batch Manager', icon: 'M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4' },
       { key: 'users', label: 'Users', icon: 'M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z' },
       { key: 'migration', label: 'Data Correction', icon: 'M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z' },
@@ -342,10 +344,10 @@ const App: React.FC = () => {
             </h2>
           </div>
           <div className="flex items-center gap-4">
-            {isAdmin && <NotificationsPanel onNavigation={(path, prospectId) => {
+            <NotificationsPanel onNavigation={(path, prospectId) => {
               handleTabChange(path as any);
               if (prospectId) setPendingEnrollProspectId(prospectId);
-            }} />}
+            }} />
             <div className="hidden md:flex flex-col text-right">
               <span className="text-sm font-bold text-slate-700">{user?.name || user?.email}</span>
               <span className="text-xs text-slate-500 capitalize">{user?.roles[0]}</span>
@@ -405,6 +407,9 @@ const App: React.FC = () => {
                   instruments={instruments}
                   onRefresh={fetchData}
                 />
+              )}
+              {activeTab === 'homework' && (
+                <BulkHomeworkPanel mode="admin" />
               )}
               {activeTab === 'batch-manager' && (
                 <BatchManager instruments={instruments} />

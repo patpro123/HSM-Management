@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { apiGet, apiPut } from '../api';
+import { getToken } from '../auth';
+import { API_BASE_URL } from '../config';
 import ProspectViewerModal from './ProspectViewerModal';
 
 interface Notification {
@@ -51,45 +53,37 @@ const NotificationsPanel: React.FC<NotificationsPanelProps> = ({ onNavigation })
         // Initial fetch
         fetchNotifications();
 
-        // Connect to SSE stream for real-time push notifications
-        const sseUrl = '/api/notifications/stream'; // This will be relative to wherever index is hoisted
-        // Using explicit URL block to guarantee it reaches backend-enroll correctly
+        // Polling fallback — catches notifications if SSE is blocked by the proxy
+        const pollInterval = setInterval(fetchNotifications, 15000);
+
+        // SSE for instant push — connect directly to backend (bypasses Vite proxy which buffers SSE).
+        // Pass JWT as query param because EventSource cannot send custom headers.
+        const token = getToken();
+        const sseUrl = `${API_BASE_URL}/api/notifications/stream${token ? `?token=${token}` : ''}`;
         const eventSource = new EventSource(sseUrl);
 
         eventSource.onmessage = (event) => {
             try {
                 const data = JSON.parse(event.data);
                 if (data.type === 'CONNECTED') {
-                    console.log('SSE Stream Connected for Notifications');
+                    console.log('[notifications] SSE connected');
                     return;
                 }
-
-                // Real notification arrived!
-                console.log('New Push Notification:', data);
-
-                // Construct pseudo-notification object for UI
-                const newNotif: Notification = {
-                    ...data,
-                    is_read: false,
-                    id: data.id || `temp-${Date.now()}` // Backend may or may not send ID in pure SSE push
-                };
-
-                setNotifications(prev => [newNotif, ...prev]);
-                setUnreadCount(prev => prev + 1);
-
-                // Auto-open dropdown on push notification
-                setIsOpen(true);
+                console.log('[notifications] SSE push received:', data.type);
+                // Re-fetch from DB so we have real IDs for mark-as-read
+                fetchNotifications();
             } catch (err) {
                 console.error('Error parsing SSE data', err);
             }
         };
 
-        eventSource.onerror = (error) => {
-            console.error('SSE connection error, closing stream.', error);
+        eventSource.onerror = () => {
+            // SSE failed — polling takes over silently
             eventSource.close();
         };
 
         return () => {
+            clearInterval(pollInterval);
             eventSource.close();
         };
     }, []);

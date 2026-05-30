@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { apiGet, apiPost, apiDelete } from '../api';
 import PhoneLink from './PhoneLink';
 import HomeworkTab from './HomeworkTab';
+import HabitTrackerTab from './HabitTrackerTab';
+import XPBadge from './XPBadge';
 
 interface Student360ViewProps {
   email?: string;
@@ -51,12 +53,13 @@ interface Document {
 
 
 const Student360View: React.FC<Student360ViewProps> = ({ email, studentId, onClose, isModal = false, hidePayments = false, selfMode = false }) => {
-  const [activeTab, setActiveTab] = useState<'personal' | 'academic' | 'payment' | 'homework'>('personal');
+  const [activeTab, setActiveTab] = useState<'personal' | 'academic' | 'payment' | 'homework' | 'habits'>('personal');
   const [data, setData] = useState<Student360Data | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [documents, setDocuments] = useState<Document[]>([]);
   const [uploadSuccess, setUploadSuccess] = useState<string | null>(null);
+  const [totalXP, setTotalXP] = useState<number | null>(null);
 
 
   useEffect(() => {
@@ -73,10 +76,13 @@ const Student360View: React.FC<Student360ViewProps> = ({ email, studentId, onClo
         const result = await apiGet(url);
         setData(result);
 
-        // Fetch documents once we have the student ID
+        // Fetch documents + XP once we have the student ID
         const resolvedId = studentId || result.personal.details.id;
         if (resolvedId) {
           fetchDocuments(resolvedId);
+          apiGet(`/api/students/${resolvedId}/xp`)
+            .then(xp => setTotalXP(xp.totalXP ?? 0))
+            .catch(() => {});
         }
       } catch (err: any) {
         setError(err.message || 'Failed to fetch student data');
@@ -169,6 +175,11 @@ const Student360View: React.FC<Student360ViewProps> = ({ email, studentId, onClo
             <>
               <h2 className="text-2xl font-bold text-gray-800">{data.personal.details.name}</h2>
               <p className="text-gray-600">{data.personal.details.email}</p>
+              {totalXP !== null && (
+                <div className="mt-2">
+                  <XPBadge totalXP={totalXP} />
+                </div>
+              )}
             </>
           ) : null}
         </div>
@@ -199,7 +210,7 @@ const Student360View: React.FC<Student360ViewProps> = ({ email, studentId, onClo
         <>
           {/* Tabs */}
           <div className="flex border-b px-6 overflow-x-auto">
-            {(['personal', 'academic', 'payment', 'homework'] as const)
+            {(['personal', 'academic', 'payment', 'homework', 'habits'] as const)
               .filter(tab => !(hidePayments && tab === 'payment'))
               .map((tab) => (
                 <button
@@ -210,7 +221,7 @@ const Student360View: React.FC<Student360ViewProps> = ({ email, studentId, onClo
                       : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                     }`}
                 >
-                  {tab === 'homework' ? 'Homework' : `${tab} Details`}
+                  {tab === 'homework' ? 'Homework' : tab === 'habits' ? 'Practice Habits' : `${tab} Details`}
                 </button>
               ))}
           </div>
@@ -339,6 +350,14 @@ const Student360View: React.FC<Student360ViewProps> = ({ email, studentId, onClo
               <HomeworkTab
                 studentId={data.personal.details.id}
                 selfMode={selfMode}
+              />
+            )}
+
+            {/* Practice Habits Tab */}
+            {activeTab === 'habits' && (
+              <HabitTrackerTab
+                studentId={data.personal.details.id}
+                selfMode={selfMode ?? false}
               />
             )}
 

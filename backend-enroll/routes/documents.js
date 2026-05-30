@@ -59,9 +59,22 @@ router.post('/students/:studentId/documents', async (req, res) => {
       const buffer     = Buffer.from(base64Part, 'base64');
       const mimeType   = file_type || 'application/octet-stream';
 
+      // Build a descriptive filename: StudentName_YYYY-MM-DD_OriginalFilename
+      let driveName = filename;
+      try {
+        const meta = await pool.query('SELECT name FROM students WHERE id = $1', [studentId]);
+        if (meta.rows.length > 0) {
+          driveName = driveService.buildDriveFileName({
+            studentName:  meta.rows[0].name,
+            instrument:   null,
+            originalName: filename,
+          });
+        }
+      } catch (_) { /* fallback */ }
+
       const result = await driveService.upload({
         buffer,
-        fileName:   filename,
+        fileName:   driveName,
         mimeType,
         category:   'student_document',
         entityType: 'student_document',

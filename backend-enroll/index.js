@@ -260,6 +260,8 @@ app.use('/api', require('./routes/documents'));
 app.use('/api/whatsapp', require('./routes/whatsapp'));
 app.use('/api', require('./routes/homework'));
 app.use('/api', require('./routes/files'));
+app.use('/api', require('./routes/habits'));
+app.use('/api', require('./routes/xp'));
 
 // GET /api/packages — list all packages, optionally filtered by instrument_id and location
 app.get('/api/packages', async (req, res) => {
