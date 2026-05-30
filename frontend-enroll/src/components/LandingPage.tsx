@@ -4,7 +4,6 @@ import './LandingPage.css';
 import { PublicCleffChat } from './Chat/PublicCleffChat';
 import Navbar from './LandingPage/Navbar';
 import HeroSection from './LandingPage/HeroSection';
-import FlashSection from './LandingPage/FlashSection';
 import InstrumentShowcase from './LandingPage/InstrumentShowcase';
 import WhyHSM from './LandingPage/WhyHSM';
 import TeachersSection from './LandingPage/TeachersSection';
@@ -187,7 +186,6 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLogin, authError }) => {
 
             <main className="stacking-container">
                 <HeroSection onOpenModal={handleOpenModal} flashConfig={flashConfig} />
-                <FlashSection onOpenModal={handleOpenModal} />
                 <InstrumentShowcase onOpenModal={handleOpenModal} />
                 <WhyHSM />
                 <TeachersSection teachers={teachers} />

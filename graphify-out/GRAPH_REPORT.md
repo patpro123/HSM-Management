@@ -1,12 +1,12 @@
 # Graph Report - HSM-Management  (2026-05-30)
 
 ## Corpus Check
-- 195 files · ~2,040,074 words
+- 194 files · ~2,039,826 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 836 nodes · 918 edges · 94 communities detected
-- Extraction: 85% EXTRACTED · 15% INFERRED · 0% AMBIGUOUS · INFERRED: 137 edges (avg confidence: 0.8)
+- 834 nodes · 916 edges · 94 communities detected
+- Extraction: 85% EXTRACTED · 15% INFERRED · 0% AMBIGUOUS · INFERRED: 136 edges (avg confidence: 0.8)
 - Token cost: 0 input · 0 output
 
 ## Community Hubs (Navigation)
@@ -106,8 +106,8 @@
 - [[_COMMUNITY_Community 205|Community 205]]
 
 ## God Nodes (most connected - your core abstractions)
-1. `apiGet()` - 33 edges
-2. `apiPost()` - 33 edges
+1. `apiPost()` - 33 edges
+2. `apiGet()` - 32 edges
 3. `apiPut()` - 22 edges
 4. `HSM Frontend README` - 16 edges
 5. `apiDelete()` - 13 edges
@@ -133,7 +133,7 @@
 
 ### Community 0 - "Community 0"
 Cohesion: 0.04
-Nodes (57): apiGet(), apiPost(), discardRecording(), fetchManageHabits(), fetchPredefined(), fetchStudents(), handleAssign(), handleAssignHabit() (+49 more)
+Nodes (56): apiGet(), apiPost(), discardRecording(), fetchManageHabits(), fetchPredefined(), fetchStudents(), handleAssign(), handleAssignHabit() (+48 more)
 
 ### Community 1 - "Community 1"
 Cohesion: 0.07
@@ -176,12 +176,12 @@ Cohesion: 0.2
 Nodes (11): buildDriveFileName(), cleanupExpired(), deleteFile(), getAuthClient(), getCategoryConfig(), getDriveClient(), _safePart(), upload() (+3 more)
 
 ### Community 11 - "Community 11"
-Cohesion: 0.31
-Nodes (14): apiDelete(), handleDeleteHabit(), archiveHabit(), handleDeleteInst(), handleDeleteStudent(), fetchAll(), handleAddRole(), handleMarkActivated() (+6 more)
-
-### Community 12 - "Community 12"
 Cohesion: 0.17
 Nodes (11): computeStreaks(), fmt(), formatDate(), formatPeriod(), handleDownloadPDF(), handleOpenWhatsApp(), handleSave(), awardXP() (+3 more)
+
+### Community 12 - "Community 12"
+Cohesion: 0.31
+Nodes (14): apiDelete(), handleDeleteHabit(), archiveHabit(), handleDeleteInst(), handleDeleteStudent(), fetchAll(), handleAddRole(), handleMarkActivated() (+6 more)
 
 ### Community 13 - "Community 13"
 Cohesion: 0.22
@@ -622,16 +622,16 @@ Nodes (1): Carnatik
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `apiGet()` connect `Community 0` to `Community 3`, `Community 4`, `Community 6`, `Community 9`, `Community 11`, `Community 13`, `Community 15`, `Community 16`?**
-  _High betweenness centrality (0.043) - this node is a cross-community bridge._
-- **Why does `apiPost()` connect `Community 0` to `Community 1`, `Community 3`, `Community 6`, `Community 9`, `Community 11`, `Community 13`, `Community 15`?**
+- **Why does `apiPost()` connect `Community 0` to `Community 1`, `Community 3`, `Community 6`, `Community 9`, `Community 12`, `Community 13`, `Community 15`?**
   _High betweenness centrality (0.042) - this node is a cross-community bridge._
+- **Why does `apiGet()` connect `Community 0` to `Community 3`, `Community 4`, `Community 6`, `Community 9`, `Community 12`, `Community 13`, `Community 15`, `Community 16`?**
+  _High betweenness centrality (0.041) - this node is a cross-community bridge._
 - **Why does `apiPut()` connect `Community 3` to `Community 0`, `Community 11`, `Community 12`, `Community 13`, `Community 15`?**
   _High betweenness centrality (0.028) - this node is a cross-community bridge._
-- **Are the 31 inferred relationships involving `apiGet()` (e.g. with `fetchData()` and `fetchProfile()`) actually correct?**
-  _`apiGet()` has 31 INFERRED edges - model-reasoned connections that need verification._
 - **Are the 31 inferred relationships involving `apiPost()` (e.g. with `handleSave()` and `performToggle()`) actually correct?**
   _`apiPost()` has 31 INFERRED edges - model-reasoned connections that need verification._
+- **Are the 30 inferred relationships involving `apiGet()` (e.g. with `fetchData()` and `fetchProfile()`) actually correct?**
+  _`apiGet()` has 30 INFERRED edges - model-reasoned connections that need verification._
 - **Are the 20 inferred relationships involving `apiPut()` (e.g. with `saveEdit()` and `gradeTheoryAnswer()`) actually correct?**
   _`apiPut()` has 20 INFERRED edges - model-reasoned connections that need verification._
 - **Are the 11 inferred relationships involving `apiDelete()` (e.g. with `archiveHabit()` and `handleDelete()`) actually correct?**
