@@ -29,6 +29,8 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLogin, authError }) => {
     const [batches, setBatches] = useState<any[]>([]);
     const [testimonialIndex, setTestimonialIndex] = useState(0);
     const [activeFaq, setActiveFaq] = useState<number | null>(null);
+    const [flashConfig, setFlashConfig] = useState<any>(null);
+    const [isDemoDayFlow, setIsDemoDayFlow] = useState(false);
 
     const faqs = [
         { q: "Does my child need prior experience?", a: "Not at all. We start from the very beginning and move at your child's pace." },
@@ -51,6 +53,21 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLogin, authError }) => {
         const handleScroll = () => { setIsScrolled(window.scrollY > 50); };
         window.addEventListener('scroll', handleScroll);
         return () => window.removeEventListener('scroll', handleScroll);
+    }, []);
+
+    useEffect(() => {
+        const fetchConfig = async () => {
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/flash-banner`);
+                if (response.ok) {
+                    const data = await response.json();
+                    setFlashConfig(data);
+                }
+            } catch (err) {
+                console.error('Failed to fetch flash banner config:', err);
+            }
+        };
+        fetchConfig();
     }, []);
 
 
@@ -120,9 +137,10 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLogin, authError }) => {
         localStorage.setItem('theme', newTheme ? 'dark' : 'light');
     };
 
-    const handleOpenModal = (e: React.MouseEvent, instrument?: string) => {
+    const handleOpenModal = (e: React.MouseEvent, instrument?: string, isDemoDay?: boolean) => {
         e.preventDefault();
         setPrefilledInstrument(instrument || '');
+        setIsDemoDayFlow(!!isDemoDay);
         setIsModalOpen(true);
         document.body.style.overflow = 'hidden';
     };
@@ -168,7 +186,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLogin, authError }) => {
             />
 
             <main className="stacking-container">
-                <HeroSection onOpenModal={handleOpenModal} />
+                <HeroSection onOpenModal={handleOpenModal} flashConfig={flashConfig} />
                 <FlashSection onOpenModal={handleOpenModal} />
                 <InstrumentShowcase onOpenModal={handleOpenModal} />
                 <WhyHSM />
@@ -211,7 +229,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLogin, authError }) => {
                             &times;
                         </button>
                         <iframe
-                            src={`/intake?embed=1${(prefilledInstrument && prefilledInstrument !== 'Demo Day') ? `&instrument=${encodeURIComponent(prefilledInstrument)}` : ''}${prefilledInstrument === 'Demo Day' ? '&demo_type=demo_day' : ''}`}
+                            src={`/intake?embed=1${prefilledInstrument ? `&instrument=${encodeURIComponent(prefilledInstrument)}` : ''}${isDemoDayFlow ? '&demo_type=demo_day' : ''}`}
                             style={{ width: '100%', height: '100%', border: 'none', display: 'block' }}
                             title="Book a Free Demo"
                         />
