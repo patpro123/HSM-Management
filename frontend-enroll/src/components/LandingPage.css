@@ -1745,3 +1745,125 @@ img {
     text-align: center;
     font-style: italic;
 }
+
+/* Promo Banner & Lead Magnet CSS Custom Styles */
+.landing-wrapper {
+  --promo-banner-height: 40px;
+}
+
+@media (max-width: 767px) {
+  .landing-wrapper {
+    --promo-banner-height: 52px;
+  }
+}
+
+.landing-wrapper.has-promo {
+  padding-top: var(--promo-banner-height);
+}
+
+.promo-banner {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: var(--promo-banner-height);
+  background: linear-gradient(90deg, #f26b38 0%, #ea580c 50%, #fbbf24 100%);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  font-family: var(--font-sans);
+  font-size: 0.85rem;
+  font-weight: 500;
+  padding: 0 2rem 0 1rem;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.15);
+  box-sizing: border-box;
+}
+
+@media (max-width: 767px) {
+  .promo-banner {
+    font-size: 0.78rem;
+    padding-right: 2.2rem;
+  }
+}
+
+.promo-banner-content {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  width: 100%;
+}
+
+@media (max-width: 767px) {
+  .promo-banner-content {
+    flex-direction: column;
+    gap: 2px;
+    text-align: center;
+  }
+}
+
+.promo-banner-text {
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.promo-banner-btn {
+  background: #ffffff;
+  color: #ea580c;
+  padding: 2px 10px;
+  border-radius: 9999px;
+  font-weight: 700;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.promo-banner-btn:hover {
+  background: #fdf2e9;
+  transform: scale(1.05);
+  color: #d84a06;
+}
+
+.promo-banner-close {
+  position: absolute;
+  right: 12px;
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 1.5rem;
+  font-weight: 300;
+  cursor: pointer;
+  line-height: 1;
+  padding: 0;
+  transition: color 0.2s;
+}
+
+.promo-banner-close:hover {
+  color: #ffffff;
+}
+
+.navbar.has-promo {
+  top: var(--promo-banner-height);
+}
+
+.lead-magnet-modal {
+  animation: hsm-scale-up 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes hsm-scale-up {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}

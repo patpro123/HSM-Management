@@ -6,11 +6,12 @@ interface NavbarProps {
   onLogin: () => void;
   onOpenModal: (e: React.MouseEvent) => void;
   onToggleTheme: () => void;
+  promoActive?: boolean;
 }
 
-const Navbar: React.FC<NavbarProps> = ({ isScrolled, isDark, onLogin, onOpenModal, onToggleTheme }) => {
+const Navbar: React.FC<NavbarProps> = ({ isScrolled, isDark, onLogin, onOpenModal, onToggleTheme, promoActive }) => {
   return (
-    <nav className={`navbar ${isScrolled ? 'scrolled' : ''}`} id="navbar">
+    <nav className={`navbar ${isScrolled ? 'scrolled' : ''} ${promoActive ? 'has-promo' : ''}`} id="navbar">
       <div className="nav-container">
         <a href="#" className="logo">
           <img

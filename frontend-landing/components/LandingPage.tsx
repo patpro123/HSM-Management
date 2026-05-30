@@ -4,6 +4,8 @@ import React, { useState, useEffect } from 'react';
 import './LandingPage.css';
 import { PublicCleffChat } from './Chat/PublicCleffChat';
 import Navbar from './LandingPage/Navbar';
+import PromoBanner from './LandingPage/PromoBanner';
+import ExitIntentModal from './LandingPage/ExitIntentModal';
 import HeroSection from './LandingPage/HeroSection';
 import InstrumentShowcase from './LandingPage/InstrumentShowcase';
 import WhyHSM from './LandingPage/WhyHSM';
@@ -54,6 +56,7 @@ const testimonials = [
 
 const LandingPage: React.FC<LandingPageProps> = ({ teachers, batches }) => {
     const [isScrolled, setIsScrolled] = useState(false);
+    const [isPromoActive, setIsPromoActive] = useState(false);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [prefilledInstrument, setPrefilledInstrument] = useState('');
     const [isDemoDayFlow, setIsDemoDayFlow] = useState(false);
@@ -118,11 +121,13 @@ const LandingPage: React.FC<LandingPageProps> = ({ teachers, batches }) => {
         (isDemoDayFlow ? `&demo_type=demo_day` : '');
 
     return (
-        <div className="landing-wrapper">
+        <div className={`landing-wrapper ${isPromoActive ? 'has-promo' : ''}`}>
+            <PromoBanner onVisibilityChange={setIsPromoActive} />
             <Navbar
                 isScrolled={isScrolled}
                 onLogin={() => { window.location.href = `${API_BASE_URL}/api/auth/google`; }}
                 onOpenModal={handleOpenModal}
+                promoActive={isPromoActive}
             />
 
             <main className="stacking-container">
@@ -149,6 +154,8 @@ const LandingPage: React.FC<LandingPageProps> = ({ teachers, batches }) => {
             </main>
 
             <PublicCleffChat onBookDemo={() => handleOpenModal({ preventDefault: () => {} } as React.MouseEvent)} />
+
+            <ExitIntentModal apiBaseUrl={API_BASE_URL} />
 
             {isModalOpen && (
                 <div

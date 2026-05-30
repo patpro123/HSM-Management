@@ -3,6 +3,8 @@ import { API_BASE_URL } from '../config';
 import './LandingPage.css';
 import { PublicCleffChat } from './Chat/PublicCleffChat';
 import Navbar from './LandingPage/Navbar';
+import PromoBanner from './PromoBanner';
+import ExitIntentModal from './ExitIntentModal';
 import HeroSection from './LandingPage/HeroSection';
 import InstrumentShowcase from './LandingPage/InstrumentShowcase';
 import WhyHSM from './LandingPage/WhyHSM';
@@ -21,6 +23,7 @@ interface LandingPageProps {
 
 const LandingPage: React.FC<LandingPageProps> = ({ onLogin, authError }) => {
     const [isScrolled, setIsScrolled] = useState(false);
+    const [isPromoActive, setIsPromoActive] = useState(false);
     const [isDark, setIsDark] = useState(false);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [prefilledInstrument, setPrefilledInstrument] = useState('');
@@ -162,7 +165,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLogin, authError }) => {
     }, []);
 
     return (
-        <div className={`landing-wrapper ${isDark ? 'dark-theme' : ''}`}>
+        <div className={`landing-wrapper ${isPromoActive ? 'has-promo' : ''} ${isDark ? 'dark-theme' : ''}`}>
             {authError && (
                 <div style={{ position: 'fixed', top: 0, left: 0, right: 0, zIndex: 9999, background: '#fef2f2', borderBottom: '1px solid #fecaca', padding: '12px 24px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px' }}>
                     <span style={{ fontSize: '14px', color: '#991b1b', fontWeight: 500 }}>
@@ -176,12 +179,14 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLogin, authError }) => {
                 </div>
             )}
 
+            <PromoBanner onVisibilityChange={setIsPromoActive} />
             <Navbar
                 isScrolled={isScrolled}
                 isDark={isDark}
                 onLogin={onLogin}
                 onOpenModal={handleOpenModal}
                 onToggleTheme={toggleTheme}
+                promoActive={isPromoActive}
             />
 
             <main className="stacking-container">
@@ -209,6 +214,8 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLogin, authError }) => {
 
             {/* Public Cleff chatbot — no auth required */}
             <PublicCleffChat onBookDemo={() => handleOpenModal({ preventDefault: () => {} } as React.MouseEvent)} />
+
+            <ExitIntentModal apiBaseUrl={API_BASE_URL} />
 
             {/* Intake form — rendered in an iframe so the landing page stays mounted */}
             {isModalOpen && (
