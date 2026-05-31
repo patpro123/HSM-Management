@@ -1809,3 +1809,123 @@ img {
   }
 }
 
+
+/* ═══════════════════════════════════════════════
+   METHODOLOGY INFOGRAPHIC — responsive
+═══════════════════════════════════════════════ */
+
+/* Mobile stepper hidden on desktop */
+.method-loop-mobile { display: none; }
+
+/* Desktop loop shown on desktop */
+.method-loop-desktop { display: block; }
+
+@media (max-width: 767px) {
+  /* Hide desktop horizontal loop */
+  .method-loop-desktop { display: none; }
+
+  /* Show mobile vertical stepper */
+  .method-loop-mobile { display: block; margin-bottom: 2rem; }
+
+  /* Heading: tighten font size so it wraps cleanly */
+  .method-infographic-title {
+    font-size: 1.45rem !important;
+    line-height: 1.25 !important;
+  }
+  .method-infographic-sub {
+    font-size: 0.875rem !important;
+  }
+
+  /* Stats: single column on very small screens */
+  .method-stats-grid {
+    grid-template-columns: 1fr !important;
+    max-width: 100% !important;
+  }
+
+  /* ── Stepper track ── */
+  .method-stepper {
+    position: relative;
+    padding-left: 0;
+  }
+
+  .method-stepper-row {
+    display: flex;
+    gap: 1rem;
+    align-items: flex-start;
+    margin-bottom: 0;
+  }
+
+  /* Left column: circle + connecting line */
+  .method-stepper-track {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    flex-shrink: 0;
+    width: 32px;
+  }
+
+  .method-stepper-num {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: var(--brand-orange, #f26b38);
+    color: #fff;
+    font-size: 0.75rem;
+    font-weight: 800;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    z-index: 1;
+    position: relative;
+  }
+
+  .method-stepper-line {
+    width: 2px;
+    flex: 1;
+    min-height: 28px;
+    background: linear-gradient(to bottom, var(--brand-orange, #f26b38), #fbd38d);
+    margin: 3px 0;
+  }
+
+  /* Right column: content */
+  .method-stepper-content {
+    background: #fff;
+    border: 1.5px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 0.85rem 1rem;
+    flex: 1;
+    margin-bottom: 0.6rem;
+  }
+
+  .method-stepper-icon {
+    font-size: 1.35rem;
+    display: block;
+    margin-bottom: 0.3rem;
+  }
+
+  .method-stepper-title {
+    font-weight: 700;
+    font-size: 0.9rem;
+    color: var(--text-heading, #1e293b);
+    margin-bottom: 0.2rem;
+  }
+
+  .method-stepper-sub {
+    font-size: 0.78rem;
+    color: var(--text-muted, #64748b);
+    line-height: 1.4;
+  }
+
+  /* Return indicator */
+  .method-stepper-return {
+    text-align: center;
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: var(--brand-orange, #f26b38);
+    letter-spacing: 0.03em;
+    padding: 0.6rem 0 0.25rem;
+    margin-left: 32px;
+  }
+}
