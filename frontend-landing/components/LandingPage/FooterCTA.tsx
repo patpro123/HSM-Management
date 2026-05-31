@@ -30,7 +30,7 @@ const FooterCTA: React.FC<FooterCTAProps> = ({ onOpenModal }) => {
               className="logo-screen"
               style={{ height: '160px', marginTop: '-40px', marginBottom: '0', marginLeft: '-20px' }}
             />
-            <p className="text-muted">Hyderabad School of Music. Shaping the artists of tomorrow.</p>
+            <p className="text-muted">Hyderabad School of Music. Where students become performers.</p>
           </div>
           <div className="footer-links">
             <h4>Explore</h4>

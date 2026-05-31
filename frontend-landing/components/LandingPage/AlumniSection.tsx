@@ -34,6 +34,22 @@ const AlumniSection: React.FC = () => {
     <section className="stack-section logos-section">
       <div className="container section-padding" style={{ textAlign: 'center' }}>
 
+        {/* Stat strip */}
+        <div style={{ display: 'flex', justifyContent: 'center', gap: '2.5rem', marginBottom: '2rem', flexWrap: 'wrap' }}>
+          <div style={{ textAlign: 'center' }}>
+            <div style={{ fontSize: '2rem', fontWeight: 800, color: 'var(--brand-orange)' }}>100%</div>
+            <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 600 }}>Merit or Distinction rate</div>
+          </div>
+          <div style={{ textAlign: 'center' }}>
+            <div style={{ fontSize: '2rem', fontWeight: 800, color: 'var(--brand-orange)' }}>Grade 1–8</div>
+            <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 600 }}>Complete Trinity path</div>
+          </div>
+          <div style={{ textAlign: 'center' }}>
+            <div style={{ fontSize: '2rem', fontWeight: 800, color: 'var(--brand-orange)' }}>7 instruments</div>
+            <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 600 }}>Trinity-certified teaching</div>
+          </div>
+        </div>
+
         {/* Trinity badge */}
         <a
           href={TRINITY_URL}
@@ -57,10 +73,9 @@ const AlumniSection: React.FC = () => {
           We follow the Trinity College London syllabus
         </h2>
         <p className="text-muted" style={{ maxWidth: '560px', margin: '0 auto 2.5rem' }}>
-          Our teaching across 7 instruments is structured around the Trinity College London
-          graded exam syllabus — Grade 1 through Grade 8. Trinity exams celebrate each learner's
-          unique strengths, offer flexibility in repertoire, and provide clear progression milestones
-          recognised worldwide.
+          Every HSM student who has sat a Trinity College London exam has earned Merit or Distinction.
+          Our teaching across 7 instruments follows the Trinity Grade 1–8 graded syllabus — a clear,
+          internationally recognised progression from first note to performance-ready.
         </p>
 
         {/* Desktop: 4-column grid */}

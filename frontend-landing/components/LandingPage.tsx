@@ -12,6 +12,8 @@ import WhyHSM from './LandingPage/WhyHSM';
 import TeachersSection from './LandingPage/TeachersSection';
 import TestimonialsSection from './LandingPage/TestimonialsSection';
 import AlumniSection from './LandingPage/AlumniSection';
+import HSMMethodSection from './LandingPage/HSMMethodSection';
+import MethodologyInfographic from './LandingPage/MethodologyInfographic';
 import ScheduleSection from './LandingPage/ScheduleSection';
 import FaqSection from './LandingPage/FaqSection';
 import LocationSection from './LandingPage/LocationSection';
@@ -38,12 +40,12 @@ interface LandingPageProps {
 }
 
 const faqs = [
+    { q: "How is HSM different from a regular music class?", a: "Most music schools teach students to play individually and work toward grade exams. HSM puts students into ensembles from the start — you learn to play with others, perform on stage, and build habits that make practice at home actually stick. We're building musicians, not just grading them." },
+    { q: "What is the habit tracker and homework reviewer?", a: "Every student gets access to our practice portal. Teachers assign homework and students log daily practice streaks. The homework reviewer lets teachers send audio/video instructions for what to practice. Students see exactly what they need to do — and check it off when done." },
     { q: "Does my child need prior experience?", a: "Not at all. We start from the very beginning and move at your child's pace." },
     { q: "What age groups do you teach?", a: "We welcome students from age 5 to 60+. Music has no age limit." },
-    { q: "Are online classes available?", a: "All our classes are in-person at our Kismatpur centre — we believe music is best learnt together." },
     { q: "How soon will my child play a real song?", a: "Most students play their first song within 4–6 weeks. We make early wins a priority." },
     { q: "What are the fees?", a: "We offer a Trial Pack (4 classes, starting ₹2000) and a Quarterly Pack (24 classes). Your first demo class is completely free — no commitment." },
-    { q: "What if we need to pause or stop?", a: "No problem. We have a flexible pause policy — life happens and we understand." }
 ];
 
 const testimonials = [
@@ -94,7 +96,10 @@ const LandingPage: React.FC<LandingPageProps> = ({ teachers, batches }) => {
 
     useEffect(() => {
         const handler = (event: MessageEvent) => {
-            if (event.data?.type === 'hsm-intake-success' || event.data?.type === 'hsm-intake-close') {
+            if (event.data?.type === 'hsm-intake-success') {
+                localStorage.setItem('hsm_demo_booked', 'true');
+                handleCloseModal();
+            } else if (event.data?.type === 'hsm-intake-close') {
                 handleCloseModal();
             }
         };
@@ -134,6 +139,8 @@ const LandingPage: React.FC<LandingPageProps> = ({ teachers, batches }) => {
                 <HeroSection onOpenModal={handleOpenModal} flashConfig={flashConfig} />
                 <InstrumentShowcase onOpenModal={handleOpenModal} />
                 <WhyHSM />
+                <MethodologyInfographic />
+                <HSMMethodSection />
                 <TeachersSection teachers={teachers} />
                 <TestimonialsSection
                     testimonials={testimonials}
@@ -155,7 +162,10 @@ const LandingPage: React.FC<LandingPageProps> = ({ teachers, batches }) => {
 
             <PublicCleffChat onBookDemo={() => handleOpenModal({ preventDefault: () => {} } as React.MouseEvent)} />
 
-            <ExitIntentModal apiBaseUrl={API_BASE_URL} />
+            <ExitIntentModal
+                apiBaseUrl={API_BASE_URL}
+                onOpenBooking={() => handleOpenModal({ preventDefault: () => {} } as React.MouseEvent)}
+            />
 
             {isModalOpen && (
                 <div

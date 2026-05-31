@@ -10,20 +10,20 @@ const WhyHSM: React.FC = () => {
         </div>
         <div className="value-props-grid">
           <div className="value-card pop-shadow">
-            <h3 className="value-title"><span className="value-emoji">🎓</span> Expert Teachers</h3>
-            <p className="value-desc">Qualified faculty trained at leading music conservatories</p>
+            <h3 className="value-title"><span className="value-emoji">🎼</span> Ensemble Over Solo</h3>
+            <p className="value-desc">Other schools teach you to play alone. We put students in ensembles from the start — because real musicians perform with others, not just for an examiner.</p>
           </div>
           <div className="value-card pop-shadow">
-            <h3 className="value-title"><span className="value-emoji">🎵</span> 9 Streams</h3>
-            <p className="value-desc">7 instruments + 2 vocal streams — a blend of Indian classical and western music under one roof</p>
+            <h3 className="value-title"><span className="value-emoji">📱</span> Smart Practice Tech</h3>
+            <p className="value-desc">Students use our habit tracker and homework reviewer to stay on track between classes. Progress becomes visible — and addictive.</p>
           </div>
           <div className="value-card pop-shadow">
-            <h3 className="value-title"><span className="value-emoji">🆓</span> First Class Free</h3>
-            <p className="value-desc">No commitment. No credit card. Just music.</p>
+            <h3 className="value-title"><span className="value-emoji">🏆</span> Built for the Stage</h3>
+            <p className="value-desc">Bi-annual recitals, ensembles, and workshops — every student performs live. We're training artists, not just preparing grades.</p>
           </div>
           <div className="value-card pop-shadow">
-            <h3 className="value-title"><span className="value-emoji">🏡</span> Community-First</h3>
-            <p className="value-desc">Bi-annual recitals, workshops & events in Hyderabad</p>
+            <h3 className="value-title"><span className="value-emoji">🎁</span> First Demo Free</h3>
+            <p className="value-desc">No commitment, no credit card. Book a free demo and see the difference in person.</p>
           </div>
         </div>
       </div>

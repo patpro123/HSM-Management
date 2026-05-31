@@ -549,6 +549,32 @@ function IntakeForm() {
                   referrerPolicy="no-referrer-when-downgrade"
                 />
               </div>
+
+              {/* Google Event link */}
+              <a
+                href="https://share.google/luZQOKzDpHdTKykOd"
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem',
+                  background: '#fff',
+                  border: '1px solid rgba(0,0,0,0.12)',
+                  borderRadius: '10px',
+                  padding: '0.6rem 1rem',
+                  fontSize: '0.85rem',
+                  fontWeight: 600,
+                  color: '#1a73e8',
+                  textDecoration: 'none',
+                  width: 'fit-content',
+                }}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M19 4h-1V2h-2v2H8V2H6v2H5C3.89 4 3 4.9 3 6v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V9h14v11zM7 11h5v5H7z" fill="#1a73e8"/>
+                </svg>
+                View on Google &amp; Save to Calendar
+              </a>
             </div>
           );
         })()}

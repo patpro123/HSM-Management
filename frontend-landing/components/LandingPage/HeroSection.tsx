@@ -106,11 +106,13 @@ const HeroSection: React.FC<HeroSectionProps> = ({ onOpenModal, flashConfig }) =
           </div>
 
           <h1 className="hero-title serif-heading text-white">
-            Hyderabad's Home for Music
+            From First Note<br />to Centre Stage.
           </h1>
           <p className="hero-subtitle text-white">
-            Unleash your inner musician — everyone has music within,<br />
-            you only need to nourish it.
+            The school that turns beginners into performers —<br />
+            ensemble sessions, daily habit tracking, and live recitals,{' '}
+            under one roof.{' '}
+            <span style={{ color: '#f26b38', fontWeight: 700 }}>First time in Hyderabad.</span>
           </p>
           <div className="hero-cta-group">
             <button onClick={onOpenModal} className="btn btn-primary btn-cta-main glow-shadow">
