@@ -78,6 +78,51 @@ router.get('/', async (req, res) => {
     }
 });
 
+// GET /api/intentful-users - List intentful users (from exit intent modal)
+router.get('/intentful-users', async (req, res) => {
+    try {
+        const includeInactive = req.query.include_inactive === 'true';
+        const whereClause = includeInactive
+            ? "WHERE student_type = 'intentful_user'"
+            : "WHERE student_type = 'intentful_user' AND is_active = true";
+        const result = await pool.query(`SELECT * FROM students ${whereClause} ORDER BY created_at DESC`);
+        res.json({ intentful_users: result.rows });
+    } catch (err) {
+        console.error('[GET /api/prospects/intentful-users] Error:', err);
+        res.status(500).json({ error: 'Failed to fetch intentful users' });
+    }
+});
+
+// POST /api/intentful-users/:id/convert - Convert an intentful user to a prospect
+// Body: { instrument?: string, notes?: string }
+router.post('/intentful-users/:id/convert', async (req, res) => {
+    const { instrument, notes } = req.body || {};
+    try {
+        const extraMeta = {
+            status: 'new',
+            converted_from_intentful: true,
+            converted_at: new Date().toISOString(),
+        };
+        if (instrument) extraMeta.interested_instrument = instrument;
+        if (notes) extraMeta.notes = notes;
+
+        const result = await pool.query(
+            `UPDATE students SET student_type = 'prospect',
+             metadata = metadata || $2::jsonb,
+             updated_at = NOW()
+             WHERE id = $1 AND student_type = 'intentful_user' RETURNING *`,
+            [req.params.id, JSON.stringify(extraMeta)]
+        );
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'Intentful user not found' });
+        }
+        res.json({ prospect: result.rows[0] });
+    } catch (err) {
+        console.error('[POST /api/prospects/intentful-users/:id/convert] Error:', err);
+        res.status(500).json({ error: 'Failed to convert intentful user to prospect' });
+    }
+});
+
 // GET /api/prospects/:id - Get a single prospect
 router.get('/:id', async (req, res) => {
     try {
@@ -148,24 +193,28 @@ router.post('/:id/notes', async (req, res) => {
     }
 });
 
-// POST /api/prospects - Create a new prospect (from landing page)
+// POST /api/prospects - Create a new prospect or intentful user (from landing page)
+// Pass user_type: 'intentful' to store as intentful_user instead of prospect
 router.post('/', async (req, res) => {
-    console.log('[POST /api/prospects] Incoming prospect form:', req.body);
+    console.log('[POST /api/prospects] Incoming form:', req.body);
     const {
         name, address, phone, email, instrument, location, source,
-        dob, guardian_name, guardian_phone, notes, demo_type, demo_day_date
+        dob, guardian_name, guardian_phone, notes, demo_type, demo_day_date,
+        user_type
     } = req.body;
 
     if (!name || !phone) {
-        return res.status(400).json({ error: 'Name and phone are required for a trial booking.' });
+        return res.status(400).json({ error: 'Name and phone are required.' });
     }
+
+    const isIntentful = user_type === 'intentful';
+    const studentType = isIntentful ? 'intentful_user' : 'prospect';
 
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
 
-        // Create rich metadata block
-        const prospectMetadata = {
+        const metadata = {
             email,
             address,
             interested_instrument: instrument,
@@ -180,70 +229,69 @@ router.post('/', async (req, res) => {
             demo_day_date: demo_day_date || undefined
         };
 
-        // Insert student explicitly as a prospect
         const insertQuery = `
-      INSERT INTO students (name, phone, metadata, student_type, is_active) 
-      VALUES ($1, $2, $3, 'prospect', true) 
+      INSERT INTO students (name, phone, metadata, student_type, is_active)
+      VALUES ($1, $2, $3, $4, true)
       RETURNING *
     `;
 
-        const prospectResult = await client.query(insertQuery, [
+        const insertResult = await client.query(insertQuery, [
             name,
             phone,
-            JSON.stringify(prospectMetadata)
+            JSON.stringify(metadata),
+            studentType
         ]);
 
         await client.query('COMMIT');
-        const prospect = prospectResult.rows[0];
-        console.log('[POST /api/prospects] Prospect created successfully:', prospect.id);
+        const record = insertResult.rows[0];
+        console.log(`[POST /api/prospects] ${studentType} created:`, record.id);
 
-        // Notify admins via database notification
-        try {
-            const isDemoDay = demo_type === 'demo_day';
-            const notifTitle = isDemoDay ? 'New Demo Day Sign-up' : 'New Demo Sign-up';
-            const notifMsg = isDemoDay
-                ? `${name} recently booked a trial class for ${instrument || 'a program'} during Demo Day.`
-                : `${name} recently booked a trial class for ${instrument || 'a program'}.`;
+        // Notify admins (only for prospects, not intentful users)
+        if (!isIntentful) {
+            try {
+                const isDemoDay = demo_type === 'demo_day';
+                const notifTitle = isDemoDay ? 'New Demo Day Sign-up' : 'New Demo Sign-up';
+                const notifMsg = isDemoDay
+                    ? `${name} recently booked a trial class for ${instrument || 'a program'} during Demo Day.`
+                    : `${name} recently booked a trial class for ${instrument || 'a program'}.`;
 
-            await pool.query(`
-                INSERT INTO notifications (type, title, message, metadata, action_link) 
-                VALUES ($1, $2, $3, $4::jsonb, $5)
-            `, [
-                'NEW_PROSPECT',
-                notifTitle,
-                notifMsg,
-                JSON.stringify({ prospect_id: prospect.id, phone, email, demo_type: demo_type || 'normal' }),
-                '/students'
-            ]);
-            console.log('[POST /api/prospects] Notification inserted successfully.');
+                await pool.query(`
+                    INSERT INTO notifications (type, title, message, metadata, action_link)
+                    VALUES ($1, $2, $3, $4::jsonb, $5)
+                `, [
+                    'NEW_PROSPECT',
+                    notifTitle,
+                    notifMsg,
+                    JSON.stringify({ prospect_id: record.id, phone, email, demo_type: demo_type || 'normal' }),
+                    '/students'
+                ]);
 
-            // Immediately broadcast event to connected admins via SSE
-            const notificationsRouter = require('./notifications');
-            if (notificationsRouter.emitNotification) {
-                notificationsRouter.emitNotification({
-                    type: 'NEW_PROSPECT',
-                    title: notifTitle,
-                    message: notifMsg,
-                    metadata: { prospect_id: prospect.id, phone, email, demo_type: demo_type || 'normal' },
-                    action_link: '/students',
-                    created_at: new Date().toISOString()
-                });
+                const notificationsRouter = require('./notifications');
+                if (notificationsRouter.emitNotification) {
+                    notificationsRouter.emitNotification({
+                        type: 'NEW_PROSPECT',
+                        title: notifTitle,
+                        message: notifMsg,
+                        metadata: { prospect_id: record.id, phone, email, demo_type: demo_type || 'normal' },
+                        action_link: '/students',
+                        created_at: new Date().toISOString()
+                    });
+                }
+            } catch (notifErr) {
+                console.error('[POST /api/prospects] Failed to create notification:', notifErr.message);
             }
-        } catch (notifErr) {
-            console.error('[POST /api/prospects] Failed to create notification:', notifErr.message);
+
+            sendProspectNotification(record).catch(err =>
+                console.error('[prospects] Failed to send notification email:', err.message)
+            );
         }
 
-        // Send notification email — non-blocking, failures are logged only
-        sendProspectNotification(prospect).catch(err =>
-            console.error('[prospects] Failed to send notification email:', err.message)
-        );
-
-        res.status(201).json({ message: 'Demo class booked successfully!', prospect });
+        res.status(201).json({ message: isIntentful ? 'Guide request recorded.' : 'Demo class booked successfully!', prospect: record });
 
     } catch (err) {
         await client.query('ROLLBACK');
-        console.error('[POST /api/prospects] Error storing prospect:', err);
-        res.status(500).json({ error: 'Failed to record demo booking.' });
+        console.error('[POST /api/prospects] Error:', err);
+        res.status(500).json({ error: 'Failed to record submission.' });
     } finally {
         client.release();
     }

@@ -11,6 +11,7 @@ import StudentCardGrid from './StudentManagement/StudentCardGrid';
 import StudentTableView from './StudentManagement/StudentTableView';
 import ProspectList from './StudentManagement/ProspectList';
 import DemoDayList from './StudentManagement/DemoDayList';
+import IntentfulUserList from './StudentManagement/IntentfulUserList';
 
 interface StudentManagementProps {
   students: Student[];
@@ -44,9 +45,10 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students: propStu
   const [filterBatches, setFilterBatches] = useState<(string | number)[]>([]);
   const [filterTeacher, setFilterTeacher] = useState<string>('all');
   const [filterStatus, setFilterStatus] = useState<'active' | 'inactive' | 'all'>('active');
-  const [filterType, setFilterType] = useState<'permanent' | 'prospect' | 'demoday'>('permanent');
+  const [filterType, setFilterType] = useState<'permanent' | 'prospect' | 'demoday' | 'intentful'>('permanent');
   const [demoDayDateFilter, setDemoDayDateFilter] = useState<string>('all');
   const [prospectList, setProspectList] = useState<any[]>([]);
+  const [intentfulList, setIntentfulList] = useState<any[]>([]);
   const [flashConfig, setFlashConfig] = useState<any>(null);
   const [selectedProspect, setSelectedProspect] = useState<any | null>(null);
   const [ageFilter, setAgeFilter] = useState<string | null>(null);
@@ -91,6 +93,10 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students: propStu
       apiGet('/api/prospects?include_inactive=true')
         .then(res => setProspectList(res.prospects || []))
         .catch(err => console.error('Failed to fetch prospects', err));
+    } else if (filterType === 'intentful') {
+      apiGet('/api/prospects/intentful-users?include_inactive=true')
+        .then(res => setIntentfulList(res.intentful_users || []))
+        .catch(err => console.error('Failed to fetch intentful users', err));
     }
   }, [filterType]);
 
@@ -200,6 +206,19 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students: propStu
       .map(p => p.metadata?.demo_day_date || flashConfig?.demo_day_date)
       .filter(Boolean)
   )).sort() as string[];
+
+  const displayedIntentful = intentfulList
+    .filter(u => {
+      if (!searchTerm) return true;
+      const q = searchTerm.toLowerCase();
+      return (u.name || '').toLowerCase().includes(q) ||
+        (u.phone || '').toLowerCase().includes(q) ||
+        (u.metadata?.email || '').toLowerCase().includes(q);
+    })
+    .filter(u => {
+      if (!ageFilter) return true;
+      return getAgeBucket(getAgeDays(u.created_at)).key === ageFilter;
+    });
 
   const relevantBatches = batches.filter(b => filterInstruments.includes(b.instrument_id));
 
@@ -431,6 +450,7 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students: propStu
         batches={batches}
         teachers={teachers}
         prospects={prospects}
+        intentfulCount={intentfulList.length}
         relevantBatches={relevantBatches}
         onFilterTypeChange={(type) => { setFilterType(type); setAgeFilter(null); }}
         onFilterStatusChange={setFilterStatus}
@@ -479,6 +499,23 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students: propStu
             setInitialProspectId(id);
             setShowAddModal(true);
           }}
+        />
+      )}
+
+      {filterType === 'intentful' && (
+        <IntentfulUserList
+          intentfulList={intentfulList}
+          displayedIntentful={displayedIntentful}
+          ageFilter={ageFilter}
+          ageBuckets={AGE_BUCKETS}
+          getAgeDays={getAgeDays}
+          getAgeBucket={getAgeBucket}
+          onAgeFilterChange={(key) => { setAgeFilter(key); }}
+          onConvertSuccess={(updated) => {
+            setIntentfulList(prev => prev.filter(u => u.id !== updated.id));
+            setProspectList(prev => [updated, ...prev]);
+          }}
+          instruments={instruments}
         />
       )}
 

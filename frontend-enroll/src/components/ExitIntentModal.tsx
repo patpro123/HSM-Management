@@ -57,7 +57,8 @@ const ExitIntentModal: React.FC<ExitIntentModalProps> = ({ apiBaseUrl }) => {
         location: 'hsm_main',
         source: 'Exit Intent Lead Magnet',
         notes: "Requested: The HSM Method - 5 Habits to Achieve a Trinity 'Distinction' guide",
-        demo_type: 'normal'
+        demo_type: 'normal',
+        user_type: 'intentful',
       };
 
       const res = await fetch(`${apiBaseUrl}/api/prospects`, {

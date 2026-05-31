@@ -124,6 +124,7 @@ const ExitIntentModal: React.FC<ExitIntentModalProps> = ({ apiBaseUrl, onOpenBoo
           source:    `Exit Intent — ${trigger}`,
           notes:     "Downloaded: The HSM Method — 5 Daily Habits guide",
           demo_type: 'normal',
+          user_type: 'intentful',
         }),
       });
       // Deliver PDF immediately regardless of API status

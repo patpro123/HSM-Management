@@ -168,8 +168,7 @@ const App: React.FC = () => {
   const handleLogout = () => {
     logout();
     setUser(null);
-    // Will trigger login screen to show since isAuthenticated() will return false
-    window.location.href = '/';
+    window.location.href = import.meta.env.PROD ? 'https://hsm.org.in' : '/';
   };
 
   // Dev-only: switch profile without server restart or page reload

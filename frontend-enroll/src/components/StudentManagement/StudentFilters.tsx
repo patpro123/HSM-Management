@@ -2,7 +2,7 @@ import React from 'react';
 import { Instrument, Batch } from '../../types';
 
 interface StudentFiltersProps {
-  filterType: 'permanent' | 'prospect' | 'demoday';
+  filterType: 'permanent' | 'prospect' | 'demoday' | 'intentful';
   filterStatus: 'active' | 'inactive' | 'all';
   filterTeacher: string;
   filterInstruments: (string | number)[];
@@ -11,8 +11,9 @@ interface StudentFiltersProps {
   batches: Batch[];
   teachers: any[];
   prospects: any[];
+  intentfulCount?: number;
   relevantBatches: Batch[];
-  onFilterTypeChange: (type: 'permanent' | 'prospect' | 'demoday') => void;
+  onFilterTypeChange: (type: 'permanent' | 'prospect' | 'demoday' | 'intentful') => void;
   onFilterStatusChange: (status: 'active' | 'inactive' | 'all') => void;
   onFilterTeacherChange: (teacher: string) => void;
   onInstrumentToggle: (instrumentId: string | number) => void;
@@ -30,6 +31,7 @@ const StudentFilters: React.FC<StudentFiltersProps> = ({
   instruments,
   teachers,
   prospects,
+  intentfulCount,
   relevantBatches,
   onFilterTypeChange,
   onFilterStatusChange,
@@ -45,13 +47,22 @@ const StudentFilters: React.FC<StudentFiltersProps> = ({
         {/* Type filter */}
         <div>
           <h3 className="text-sm font-bold text-slate-700 mb-3">Student Type</h3>
-          <div className="flex gap-4">
-            {([['permanent', 'Students'], ['prospect', 'Prospects'], ['demoday', 'Demo Day']] as const).map(([type, label]) => {
-              const count = type === 'prospect'
-                ? prospects.filter(p => p.metadata?.demo_type !== 'demo_day').length
-                : type === 'demoday'
-                ? prospects.filter(p => p.metadata?.demo_type === 'demo_day').length
-                : 0;
+          <div className="flex flex-wrap gap-4">
+            {([
+              ['permanent', 'Students', null],
+              ['prospect', 'Prospects', null],
+              ['demoday', 'Demo Day', null],
+              ['intentful', 'Intentful Users', null],
+            ] as const).map(([type, label]) => {
+              let count: number = 0;
+              if (type === 'prospect') count = prospects.filter(p => p.metadata?.demo_type !== 'demo_day').length;
+              else if (type === 'demoday') count = prospects.filter(p => p.metadata?.demo_type === 'demo_day').length;
+              else if (type === 'intentful') count = intentfulCount ?? 0;
+
+              const badgeColor =
+                type === 'demoday' ? 'bg-orange-100 text-orange-700' :
+                type === 'intentful' ? 'bg-blue-100 text-blue-700' :
+                'bg-purple-100 text-purple-700';
 
               return (
                 <label key={type} className="flex items-center gap-2 cursor-pointer">
@@ -65,9 +76,7 @@ const StudentFilters: React.FC<StudentFiltersProps> = ({
                   <span className="text-sm text-slate-700">
                     {label}
                     {count > 0 && (
-                      <span className={`ml-1 px-1.5 py-0.5 rounded-full text-xs font-bold ${
-                        type === 'demoday' ? 'bg-orange-100 text-orange-700' : 'bg-purple-100 text-purple-700'
-                      }`}>
+                      <span className={`ml-1 px-1.5 py-0.5 rounded-full text-xs font-bold ${badgeColor}`}>
                         {count}
                       </span>
                     )}

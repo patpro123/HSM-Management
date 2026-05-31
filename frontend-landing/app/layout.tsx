@@ -89,6 +89,12 @@ export default function RootLayout({
                                 "postalCode": "500091",
                                 "addressCountry": "IN"
                             },
+                            "geo": {
+                                "@type": "GeoCoordinates",
+                                "latitude": 17.3471995,
+                                "longitude": 78.3909525
+                            },
+                            "hasMap": "https://maps.google.com/maps?q=17.3471995,78.3909525",
                             "openingHours": [
                                 "Tu-Fr 17:00-21:00",
                                 "Sa 15:00-21:00",
@@ -137,6 +143,11 @@ export default function RootLayout({
                             "location": {
                                 "@type": "Place",
                                 "name": "Hyderabad School of Music — Kismatpur",
+                                "geo": {
+                                    "@type": "GeoCoordinates",
+                                    "latitude": 17.3471995,
+                                    "longitude": 78.3909525
+                                },
                                 "address": {
                                     "@type": "PostalAddress",
                                     "streetAddress": "Kismatpur",
