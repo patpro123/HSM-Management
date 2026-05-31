@@ -255,6 +255,7 @@ app.use('/api/notifications', require('./routes/notifications'));
 app.use('/api/chat', require('./routes/chat'));
 app.use('/api/public/chat', require('./routes/publicChat'));
 app.use('/api/prospects', require('./routes/prospects'));
+app.use('/api/stats', require('./routes/stats'));
 app.use('/api/migration', require('./routes/migration'));
 app.use('/api', require('./routes/documents'));
 app.use('/api/whatsapp', require('./routes/whatsapp'));

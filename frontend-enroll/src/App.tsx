@@ -4,7 +4,6 @@ import StudentProfile from './pages/StudentProfile';
 import {
   Student,
   Batch,
-  AttendanceRecord,
   PaymentRecord,
   Instrument
 } from './types';
@@ -41,8 +40,8 @@ const App: React.FC = () => {
   const [batches, setBatches] = useState<Batch[]>([]);
   const [instruments, setInstruments] = useState<Instrument[]>([]);
   const [prospects, setProspects] = useState<any[]>([]);
-  const [attendance, setAttendance] = useState<AttendanceRecord[]>([]);
   const [payments, setPayments] = useState<PaymentRecord[]>([]);
+  const [dashboardStats, setDashboardStats] = useState<any>(null);
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
   const [user, setUser] = useState(getCurrentUser());
   const [authChecked, setAuthChecked] = useState(false);
@@ -113,21 +112,21 @@ const App: React.FC = () => {
       if (isAdminOrTeacher) {
         // Fetch all data in parallel using authenticated API calls
         // We catch errors individually so one failure doesn't break the entire dashboard
-        const [studentsData, batchesData, instrumentsData, paymentsData, attendanceData, prospectsData] = await Promise.all([
+        const [studentsData, batchesData, instrumentsData, paymentsData, prospectsData, statsData] = await Promise.all([
           apiGet('/api/enrollments').catch(e => { console.error('Enrollments fetch failed', e); return { enrollments: [] }; }),
           apiGet('/api/batches').catch(e => { console.error('Batches fetch failed', e); return { batches: [] }; }),
           apiGet('/api/instruments').catch(e => { console.error('Instruments fetch failed', e); return { instruments: [] }; }),
           apiGet('/api/payments').catch(e => { console.error('Payments fetch failed', e); return { payments: [] }; }),
-          apiGet('/api/attendance').catch(e => { console.error('Attendance fetch failed', e); return { attendance: [] }; }),
           apiGet('/api/prospects').catch(e => { console.error('Prospects fetch failed', e); return { prospects: [] }; }),
+          apiGet('/api/stats/dashboard').catch(e => { console.error('Dashboard stats fetch failed', e); return {}; }),
         ]);
 
         setStudents(studentsData.enrollments || []);
         setBatches(batchesData.batches || []);
         setInstruments(instrumentsData.instruments || []);
         setPayments(paymentsData.payments || []);
-        setAttendance(attendanceData.attendance || []);
         setProspects(prospectsData.prospects || []);
+        setDashboardStats(statsData || null);
       } else {
         // For student/parent users, fetch only what they need and have access to
         try {
@@ -143,7 +142,6 @@ const App: React.FC = () => {
         setBatches([]);
         setInstruments([]);
         setPayments([]);
-        setAttendance([]);
       }
     } catch (err) {
       console.error('Error fetching data:', err);
@@ -349,8 +347,8 @@ const App: React.FC = () => {
                 <StatsOverview
                   students={students.filter(s => (s as any).is_active !== false)}
                   prospectsCount={prospects.length}
-                  attendance={attendance}
                   payments={payments}
+                  dashboardStats={dashboardStats}
                   onNavigate={setActiveTab}
                 />
               )}

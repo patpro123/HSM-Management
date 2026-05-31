@@ -197,7 +197,31 @@ router.delete('/:id', authenticateJWT, authorizeRole(['admin']), async (req, res
       return res.status(404).json({ error: 'Student not found' });
     }
 
-    // 2. Remove batch links (delete from enrollment_batches)
+    // 2. Snapshot batch context into metadata before links are removed
+    const snapshotRes = await client.query(
+      `SELECT
+         COALESCE(ARRAY_AGG(DISTINCT t.name) FILTER (WHERE t.name IS NOT NULL), '{}') AS teachers,
+         COALESCE(ARRAY_AGG(DISTINCT i.name) FILTER (WHERE i.name IS NOT NULL), '{}') AS instruments,
+         COALESCE(ARRAY_AGG(DISTINCT br.code) FILTER (WHERE br.code IS NOT NULL), '{}') AS branch_codes
+       FROM enrollments e
+       JOIN enrollment_batches eb ON eb.enrollment_id = e.id
+       JOIN batches b ON b.id = eb.batch_id
+       LEFT JOIN teachers t ON t.id = b.teacher_id
+       LEFT JOIN instruments i ON i.id = b.instrument_id
+       LEFT JOIN fee_structures fs ON fs.id = eb.fee_structure_id
+       LEFT JOIN branches br ON br.id = fs.branch_id
+       WHERE e.student_id = $1`,
+      [id]
+    );
+    const snap = snapshotRes.rows[0];
+    await client.query(
+      `UPDATE students
+       SET metadata = jsonb_set(COALESCE(metadata, '{}'), '{last_batch_info}', $1::jsonb)
+       WHERE id = $2`,
+      [JSON.stringify({ teachers: snap.teachers, instruments: snap.instruments, branch_codes: snap.branch_codes }), id]
+    );
+
+    // 3. Remove batch links (delete from enrollment_batches)
     await client.query(
       'DELETE FROM enrollment_batches WHERE enrollment_id IN (SELECT id FROM enrollments WHERE student_id = $1)',
       [id]
