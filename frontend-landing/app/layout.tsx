@@ -75,7 +75,7 @@ export default function RootLayout({
                     dangerouslySetInnerHTML={{
                         __html: JSON.stringify({
                             "@context": "https://schema.org",
-                            "@type": "MusicSchool",
+                            "@type": ["LocalBusiness", "MusicSchool"],
                             "name": "Hyderabad School of Music",
                             "url": "https://hsm.org.in",
                             "logo": "https://hsm.org.in/HSM_Logo_Horizontal.png",
@@ -94,7 +94,6 @@ export default function RootLayout({
                                 "latitude": 17.3471995,
                                 "longitude": 78.3909525
                             },
-                            "hasMap": "https://maps.google.com/maps?q=17.3471995,78.3909525",
                             "openingHours": [
                                 "Tu-Fr 17:00-21:00",
                                 "Sa 15:00-21:00",
@@ -104,8 +103,7 @@ export default function RootLayout({
                                 "@type": "AggregateRating",
                                 "ratingValue": "4.9",
                                 "reviewCount": "47",
-                                "bestRating": "5",
-                                "worstRating": "1"
+                                "bestRating": "5"
                             },
                             "hasOfferCatalog": {
                                 "@type": "OfferCatalog",
