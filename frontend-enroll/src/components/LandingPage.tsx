@@ -179,7 +179,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLogin, authError }) => {
                 </div>
             )}
 
-            <PromoBanner onVisibilityChange={setIsPromoActive} />
+            <PromoBanner onVisibilityChange={setIsPromoActive} enabled={flashConfig?.demo_day_banner_enabled ?? true} flashConfig={flashConfig} />
             <Navbar
                 isScrolled={isScrolled}
                 isDark={isDark}

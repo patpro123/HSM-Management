@@ -1,9 +1,10 @@
 {
+  "demo_day_banner_enabled": true,
   "demo_day_title": "Grand Demo Day Special",
   "demo_day_description": "Register on the spot during our upcoming Demo Day and get a chance to try all instruments! Special Spot Registration Offers apply",
   "demo_day_link_enabled": true,
   "demo_day_location": "hsm_main",
-  "demo_day_date": "2026-06-15",
+  "demo_day_date": "2026-06-13",
   "demo_day_instruments": [
     "Piano",
     "Guitar",

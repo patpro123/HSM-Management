@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { apiGet, apiPost } from '../api';
 
 interface BannerConfig {
+  demo_day_banner_enabled: boolean;
   demo_day_title: string;
   demo_day_description: string;
   demo_day_link_enabled: boolean;
@@ -91,18 +92,32 @@ const SettingsPanel: React.FC = () => {
             <h3 className="text-sm font-bold text-slate-700 flex items-center gap-2">
               <span>📢</span> Part 1: Demo Day Registration
             </h3>
-            <label className="relative inline-flex items-center cursor-pointer">
-              <input
-                type="checkbox"
-                checked={config.demo_day_link_enabled}
-                onChange={(e) => setConfig({ ...config, demo_day_link_enabled: e.target.checked })}
-                className="sr-only peer"
-              />
-              <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-orange-500"></div>
-              <span className="ml-2 text-xs font-bold text-slate-600">
-                {config.demo_day_link_enabled ? 'Link Active' : 'Link Disabled'}
-              </span>
-            </label>
+            <div className="flex items-center gap-4">
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={config.demo_day_banner_enabled ?? true}
+                  onChange={(e) => setConfig({ ...config, demo_day_banner_enabled: e.target.checked })}
+                  className="sr-only peer"
+                />
+                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-orange-500"></div>
+                <span className="ml-2 text-xs font-bold text-slate-600">
+                  {config.demo_day_banner_enabled ?? true ? 'Banner On' : 'Banner Off'}
+                </span>
+              </label>
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={config.demo_day_link_enabled}
+                  onChange={(e) => setConfig({ ...config, demo_day_link_enabled: e.target.checked })}
+                  className="sr-only peer"
+                />
+                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-orange-500"></div>
+                <span className="ml-2 text-xs font-bold text-slate-600">
+                  {config.demo_day_link_enabled ? 'Link Active' : 'Link Disabled'}
+                </span>
+              </label>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 gap-4">

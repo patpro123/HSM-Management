@@ -8,6 +8,7 @@ const configPath = path.join(__dirname, '../config/flash_banner.json');
 
 // Default initial config
 const defaultConfig = {
+  demo_day_banner_enabled: true,
   demo_day_title: "Grand Demo Day Special",
   demo_day_description: "Register on the spot during our upcoming Demo Day and get flat 15% off packages!",
   demo_day_link_enabled: true,
@@ -60,6 +61,7 @@ router.post('/flash-banner', authenticateJWT, async (req, res) => {
   }
 
   const {
+    demo_day_banner_enabled,
     demo_day_title,
     demo_day_description,
     demo_day_link_enabled,
@@ -72,6 +74,7 @@ router.post('/flash-banner', authenticateJWT, async (req, res) => {
 
   const current = readConfig();
 
+  if (demo_day_banner_enabled !== undefined) current.demo_day_banner_enabled = !!demo_day_banner_enabled;
   if (demo_day_title !== undefined) current.demo_day_title = demo_day_title;
   if (demo_day_description !== undefined) current.demo_day_description = demo_day_description;
   if (demo_day_link_enabled !== undefined) current.demo_day_link_enabled = !!demo_day_link_enabled;

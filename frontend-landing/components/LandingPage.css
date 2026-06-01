@@ -1874,6 +1874,17 @@ img {
   max-width: 100%;
 }
 
+@keyframes promo-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+.promo-countdown {
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  animation: promo-pulse 1.5s ease-in-out infinite;
+}
+
 .promo-banner-btn {
   background: #ffffff;
   color: #ea580c;
