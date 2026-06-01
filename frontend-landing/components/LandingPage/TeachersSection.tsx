@@ -33,7 +33,7 @@ const TEACHER_PROFILES: Record<string, TeacherProfile> = {
     quote: '"Piano teaches you to listen to every voice simultaneously — it builds your musical mind from the ground up."',
   },
   shiva: {
-    displayName: 'David',
+    displayName: 'Mriganko',
     specialty: 'Piano',
     icon: '🎹',
     quote: '"Piano teaches you to listen to every voice simultaneously — it builds your musical mind from the ground up."',

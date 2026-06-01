@@ -16,6 +16,7 @@ import HSMMethodSection from './LandingPage/HSMMethodSection';
 import MethodologyInfographic from './LandingPage/MethodologyInfographic';
 import ScheduleSection from './LandingPage/ScheduleSection';
 import FaqSection from './LandingPage/FaqSection';
+import AboutSection from './LandingPage/AboutSection';
 import LocationSection from './LandingPage/LocationSection';
 import FooterCTA from './LandingPage/FooterCTA';
 
@@ -156,6 +157,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ teachers, batches }) => {
                     activeFaq={activeFaq}
                     onToggle={(idx) => setActiveFaq(activeFaq === idx ? null : idx)}
                 />
+                <AboutSection />
                 <LocationSection />
                 <FooterCTA onOpenModal={handleOpenModal} />
             </main>

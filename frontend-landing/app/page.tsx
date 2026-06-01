@@ -4,7 +4,7 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'https://hsm-manage
 
 const FALLBACK_TEACHERS = [
     { id: 1, name: 'Josva', specialty: 'Keyboard · Guitar' },
-    { id: 2, name: 'David', specialty: 'Piano' },
+    { id: 2, name: 'Mriganko', specialty: 'Piano' },
     { id: 3, name: 'Subroto Bhaduri', specialty: 'Drums · Tabla · Octopad' },
     { id: 4, name: 'Issac Lawrence', specialty: 'Violin' },
     { id: 5, name: 'Sangeeta', specialty: 'Hindustani Classical · Carnatic Classical' },

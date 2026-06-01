@@ -23,6 +23,11 @@ export const viewport: Viewport = {
 
 export const metadata: Metadata = {
     metadataBase: new URL("https://hsm.org.in"),
+    icons: {
+        icon: "/HSM_Logo_Horizontal.png",
+        shortcut: "/HSM_Logo_Horizontal.png",
+        apple: "/HSM_Logo_Horizontal.png",
+    },
     title: "Hyderabad School of Music | Learn Music in Kismatpur, Hyderabad",
     description: "Hyderabad School of Music (HSM) offers in-person classes in Guitar, Keyboard, Piano, Drums, Tabla, Violin, and Vocals at Kismatpur, Hyderabad. Free demo class. All ages welcome.",
     keywords: "music school hyderabad, guitar classes hyderabad, keyboard lessons kismatpur, piano classes hyderabad, drums tabla violin vocals, HSM hyderabad",
@@ -170,6 +175,7 @@ export default function RootLayout({
                             "sameAs": "https://share.google/luZQOKzDpHdTKykOd",
                             "performer": [
                                 { "@type": "Person", "name": "Joshua", "jobTitle": "Guitar & Keyboard Instructor" },
+                                { "@type": "Person", "name": "Mriganko", "jobTitle": "Piano Instructor" },
                                 { "@type": "Person", "name": "Subroto Bhaduri", "jobTitle": "Drums & Tabla Instructor" },
                                 { "@type": "Person", "name": "Isaac Lawrence", "jobTitle": "Violin Instructor" },
                                 { "@type": "Person", "name": "Sangeetha", "jobTitle": "Vocals Instructor" }

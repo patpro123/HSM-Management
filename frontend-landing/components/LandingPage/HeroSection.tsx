@@ -50,35 +50,7 @@ const HeroSection: React.FC<HeroSectionProps> = ({ onOpenModal, flashConfig }) =
               </span>
             </div>
 
-            {/* 2. Demo Day (glowing dynamic pill if enabled) */}
-            {flashConfig?.demo_day_link_enabled && (
-              <div
-                onClick={(e) => onOpenModal(e, undefined, true)}
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '0.4rem',
-                  background: 'linear-gradient(135deg, rgba(242,107,56,0.25) 0%, rgba(251,191,36,0.25) 100%)',
-                  backdropFilter: 'blur(12px)',
-                  border: '1px solid rgba(242,107,56,0.6)',
-                  borderRadius: 999,
-                  padding: '0.4rem 0.95rem',
-                  cursor: 'pointer',
-                  animation: 'hsm-pulse-glow 2s ease-in-out infinite',
-                  boxShadow: '0 0 10px rgba(242,107,56,0.25)',
-                  transition: 'transform 0.15s ease',
-                }}
-                onMouseEnter={(e) => (e.currentTarget.style.transform = 'scale(1.04)')}
-                onMouseLeave={(e) => (e.currentTarget.style.transform = 'scale(1)')}
-              >
-                <span style={{ fontSize: '0.8rem' }}>🎁</span>
-                <span style={{ color: '#fff', fontSize: '0.76rem', fontWeight: 700, letterSpacing: '0.01em' }}>
-                  {flashConfig.demo_day_title} &rarr;
-                </span>
-              </div>
-            )}
-
-            {/* 3. New Piano Batches (glowing dynamic pill) */}
+            {/* 2. New Piano Batches (glowing dynamic pill) */}
             <div
               onClick={(e) => onOpenModal(e, 'Piano')}
               style={{
