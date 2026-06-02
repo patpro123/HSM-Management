@@ -212,7 +212,7 @@ function BatchColumn({
       onDrop={(e) => onDrop(e, column.id)}
       onClick={() => onColumnTap(column.id)}
       className={`
-        flex-shrink-0 w-72 rounded-xl border-2 flex flex-col transition-all duration-150
+        w-full rounded-xl border-2 flex flex-col transition-all duration-150
         ${isDragOver && !isFull ? 'border-orange-400 bg-orange-50 shadow-md' : ''}
         ${canReceive ? 'border-blue-400 bg-blue-50 shadow-md ring-2 ring-blue-200 cursor-pointer' : ''}
         ${!isDragOver && !canReceive ? 'border-slate-200 bg-white' : ''}
@@ -471,26 +471,24 @@ export default function BatchManager({ instruments }: BatchManagerProps) {
             </div>
           </div>
         ) : (
-          <div className="overflow-x-auto pb-4">
-            <div className="flex gap-4" style={{ minWidth: 'max-content' }}>
-              {columns.map(column => (
-                <BatchColumn
-                  key={column.id}
-                  column={column}
-                  isDragOver={dragOverBatchId === column.id}
-                  isMoveTarget={!!selectedStudent && selectedStudent.fromBatchId !== column.id}
-                  selectedStudentFromBatch={selectedStudent?.fromBatchId ?? null}
-                  movingEnrollmentBatchId={movingEnrollmentBatchId}
-                  onDragOver={handleDragOver}
-                  onDragLeave={handleDragLeave}
-                  onDrop={handleDrop}
-                  onColumnTap={handleColumnTap}
-                  onStudentSelect={handleStudentSelect}
-                  onStudentDragStart={handleDragStart}
-                  selectedStudent={selectedStudent}
-                />
-              ))}
-            </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            {columns.map(column => (
+              <BatchColumn
+                key={column.id}
+                column={column}
+                isDragOver={dragOverBatchId === column.id}
+                isMoveTarget={!!selectedStudent && selectedStudent.fromBatchId !== column.id}
+                selectedStudentFromBatch={selectedStudent?.fromBatchId ?? null}
+                movingEnrollmentBatchId={movingEnrollmentBatchId}
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+                onColumnTap={handleColumnTap}
+                onStudentSelect={handleStudentSelect}
+                onStudentDragStart={handleDragStart}
+                selectedStudent={selectedStudent}
+              />
+            ))}
           </div>
         )
       )}
