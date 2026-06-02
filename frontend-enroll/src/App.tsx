@@ -312,8 +312,9 @@ const App: React.FC = () => {
                 <span>Logout</span>
               </button>
             )}
-            <div className="mt-4 text-[10px] text-slate-500 font-bold uppercase tracking-widest text-center">
-              Hyderabad School of Music
+            <div className="mt-4 text-[10px] text-slate-500 text-center leading-relaxed">
+              <div className="font-bold uppercase tracking-widest">Hyderabad School of Music</div>
+              <div className="mt-1 text-slate-600">© 2024–2028 All rights reserved.</div>
             </div>
           </div>
         </nav>
@@ -521,10 +522,6 @@ const App: React.FC = () => {
           </div>
         </>
       )}
-      <div className="hidden md:block text-center py-3 text-xs text-slate-400 border-t border-slate-100 bg-white">
-        © 2024–2028 Hyderabad School of Music. All rights reserved.
-      </div>
-
       {user && (
         <>
           <ChatFAB
