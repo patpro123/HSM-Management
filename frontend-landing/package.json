@@ -16,6 +16,8 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "pdf-lib": "^1.17.1",
+    "playwright": "^1.60.0",
     "typescript": "^5"
   }
 }

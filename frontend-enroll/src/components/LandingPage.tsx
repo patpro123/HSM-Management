@@ -15,6 +15,7 @@ import ScheduleSection from './LandingPage/ScheduleSection';
 import FaqSection from './LandingPage/FaqSection';
 import LocationSection from './LandingPage/LocationSection';
 import FooterCTA from './LandingPage/FooterCTA';
+import TermsOfUse from './TermsOfUse';
 
 interface LandingPageProps {
     onLogin: () => void;
@@ -33,6 +34,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLogin, authError }) => {
     const [activeFaq, setActiveFaq] = useState<number | null>(null);
     const [flashConfig, setFlashConfig] = useState<any>(null);
     const [isDemoDayFlow, setIsDemoDayFlow] = useState(false);
+    const [isToUOpen, setIsToUOpen] = useState(false);
 
     const faqs = [
         { q: "Does my child need prior experience?", a: "Not at all. We start from the very beginning and move at your child's pace." },
@@ -209,13 +211,14 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLogin, authError }) => {
                     onToggle={(idx) => setActiveFaq(activeFaq === idx ? null : idx)}
                 />
                 <LocationSection />
-                <FooterCTA onOpenModal={handleOpenModal} />
+                <FooterCTA onOpenModal={handleOpenModal} onOpenToU={() => setIsToUOpen(true)} />
             </main>
 
             {/* Public Cleff chatbot — no auth required */}
             <PublicCleffChat onBookDemo={() => handleOpenModal({ preventDefault: () => {} } as React.MouseEvent)} />
 
             <ExitIntentModal apiBaseUrl={API_BASE_URL} />
+            {isToUOpen && <TermsOfUse onClose={() => setIsToUOpen(false)} />}
 
             {/* Intake form — rendered in an iframe so the landing page stays mounted */}
             {isModalOpen && (

@@ -521,6 +521,10 @@ const App: React.FC = () => {
           </div>
         </>
       )}
+      <div className="hidden md:block text-center py-3 text-xs text-slate-400 border-t border-slate-100 bg-white">
+        © 2024–2028 Hyderabad School of Music. All rights reserved.
+      </div>
+
       {user && (
         <>
           <ChatFAB

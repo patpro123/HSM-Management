@@ -45,6 +45,14 @@ const FooterCTA: React.FC<FooterCTAProps> = ({ onOpenModal }) => {
             <a href="#careers">Careers</a>
           </div>
         </div>
+        <div className="container" style={{ borderTop: '1px solid rgba(255,255,255,0.12)', marginTop: '2rem', paddingTop: '1.25rem', display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem' }}>
+          <p className="text-muted" style={{ fontSize: '0.8rem', margin: 0 }}>
+            © 2024–2028 Hyderabad School of Music. All rights reserved.
+          </p>
+          <a href="/terms" className="text-muted" style={{ fontSize: '0.8rem', textDecoration: 'underline' }}>
+            Terms of Use
+          </a>
+        </div>
       </footer>
     </section>
   );
