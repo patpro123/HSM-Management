@@ -188,7 +188,7 @@ router.delete('/:id', authenticateJWT, authorizeRole(['admin']), async (req, res
 
     // 1. Mark student as inactive
     const updateRes = await client.query(
-      'UPDATE students SET is_active = false WHERE id = $1 RETURNING *',
+      'UPDATE students SET is_active = false, deactivated_at = NOW() WHERE id = $1 RETURNING *',
       [id]
     );
 
@@ -246,7 +246,7 @@ router.post('/:id/restore', authenticateJWT, authorizeRole(['admin']), async (re
   const { id } = req.params;
   try {
     const result = await pool.query(
-      'UPDATE students SET is_active = true WHERE id = $1 RETURNING *',
+      'UPDATE students SET is_active = true, deactivated_at = NULL WHERE id = $1 RETURNING *',
       [id]
     );
     if (result.rows.length === 0) {

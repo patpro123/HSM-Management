@@ -82,7 +82,11 @@ CREATE TABLE IF NOT EXISTS students (
   guardian_contact text,
   metadata jsonb DEFAULT '{}'::jsonb,
   created_at timestamptz DEFAULT now(),
-  updated_at timestamptz DEFAULT now()
+  updated_at timestamptz DEFAULT now(),
+  -- Added via migrations
+  is_active boolean DEFAULT true,
+  student_type text DEFAULT 'permanent',
+  deactivated_at timestamptz  -- set when is_active → false, cleared on restore (migration 048)
 );
 
 COMMENT ON TABLE students IS 'Student profiles with contact information and metadata';
@@ -538,6 +542,7 @@ CREATE INDEX IF NOT EXISTS idx_homework_submissions_assignment ON homework_submi
 -- 5. migration 019: Added trinity_grade to enrollment_batches
 -- 6. migration 020: Created instrument_grade_rates table
 -- 7. migration 021: Created teacher_grade_rate_overrides table
+-- 8. migration 048: Added deactivated_at to students for reliable active-student trend tracking
 --
 -- Key Design Decisions:
 -- - One enrollment per student (not per instrument)

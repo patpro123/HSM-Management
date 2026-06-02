@@ -70,7 +70,7 @@ router.get('/dashboard', async (req, res) => {
                        AND (
                          (s.is_active = true  AND e.status = 'active')
                          OR
-                         (s.is_active = false AND s.updated_at >= m.month_start + INTERVAL '1 month')
+                         (s.is_active = false AND s.deactivated_at >= m.month_start + INTERVAL '1 month')
                        )
                    ) AS count
                  FROM months m
