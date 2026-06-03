@@ -17,6 +17,8 @@ interface User {
   last_login: string;
   created_at: string;
   roles: UserRole[];
+  teacher_id?: string | null;
+  student_id?: string | null;
 }
 
 interface ProvisionedUser {
@@ -52,6 +54,12 @@ const UserManagement: React.FC = () => {
   const [provEntityId, setProvEntityId] = useState('');
   const [provSubmitting, setProvSubmitting] = useState(false);
   const [showProvisionForm, setShowProvisionForm] = useState(false);
+
+  // Re-link form state
+  const [relinkUserId, setRelinkUserId] = useState<string | null>(null);
+  const [relinkEntityType, setRelinkEntityType] = useState<'student' | 'teacher'>('student');
+  const [relinkEntityId, setRelinkEntityId] = useState('');
+  const [relinkSubmitting, setRelinkSubmitting] = useState(false);
 
   const fetchAll = async () => {
     try {
@@ -165,6 +173,32 @@ const UserManagement: React.FC = () => {
       fetchAll();
     } catch (err: any) {
       showError(err.message || 'Failed to activate provisioning');
+    }
+  };
+
+  const openRelink = (user: User) => {
+    setRelinkUserId(user.id);
+    setRelinkEntityType(user.teacher_id ? 'teacher' : 'student');
+    setRelinkEntityId(user.teacher_id || user.student_id || '');
+  };
+
+  const handleRelink = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!relinkUserId || !relinkEntityId) return;
+    setRelinkSubmitting(true);
+    try {
+      await apiPost(`/api/users/${relinkUserId}/link`, {
+        entity_type: relinkEntityType,
+        entity_id: relinkEntityId,
+      });
+      showSuccess('Profile link updated successfully');
+      setRelinkUserId(null);
+      setRelinkEntityId('');
+      fetchAll();
+    } catch (err: any) {
+      showError(err.message || 'Failed to update link');
+    } finally {
+      setRelinkSubmitting(false);
     }
   };
 
@@ -414,79 +448,143 @@ const UserManagement: React.FC = () => {
                     </td>
                   </tr>
                 ) : (
-                  filteredUsers.map((user) => (
-                    <tr key={user.id} className="hover:bg-slate-50 transition">
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-3">
-                          {user.profile_picture ? (
-                            <img src={user.profile_picture} alt={user.name} className="w-10 h-10 rounded-full" />
-                          ) : (
-                            <div className="w-10 h-10 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center font-bold">
-                              {(user.name || '?').charAt(0).toUpperCase()}
+                  filteredUsers.map((user) => {
+                    const linkedTeacher = user.teacher_id ? teachers.find(t => t.id === user.teacher_id) : null;
+                    const linkedStudent = user.student_id ? students.find(s => s.id === user.student_id) : null;
+                    const isRelinkOpen = relinkUserId === user.id;
+                    return (
+                      <React.Fragment key={user.id}>
+                        <tr className="hover:bg-slate-50 transition">
+                          <td className="px-6 py-4">
+                            <div className="flex items-center gap-3">
+                              {user.profile_picture ? (
+                                <img src={user.profile_picture} alt={user.name} className="w-10 h-10 rounded-full" />
+                              ) : (
+                                <div className="w-10 h-10 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center font-bold">
+                                  {(user.name || '?').charAt(0).toUpperCase()}
+                                </div>
+                              )}
+                              <div>
+                                <div className="font-medium text-slate-900">{user.name}</div>
+                                <div className="text-xs text-slate-500">{user.email}</div>
+                                {linkedTeacher && (
+                                  <div className="text-xs text-purple-600 mt-0.5">Teacher: {linkedTeacher.name}</div>
+                                )}
+                                {linkedStudent && (
+                                  <div className="text-xs text-blue-600 mt-0.5">Student: {linkedStudent.name}</div>
+                                )}
+                              </div>
                             </div>
-                          )}
-                          <div>
-                            <div className="font-medium text-slate-900">{user.name}</div>
-                            <div className="text-xs text-slate-500">{user.email}</div>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="flex flex-wrap gap-2 items-center">
-                          {(user.roles || []).map((roleObj) => (
-                            <span key={roleObj.role} className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                              {roleObj.role}
-                              <button
-                                onClick={() => handleRemoveRole(user.id, roleObj.role)}
-                                className="ml-1.5 text-blue-600 hover:text-blue-900 font-bold"
-                                title="Remove role"
+                          </td>
+                          <td className="px-6 py-4">
+                            <div className="flex flex-wrap gap-2 items-center">
+                              {(user.roles || []).map((roleObj) => (
+                                <span key={roleObj.role} className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                  {roleObj.role}
+                                  <button
+                                    onClick={() => handleRemoveRole(user.id, roleObj.role)}
+                                    className="ml-1.5 text-blue-600 hover:text-blue-900 font-bold"
+                                    title="Remove role"
+                                  >
+                                    ×
+                                  </button>
+                                </span>
+                              ))}
+                              <select
+                                className="text-xs border border-slate-300 rounded px-2 py-1 focus:outline-none focus:border-orange-500"
+                                onChange={(e) => {
+                                  if (e.target.value) {
+                                    handleAddRole(user.id, e.target.value);
+                                    e.target.value = '';
+                                  }
+                                }}
+                                value=""
                               >
-                                ×
-                              </button>
+                                <option value="">+ Add Role</option>
+                                {availableRoles
+                                  .filter(r => !(user.roles || []).some(ur => ur.role === r))
+                                  .map(role => (
+                                    <option key={role} value={role}>{role}</option>
+                                  ))
+                                }
+                              </select>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4">
+                            <span className={`inline-flex px-2 py-1 rounded-full text-xs font-semibold ${
+                              user.is_active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                            }`}>
+                              {user.is_active ? 'Active' : 'Inactive'}
                             </span>
-                          ))}
-                          <select
-                            className="text-xs border border-slate-300 rounded px-2 py-1 focus:outline-none focus:border-orange-500"
-                            onChange={(e) => {
-                              if (e.target.value) {
-                                handleAddRole(user.id, e.target.value);
-                                e.target.value = '';
-                              }
-                            }}
-                            value=""
-                          >
-                            <option value="">+ Add Role</option>
-                            {availableRoles
-                              .filter(r => !(user.roles || []).some(ur => ur.role === r))
-                              .map(role => (
-                                <option key={role} value={role}>{role}</option>
-                              ))
-                            }
-                          </select>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <span className={`inline-flex px-2 py-1 rounded-full text-xs font-semibold ${
-                          user.is_active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                        }`}>
-                          {user.is_active ? 'Active' : 'Inactive'}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 text-sm text-slate-500">
-                        {user.last_login ? new Date(user.last_login).toLocaleString() : 'Never'}
-                      </td>
-                      <td className="px-6 py-4 text-right">
-                        <button
-                          onClick={() => handleToggleActive(user)}
-                          className={`text-sm font-medium ${
-                            user.is_active ? 'text-red-600 hover:text-red-800' : 'text-green-600 hover:text-green-800'
-                          }`}
-                        >
-                          {user.is_active ? 'Deactivate' : 'Activate'}
-                        </button>
-                      </td>
-                    </tr>
-                  ))
+                          </td>
+                          <td className="px-6 py-4 text-sm text-slate-500">
+                            {user.last_login ? new Date(user.last_login).toLocaleString() : 'Never'}
+                          </td>
+                          <td className="px-6 py-4 text-right">
+                            <div className="flex flex-col items-end gap-1">
+                              <button
+                                onClick={() => handleToggleActive(user)}
+                                className={`text-sm font-medium ${
+                                  user.is_active ? 'text-red-600 hover:text-red-800' : 'text-green-600 hover:text-green-800'
+                                }`}
+                              >
+                                {user.is_active ? 'Deactivate' : 'Activate'}
+                              </button>
+                              <button
+                                onClick={() => isRelinkOpen ? setRelinkUserId(null) : openRelink(user)}
+                                className="text-xs text-orange-500 hover:text-orange-700 font-medium"
+                              >
+                                {isRelinkOpen ? 'Cancel' : 'Manage Link'}
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                        {isRelinkOpen && (
+                          <tr className="bg-orange-50">
+                            <td colSpan={5} className="px-6 py-4">
+                              <form onSubmit={handleRelink} className="flex flex-wrap gap-3 items-end">
+                                <span className="text-sm font-medium text-slate-700">Link to:</span>
+                                <div className="flex rounded-lg border border-slate-300 overflow-hidden text-xs">
+                                  <button
+                                    type="button"
+                                    onClick={() => { setRelinkEntityType('student'); setRelinkEntityId(''); }}
+                                    className={`px-3 py-1.5 font-medium transition ${relinkEntityType === 'student' ? 'bg-orange-500 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'}`}
+                                  >
+                                    Student
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => { setRelinkEntityType('teacher'); setRelinkEntityId(''); }}
+                                    className={`px-3 py-1.5 font-medium transition ${relinkEntityType === 'teacher' ? 'bg-orange-500 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'}`}
+                                  >
+                                    Teacher
+                                  </button>
+                                </div>
+                                <select
+                                  required
+                                  value={relinkEntityId}
+                                  onChange={e => setRelinkEntityId(e.target.value)}
+                                  className="px-3 py-1.5 rounded-lg border border-slate-300 focus:border-orange-500 focus:ring-2 focus:ring-orange-200 outline-none text-sm w-52"
+                                >
+                                  <option value="">Select {relinkEntityType}…</option>
+                                  {(relinkEntityType === 'student' ? students : teachers).map(opt => (
+                                    <option key={opt.id} value={opt.id}>{opt.name}</option>
+                                  ))}
+                                </select>
+                                <button
+                                  type="submit"
+                                  disabled={relinkSubmitting || !relinkEntityId}
+                                  className="px-3 py-1.5 bg-orange-500 text-white rounded-lg hover:bg-orange-600 disabled:opacity-50 transition text-sm font-medium"
+                                >
+                                  {relinkSubmitting ? 'Saving…' : 'Save Link'}
+                                </button>
+                              </form>
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
+                    );
+                  })
                 )}
               </tbody>
             </table>

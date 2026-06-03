@@ -6,6 +6,7 @@ const crypto = require('crypto')
 const passport = require('passport')
 const pool = require('./db')
 const rbac = require('./auth/rbacMiddleware')
+const { authenticateJWT } = require('./auth/jwtMiddleware')
 
 const app = express()
 app.use(cors())
@@ -245,7 +246,7 @@ app.use('/api/students', require('./routes/students'));
 const { router: student360Router } = require('./routes/student360');
 app.use('/api/students', student360Router);
 app.use('/api/teachers', require('./routes/teachers'));
-app.use('/api/teachers', require('./routes/teacher360'));
+app.use('/api/teachers', authenticateJWT, require('./routes/teacher360'));
 app.use('/api/payments', require('./routes/payments'));
 app.use('/api/users', require('./routes/users'));
 app.use('/api/finance', require('./routes/finance'));
