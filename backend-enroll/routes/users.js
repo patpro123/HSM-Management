@@ -298,21 +298,31 @@ router.post('/:id/roles', authenticateJWT, authorizeRole(['admin']), async (req,
       return res.status(404).json({ error: 'User not found' });
     }
     
-    // Check if role already exists and is not revoked
+    // Check if any row (active or revoked) exists for this user+role
     const existingRole = await client.query(
-      'SELECT * FROM user_roles WHERE user_id = $1 AND role = $2 AND revoked_at IS NULL',
+      'SELECT * FROM user_roles WHERE user_id = $1 AND role = $2',
       [id, role]
     );
-    
+
     if (existingRole.rows.length > 0) {
-      await client.query('ROLLBACK');
-      return res.status(400).json({ error: 'User already has this role' });
+      if (existingRole.rows[0].revoked_at === null) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: 'User already has this role' });
+      }
+      // Revoked row exists — restore it instead of inserting
+      const result = await client.query(
+        `UPDATE user_roles SET revoked_at = NULL, granted_at = NOW(), granted_by = $3
+         WHERE user_id = $1 AND role = $2 RETURNING *`,
+        [id, role, req.user.id]
+      );
+      await client.query('COMMIT');
+      return res.json(result.rows[0]);
     }
-    
-    // Insert new role
+
+    // No existing row — insert fresh
     const result = await client.query(
-      `INSERT INTO user_roles (user_id, role, granted_by) 
-       VALUES ($1, $2, $3) 
+      `INSERT INTO user_roles (user_id, role, granted_by)
+       VALUES ($1, $2, $3)
        RETURNING *`,
       [id, role, req.user.id]
     );
