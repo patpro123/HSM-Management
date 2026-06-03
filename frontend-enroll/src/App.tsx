@@ -21,6 +21,7 @@ import EnrollmentForm from './components/EnrollmentForm';
 import PaymentModule from './components/PaymentModule';
 import FinanceModule from './components/FinanceModule';
 import Teacher360View from './components/Teacher360View';
+import Student360View from './components/Student360View';
 import BatchManager from './components/BatchManager';
 import hsmLogo from './images/hsmLogo.jpg';
 import LandingPage from './components/LandingPage';
@@ -29,6 +30,7 @@ import MigrationTools from './components/MigrationTools';
 import BulkHomeworkPanel from './components/BulkHomeworkPanel';
 import SettingsPanel from './components/SettingsPanel';
 import { ChatFAB, ChatPanel, ChatUserRole } from './components/Chat';
+import ImpersonatePanel, { ImpersonateTarget } from './components/ImpersonatePanel';
 
 const App: React.FC = () => {
   const [chatOpen, setChatOpen] = useState(false);
@@ -50,6 +52,8 @@ const App: React.FC = () => {
   const [pendingEnrollProspectId, setPendingEnrollProspectId] = useState<string | null>(null);
   const [devProfile, setDevProfile] = useState<'admin' | 'teacher' | 'student'>('admin');
   const [devOverride, setDevOverride] = useState<{ email: string; name: string } | null>(null);
+  const [impersonating, setImpersonating] = useState<ImpersonateTarget | null>(null);
+  const [showImpersonateModal, setShowImpersonateModal] = useState(false);
 
   // Handle OAuth callback on mount
   useEffect(() => {
@@ -328,7 +332,20 @@ const App: React.FC = () => {
               {menuItems.find(item => item.key === activeTab)?.label || 'Dashboard'}
             </h2>
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3">
+            {isAdmin && (
+              <button
+                onClick={() => setShowImpersonateModal(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-100 border border-slate-200 transition-colors"
+                title="View as teacher or student"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                </svg>
+                View as
+              </button>
+            )}
             <NotificationsPanel onNavigation={(path, prospectId) => {
               handleTabChange(path as any);
               if (prospectId) setPendingEnrollProspectId(prospectId);
@@ -341,8 +358,36 @@ const App: React.FC = () => {
         </header>
 
         <div className="p-4 md:p-10">
+          {/* Impersonation banner */}
+          {impersonating && (
+            <div className="mb-4 flex items-center justify-between bg-amber-50 border border-amber-300 rounded-xl px-5 py-3">
+              <div className="flex items-center gap-2 text-amber-800 text-sm font-medium">
+                <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                </svg>
+                Viewing as <span className="font-bold">{impersonating.name}</span>
+                <span className="text-amber-600 capitalize">({impersonating.type})</span>
+              </div>
+              <button
+                onClick={() => setImpersonating(null)}
+                className="text-amber-700 hover:text-amber-900 font-semibold text-sm px-3 py-1 rounded-lg hover:bg-amber-100 transition-colors"
+              >
+                Exit
+              </button>
+            </div>
+          )}
+
           {/* Main content by tab */}
-          {isAdmin ? (
+          {isAdmin && impersonating ? (
+            <div className="bg-white rounded-xl p-8 shadow-sm border border-slate-100">
+              {impersonating.type === 'teacher' ? (
+                <Teacher360View teacherId={impersonating.id} isModal={false} />
+              ) : (
+                <Student360View studentId={impersonating.id} />
+              )}
+            </div>
+          ) : isAdmin ? (
             <div className="bg-white rounded-xl p-8 shadow-sm border border-slate-100">
               {activeTab === 'stats' && (
                 <StatsOverview
@@ -443,6 +488,12 @@ const App: React.FC = () => {
           currentProfile={devProfile}
           currentOverride={devOverride}
           onSwitched={handleDevSwitched}
+        />
+      )}
+      {showImpersonateModal && (
+        <ImpersonatePanel
+          onSelect={target => { setImpersonating(target); setShowImpersonateModal(false); }}
+          onClose={() => setShowImpersonateModal(false)}
         />
       )}
 
