@@ -47,6 +47,7 @@ const UserManagement: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [provisionedSearchTerm, setProvisionedSearchTerm] = useState('');
 
   // Provision form state
   const [provEmail, setProvEmail] = useState('');
@@ -207,6 +208,11 @@ const UserManagement: React.FC = () => {
     (user.email || '').toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  const filteredProvisioned = provisioned.filter(p =>
+    (p.email || '').toLowerCase().includes(provisionedSearchTerm.toLowerCase()) ||
+    (p.entity_name || '').toLowerCase().includes(provisionedSearchTerm.toLowerCase())
+  );
+
   const entityOptions = provEntityType === 'student' ? students : teachers;
   const availableRoles = ['admin', 'teacher', 'parent', 'student'];
 
@@ -341,9 +347,18 @@ const UserManagement: React.FC = () => {
       {/* Provisioned Users List */}
       {provisioned.length > 0 && (
         <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
-          <div className="px-5 py-3 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-slate-700">Provisioned Access</h3>
-            <span className="text-xs text-slate-500">{provisioned.filter(p => !p.used_at).length} pending</span>
+          <div className="px-5 py-3 border-b border-slate-200 bg-slate-50 flex flex-wrap items-center gap-3 justify-between">
+            <div className="flex items-center gap-3">
+              <h3 className="text-sm font-semibold text-slate-700">Provisioned Access</h3>
+              <span className="text-xs text-slate-500">{provisioned.filter(p => !p.used_at).length} pending</span>
+            </div>
+            <input
+              type="text"
+              placeholder="Search by email or name..."
+              value={provisionedSearchTerm}
+              onChange={e => setProvisionedSearchTerm(e.target.value)}
+              className="px-3 py-1.5 text-sm rounded-lg border border-slate-300 focus:border-orange-500 focus:ring-2 focus:ring-orange-200 outline-none w-56"
+            />
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm border-collapse">
@@ -358,7 +373,14 @@ const UserManagement: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {provisioned.map(p => (
+                {filteredProvisioned.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="px-5 py-6 text-center text-sm text-slate-500">
+                      No provisioned users match your search.
+                    </td>
+                  </tr>
+                ) : null}
+                {filteredProvisioned.map(p => (
                   <tr key={p.id} className="hover:bg-slate-50">
                     <td className="px-5 py-3 font-medium text-slate-800">{p.email}</td>
                     <td className="px-5 py-3">
