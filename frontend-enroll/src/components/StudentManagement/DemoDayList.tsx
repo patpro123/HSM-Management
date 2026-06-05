@@ -289,7 +289,7 @@ const DemoDayList: React.FC<DemoDayListProps> = ({
                   {isScheduling ? (
                     <div className="space-y-3">
                       <div>
-                        <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">Pick 45-min Slot:</label>
+                        <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">Pick 45-min Slot (max 5 students/slot):</label>
                         <select
                           value={selectedTime}
                           onChange={(e) => setSelectedTime(e.target.value)}
@@ -297,13 +297,15 @@ const DemoDayList: React.FC<DemoDayListProps> = ({
                         >
                           <option value="">-- Select Standard Slot --</option>
                           {standardSlots.map(slot => {
-                            const isBookedForSameInstrument = bookedSlots.some(b =>
+                            const slotCount = bookedSlots.filter(b => b.metadata.demo_day_time === slot).length;
+                            const isFull = slotCount >= 5;
+                            const sameInstrumentInSlot = bookedSlots.some(b =>
                               b.metadata.demo_day_time === slot &&
                               b.metadata.interested_instrument?.toLowerCase() === p.metadata?.interested_instrument?.toLowerCase()
                             );
                             return (
-                              <option key={slot} value={slot}>
-                                {slot} {isBookedForSameInstrument ? '⚠️ (Instrument Booked)' : ''}
+                              <option key={slot} value={slot} disabled={isFull}>
+                                {slot} — {slotCount}/5 students{isFull ? ' 🔴 Full' : sameInstrumentInSlot ? ' ⚠️ Same Instrument' : ''}
                               </option>
                             );
                           })}
@@ -312,20 +314,40 @@ const DemoDayList: React.FC<DemoDayListProps> = ({
 
                       <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-200 text-[11px]">
                         <p className="font-bold text-slate-700 mb-1.5 flex items-center gap-1">
-                          <span>🚫</span> Already Booked Slots ({bookedSlots.length}):
+                          <span>📊</span> Slot Occupancy:
                         </p>
                         {bookedSlots.length === 0 ? (
-                          <p className="text-slate-400 italic">No other slots booked yet on this date.</p>
+                          <p className="text-slate-400 italic">No slots booked yet on this date.</p>
                         ) : (
-                          <div className="max-h-24 overflow-y-auto space-y-1">
-                            {bookedSlots.map(b => (
-                              <div key={b.id} className="flex justify-between text-slate-600 bg-white p-1 rounded border border-slate-100">
-                                <span className="font-semibold text-slate-500">
-                                  {b.metadata?.interested_instrument ? `🎵 ${b.metadata.interested_instrument}` : '🎵 Any'}
-                                </span>
-                                <span className="font-bold text-slate-800">{b.metadata.demo_day_time} ({b.name})</span>
-                              </div>
-                            ))}
+                          <div className="max-h-32 overflow-y-auto space-y-1.5">
+                            {standardSlots
+                              .filter(slot => bookedSlots.some(b => b.metadata.demo_day_time === slot))
+                              .map(slot => {
+                                const studentsInSlot = bookedSlots.filter(b => b.metadata.demo_day_time === slot);
+                                const isFull = studentsInSlot.length >= 5;
+                                return (
+                                  <div key={slot} className="bg-white p-1.5 rounded border border-slate-100">
+                                    <div className="flex justify-between items-center mb-0.5">
+                                      <span className="font-bold text-slate-700">{slot}</span>
+                                      <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${isFull ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
+                                        {studentsInSlot.length}/5 {isFull ? '🔴' : '🟢'}
+                                      </span>
+                                    </div>
+                                    <div className="text-slate-500 space-y-0.5">
+                                      {studentsInSlot.map(b => (
+                                        <div key={b.id} className="flex gap-1">
+                                          <span>•</span>
+                                          <span>{b.name}</span>
+                                          {b.metadata?.interested_instrument && (
+                                            <span className="text-slate-400">({b.metadata.interested_instrument})</span>
+                                          )}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                );
+                              })
+                            }
                           </div>
                         )}
                       </div>
