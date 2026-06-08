@@ -193,6 +193,39 @@ router.post('/:id/notes', async (req, res) => {
     }
 });
 
+// POST /api/prospects/:id/whatsapp-nudge - Log WhatsApp demo nudge and mark status as contacted
+router.post('/:id/whatsapp-nudge', async (req, res) => {
+    const { message, created_by } = req.body;
+    if (!message || !message.trim()) return res.status(400).json({ error: 'message is required' });
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+        const noteResult = await client.query(
+            'INSERT INTO prospect_notes (prospect_id, note, created_by) VALUES ($1, $2, $3) RETURNING *',
+            [req.params.id, `📱 WhatsApp nudge sent: "${message.trim()}"`, created_by || 'Admin']
+        );
+        const prospectResult = await client.query(
+            `UPDATE students
+             SET metadata = metadata || jsonb_build_object('status', 'contacted'::text),
+                 updated_at = NOW()
+             WHERE id = $1 AND student_type = 'prospect' RETURNING *`,
+            [req.params.id]
+        );
+        if (prospectResult.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ error: 'Prospect not found' });
+        }
+        await client.query('COMMIT');
+        res.json({ prospect: prospectResult.rows[0], note: noteResult.rows[0] });
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error('[POST /api/prospects/:id/whatsapp-nudge] Error:', err);
+        res.status(500).json({ error: 'Failed to log WhatsApp nudge' });
+    } finally {
+        client.release();
+    }
+});
+
 // POST /api/prospects - Create a new prospect or intentful user (from landing page)
 // Pass user_type: 'intentful' to store as intentful_user instead of prospect
 router.post('/', async (req, res) => {
