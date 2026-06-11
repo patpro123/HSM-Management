@@ -29,9 +29,9 @@ router.get('/sessions', adminOnly, async (req, res) => {
 
 // POST /api/ptm/sessions
 router.post('/sessions', adminOnly, async (req, res) => {
-  const { title, scheduled_date, description } = req.body;
+  const { title, scheduled_date, description } = req.body || {};
   if (!title || !scheduled_date) {
-    return res.status(400).json({ error: 'title and scheduled_date are required' });
+    return res.status(400).json({ error: 'title and scheduled_date are required', received: req.body });
   }
   try {
     const result = await pool.query(
@@ -72,7 +72,7 @@ router.get('/sessions/:sessionId', adminOnly, async (req, res) => {
         JOIN batches b ON b.id = eb.batch_id
         JOIN instruments i ON i.id = b.instrument_id
         WHERE e.status = 'active'
-        ORDER BY eb.enrollment_id, eb.created_at ASC
+        ORDER BY eb.enrollment_id, eb.assigned_on ASC
       ) i ON i.student_id = a.student_id
       WHERE a.ptm_session_id = $1
       ORDER BY a.scheduled_time ASC NULLS LAST, s.name ASC
@@ -357,7 +357,7 @@ router.get('/students/:studentId/history', authenticateJWT, async (req, res) => 
         JOIN batches b ON b.id = eb.batch_id
         JOIN instruments i ON i.id = b.instrument_id
         WHERE e.status = 'active'
-        ORDER BY eb.enrollment_id, eb.created_at ASC
+        ORDER BY eb.enrollment_id, eb.assigned_on ASC
       ) i ON i.student_id = a.student_id
       WHERE a.student_id = $1
       ORDER BY s.scheduled_date DESC
@@ -408,7 +408,7 @@ router.get('/teachers/:teacherId/appointments', authenticateJWT, async (req, res
         JOIN batches b ON b.id = eb.batch_id
         JOIN instruments i ON i.id = b.instrument_id
         WHERE e.status = 'active'
-        ORDER BY eb.enrollment_id, eb.created_at ASC
+        ORDER BY eb.enrollment_id, eb.assigned_on ASC
       ) i ON i.student_id = a.student_id
       WHERE a.teacher_id = $1
       ORDER BY s.scheduled_date DESC, a.scheduled_time ASC
