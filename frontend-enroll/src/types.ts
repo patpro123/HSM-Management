@@ -181,3 +181,51 @@ export interface Teacher360Data {
     total_paid: number;
   };
 }
+
+export interface PTMSession {
+  id: string;
+  title: string;
+  scheduled_date: string;
+  description?: string;
+  status: 'draft' | 'scheduled' | 'completed';
+  created_by?: string;
+  created_at: string;
+  appointment_count?: number;
+  completed_count?: number;
+}
+
+export interface PTMAppointment {
+  id: string;
+  ptm_session_id: string;
+  student_id: string;
+  teacher_id: string;
+  scheduled_time?: string;
+  status: 'scheduled' | 'completed' | 'cancelled' | 'no_show';
+  parent_notified_at?: string;
+  teacher_notified_at?: string;
+  notes?: string;
+  completed_at?: string;
+  created_at: string;
+  student_name?: string;
+  student_phone?: string;
+  guardian_contact?: string;
+  guardian_name?: string;
+  guardian_phone?: string;
+  teacher_name?: string;
+  teacher_phone?: string;
+  instrument_name?: string;
+  session_title?: string;
+  scheduled_date?: string;
+  action_items?: PTMActionItem[];
+}
+
+export interface PTMActionItem {
+  id: string;
+  appointment_id: string;
+  action_text: string;
+  assigned_to: 'parent' | 'teacher' | 'admin' | 'student';
+  due_date?: string;
+  status: 'open' | 'done';
+  created_at: string;
+  resolved_at?: string;
+}

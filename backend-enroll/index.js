@@ -260,6 +260,7 @@ app.use('/api/stats', require('./routes/stats'));
 app.use('/api/migration', require('./routes/migration'));
 app.use('/api', require('./routes/documents'));
 app.use('/api/whatsapp', require('./routes/whatsapp'));
+app.use('/api/ptm', require('./routes/ptm'));
 app.use('/api', require('./routes/homework'));
 app.use('/api', require('./routes/files'));
 app.use('/api', require('./routes/habits'));

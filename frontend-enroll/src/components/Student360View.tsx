@@ -4,6 +4,7 @@ import PhoneLink from './PhoneLink';
 import HomeworkTab from './HomeworkTab';
 import HabitTrackerTab from './HabitTrackerTab';
 import XPBadge from './XPBadge';
+import PTMHistoryTab from './PTMHistoryTab';
 
 interface Student360ViewProps {
   email?: string;
@@ -53,7 +54,7 @@ interface Document {
 
 
 const Student360View: React.FC<Student360ViewProps> = ({ email, studentId, onClose, isModal = false, hidePayments = false, selfMode = false }) => {
-  const [activeTab, setActiveTab] = useState<'personal' | 'academic' | 'payment' | 'homework' | 'habits'>('personal');
+  const [activeTab, setActiveTab] = useState<'personal' | 'academic' | 'payment' | 'homework' | 'habits' | 'ptm'>('personal');
   const [data, setData] = useState<Student360Data | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -163,8 +164,9 @@ const Student360View: React.FC<Student360ViewProps> = ({ email, studentId, onClo
   if (!selfMode && !email && !studentId) return null;
 
   const shouldHidePayment = hidePayments || selfMode;
-  const visibleStudentTabs = (['personal', 'academic', 'payment', 'homework', 'habits'] as const)
-    .filter(tab => !(shouldHidePayment && tab === 'payment'));
+  const visibleStudentTabs = (['personal', 'academic', 'payment', 'homework', 'habits', 'ptm'] as const)
+    .filter(tab => !(shouldHidePayment && tab === 'payment'))
+    .filter(tab => !(selfMode && tab === 'ptm'));
 
   const STUDENT_TAB_ICONS: Record<string, React.ReactNode> = {
     personal: <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z" />,
@@ -172,6 +174,7 @@ const Student360View: React.FC<Student360ViewProps> = ({ email, studentId, onClo
     payment: <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 18.75a60.07 60.07 0 0 1 15.797 2.101c.727.198 1.453-.342 1.453-1.096V18.75M3.75 4.5v.75A.75.75 0 0 1 3 6h-.75m0 0v-.375c0-.621.504-1.125 1.125-1.125H20.25M2.25 6v9m18-10.5v.75c0 .414.336.75.75.75h.75m-1.5-1.5h.375c.621 0 1.125.504 1.125 1.125v9.75c0 .621-.504 1.125-1.125 1.125h-.375m1.5-1.5H21a.75.75 0 0 0-.75.75v.75m0 0H3.75m0 0h-.375a1.125 1.125 0 0 1-1.125-1.125V15m1.5 1.5v-.75A.75.75 0 0 0 3 15h-.75M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Zm3 0h.008v.008H18V10.5Zm-12 0h.008v.008H6V10.5Z" />,
     homework: <path strokeLinecap="round" strokeLinejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0 1 15.75 21H5.25A2.25 2.25 0 0 1 3 18.75V8.25A2.25 2.25 0 0 1 5.25 6H10" />,
     habits: <path strokeLinecap="round" strokeLinejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 0 1 3 19.875v-6.75ZM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V8.625ZM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V4.125Z" />,
+    ptm: <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5" />,
   };
   const STUDENT_TAB_LABELS: Record<string, string> = {
     personal: 'Personal',
@@ -179,10 +182,12 @@ const Student360View: React.FC<Student360ViewProps> = ({ email, studentId, onClo
     payment: 'Payment',
     homework: 'Homework',
     habits: 'Practice Habits',
+    ptm: 'PTM History',
   };
   const STUDENT_TAB_MOBILE_LABELS: Record<string, string> = {
     ...STUDENT_TAB_LABELS,
     habits: 'Habits',
+    ptm: 'PTM',
   };
 
   const content = (
@@ -399,6 +404,11 @@ const Student360View: React.FC<Student360ViewProps> = ({ email, studentId, onClo
                 studentId={data.personal.details.id}
                 selfMode={selfMode ?? false}
               />
+            )}
+
+            {/* PTM History Tab */}
+            {activeTab === 'ptm' && (
+              <PTMHistoryTab studentId={String(data.personal.details.id)} />
             )}
 
             {/* Payment Tab */}

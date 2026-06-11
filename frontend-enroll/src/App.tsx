@@ -31,11 +31,12 @@ import BulkHomeworkPanel from './components/BulkHomeworkPanel';
 import SettingsPanel from './components/SettingsPanel';
 import { ChatFAB, ChatPanel, ChatUserRole } from './components/Chat';
 import ImpersonatePanel, { ImpersonateTarget } from './components/ImpersonatePanel';
+import PTMModule from './components/PTMModule';
 
 const App: React.FC = () => {
   const [chatOpen, setChatOpen] = useState(false);
   // Add new profile page states
-  const [activeTab, setActiveTab] = useState<'stats' | 'students' | 'attendance' | 'payments' | 'finance' | 'teachers' | 'homework' | 'batch-manager' | 'users' | 'migration' | 'student-profile' | 'teacher-profile' | 'enrollment' | 'settings'>(
+  const [activeTab, setActiveTab] = useState<'stats' | 'students' | 'attendance' | 'payments' | 'finance' | 'teachers' | 'homework' | 'batch-manager' | 'users' | 'migration' | 'student-profile' | 'teacher-profile' | 'enrollment' | 'settings' | 'ptm'>(
     getCurrentUser()?.roles?.includes('admin') ? 'stats' : getCurrentUser()?.roles?.includes('teacher') ? 'teacher-profile' : 'student-profile'
   );
   const [students, setStudents] = useState<Student[]>([]);
@@ -260,6 +261,7 @@ const App: React.FC = () => {
       { key: 'users', label: 'Users', icon: 'M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z' },
       { key: 'migration', label: 'Data Correction', icon: 'M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z' },
       { key: 'settings', label: 'Landing Settings', icon: 'M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z M15 12a3 3 0 11-6 0 3 3 0 016 0z' },
+      { key: 'ptm', label: 'PTM', icon: 'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z' },
     ]
     : isTeacherOnly
       ? [
@@ -452,6 +454,9 @@ const App: React.FC = () => {
               )}
               {activeTab === 'settings' && (
                 <SettingsPanel />
+              )}
+              {activeTab === 'ptm' && (
+                <PTMModule />
               )}
               {activeTab === 'enrollment' && (
                 <EnrollmentForm
