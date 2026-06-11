@@ -39,8 +39,9 @@ const BRANCH_MAP_LINKS: Record<string, string> = {
 function generateNudgeMessage(name: string, instrument?: string, location?: string): string {
   const inst = instrument && instrument !== 'Not specified' && instrument !== '—' ? instrument : null;
   const mapLink = location ? BRANCH_MAP_LINKS[location] : null;
-  const locationLine = mapLink ? `\n\n📍 Find us here: ${mapLink}` : '';
-  return `Hi ${name}! 👋\n\nThis is the team at Hyderabad School of Music. You recently signed up for a free demo class${inst ? ` for ${inst}` : ''}. We'd love to get you started!\n\nCould you share a convenient time? We're available Tue–Fri (5–9 PM) and weekends.${locationLine}\n\nLooking forward to meeting you! 🎵`;
+  const instrumentLine = inst ? `\n🎵 Instrument registered: ${inst}` : '';
+  const locationLine = mapLink ? `\n📍 Find us here: ${mapLink}` : '';
+  return `Hi ${name}! 👋\n\nThis is the team at Hyderabad School of Music. You recently signed up for a free demo class with us. We'd love to get you started!${instrumentLine}${locationLine}\n\nCould you share a convenient time? We're available Tue–Fri (5–9 PM) and weekends.\n\nLooking forward to meeting you! 🎵`;
 }
 
 const ProspectModal: React.FC<ProspectModalProps> = ({ prospect, onClose, onUpdated }) => {
