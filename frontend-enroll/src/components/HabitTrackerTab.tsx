@@ -588,7 +588,33 @@ const HabitTrackerTab: React.FC<HabitTrackerTabProps> = ({ studentId, selfMode }
             )}
 
             {/* Stats + Progress Row */}
-            <div className="flex flex-wrap gap-4 items-center">
+            {/* Mobile: 3-col grid + centered ring | Desktop: single flex row */}
+            <div className="sm:hidden space-y-3">
+                <div className="grid grid-cols-3 gap-2">
+                    <div className="flex flex-col items-center bg-orange-50 border border-orange-100 rounded-xl px-2 py-3">
+                        <span className="text-2xl">🔥</span>
+                        <span className="text-xl font-bold text-slate-800 mt-1">{stats.currentStreak}</span>
+                        <span className="text-[10px] text-slate-500 mt-0.5 text-center leading-tight">Current streak</span>
+                    </div>
+                    <div className="flex flex-col items-center bg-amber-50 border border-amber-100 rounded-xl px-2 py-3">
+                        <span className="text-2xl">🏆</span>
+                        <span className="text-xl font-bold text-slate-800 mt-1">{stats.longestStreak}</span>
+                        <span className="text-[10px] text-slate-500 mt-0.5 text-center leading-tight">Longest streak</span>
+                    </div>
+                    <div className="flex flex-col items-center bg-slate-50 border border-slate-100 rounded-xl px-2 py-3">
+                        <span className="text-2xl">✅</span>
+                        <span className="text-xl font-bold text-slate-800 mt-1">{stats.totalCompletions}</span>
+                        <span className="text-[10px] text-slate-500 mt-0.5 text-center leading-tight">Total check-ins</span>
+                    </div>
+                </div>
+                <div className="flex justify-center">
+                    <div className="flex flex-col items-center">
+                        <ProgressRing completed={completedToday} total={habits.length} />
+                        <span className="text-xs text-slate-500 mt-1">Today</span>
+                    </div>
+                </div>
+            </div>
+            <div className="hidden sm:flex flex-wrap gap-4 items-center">
                 <div className="flex flex-col items-center bg-orange-50 border border-orange-100 rounded-xl px-6 py-4 min-w-[110px]">
                     <span className="text-2xl">🔥</span>
                     <span className="text-2xl font-bold text-slate-800 mt-1">{stats.currentStreak}</span>

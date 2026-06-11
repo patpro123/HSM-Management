@@ -92,6 +92,22 @@ const Teacher360View: React.FC<Teacher360ViewProps> = ({
     return new Date(parseInt(y), parseInt(mo) - 1, 1).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' });
   };
 
+  const TAB_ICONS: Record<TabType, React.ReactNode> = {
+    profile: <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z" />,
+    students: <path strokeLinecap="round" strokeLinejoin="round" d="M18 18.72a9.094 9.094 0 0 0 3.741-.479 3 3 0 0 0-4.682-2.72m.94 3.198.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0 1 12 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 0 1 6 18.719m12 0a5.971 5.971 0 0 0-.941-3.197m0 0A5.995 5.995 0 0 0 12 12.75a5.995 5.995 0 0 0-5.058 2.772m0 0a3 3 0 0 0-4.681 2.72 8.986 8.986 0 0 0 3.74.477m.94-3.197a5.971 5.971 0 0 0-.94 3.197M15 6.75a3 3 0 1 1-6 0 3 3 0 0 1 6 0Zm6 3a2.25 2.25 0 1 1-4.5 0 2.25 2.25 0 0 1 4.5 0Zm-13.5 0a2.25 2.25 0 1 1-4.5 0 2.25 2.25 0 0 1 4.5 0Z" />,
+    attendance: <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5" />,
+    payout: <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 18.75a60.07 60.07 0 0 1 15.797 2.101c.727.198 1.453-.342 1.453-1.096V18.75M3.75 4.5v.75A.75.75 0 0 1 3 6h-.75m0 0v-.375c0-.621.504-1.125 1.125-1.125H20.25M2.25 6v9m18-10.5v.75c0 .414.336.75.75.75h.75m-1.5-1.5h.375c.621 0 1.125.504 1.125 1.125v9.75c0 .621-.504 1.125-1.125 1.125h-.375m1.5-1.5H21a.75.75 0 0 0-.75.75v.75m0 0H3.75m0 0h-.375a1.125 1.125 0 0 1-1.125-1.125V15m1.5 1.5v-.75A.75.75 0 0 0 3 15h-.75M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Zm3 0h.008v.008H18V10.5Zm-12 0h.008v.008H6V10.5Z" />,
+    homework: <path strokeLinecap="round" strokeLinejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0 1 15.75 21H5.25A2.25 2.25 0 0 1 3 18.75V8.25A2.25 2.25 0 0 1 5.25 6H10" />,
+  };
+  const TAB_LABELS: Record<TabType, string> = {
+    profile: 'Profile',
+    students: 'My Students',
+    attendance: 'Attendance',
+    payout: 'Payout',
+    homework: 'Homework',
+  };
+  const visibleTabs = (['profile', 'students', 'attendance', ...(selfView ? [] : ['payout']), 'homework'] as TabType[]);
+
   const content = (
     <div className={`bg-white ${isModal ? 'rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] flex flex-col' : 'min-h-screen'}`}>
 
@@ -145,18 +161,36 @@ const Teacher360View: React.FC<Teacher360ViewProps> = ({
       {/* Content */}
       {!loading && !error && data && (
         <>
-          {/* Tabs */}
-          <div className="flex border-b px-6">
-            {(['profile', 'students', 'attendance', 'payout', 'homework'] as TabType[]).map(tab => (
+          {/* Tabs — mobile: icon card grid | desktop: horizontal bar */}
+          <div className="sm:hidden grid grid-cols-2 gap-2 p-3 border-b bg-gray-50">
+            {visibleTabs.map(tab => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
-                className={`mr-8 py-4 text-sm font-medium capitalize border-b-2 transition-colors ${activeTab === tab
+                className={`flex flex-col items-center gap-1.5 py-3 px-2 rounded-xl text-xs font-medium transition-colors ${
+                  activeTab === tab
+                    ? 'bg-orange-50 text-orange-600 ring-1 ring-orange-200'
+                    : 'bg-white text-gray-500 border border-gray-200'
+                }`}
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
+                  {TAB_ICONS[tab]}
+                </svg>
+                {TAB_LABELS[tab]}
+              </button>
+            ))}
+          </div>
+          <div className="hidden sm:flex border-b px-4">
+            {visibleTabs.map(tab => (
+              <button
+                key={tab}
+                onClick={() => setActiveTab(tab)}
+                className={`mr-6 py-3 text-sm font-medium whitespace-nowrap flex-none border-b-2 transition-colors ${activeTab === tab
                     ? 'border-orange-500 text-orange-600'
                     : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                   }`}
               >
-                {tab === 'payout' ? 'Payout' : tab === 'attendance' ? 'Attendance' : tab === 'students' ? 'My Students' : tab === 'homework' ? 'Homework' : 'Profile'}
+                {TAB_LABELS[tab]}
               </button>
             ))}
           </div>
@@ -169,7 +203,7 @@ const Teacher360View: React.FC<Teacher360ViewProps> = ({
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   {/* Info card */}
                   <div className="bg-gray-50 p-5 rounded-lg border border-gray-100">
-                    <h3 className="font-semibold text-lg mb-4 text-gray-800">Contact & Payout</h3>
+                    <h3 className="font-semibold text-lg mb-4 text-gray-800">{selfView ? 'Contact Info' : 'Contact & Payout'}</h3>
                     <dl className="space-y-3 text-sm">
                       <div className="flex justify-between">
                         <dt className="text-gray-500">Phone</dt>
@@ -179,14 +213,18 @@ const Teacher360View: React.FC<Teacher360ViewProps> = ({
                         <dt className="text-gray-500">Email</dt>
                         <dd className="font-medium">{data.profile.email || 'N/A'}</dd>
                       </div>
-                      <div className="flex justify-between">
-                        <dt className="text-gray-500">Payout Type</dt>
-                        <dd className="font-medium">{PAYOUT_TYPE_LABELS[data.profile.payout_type] || data.profile.payout_type}</dd>
-                      </div>
-                      <div className="flex justify-between">
-                        <dt className="text-gray-500">Rate</dt>
-                        <dd className="font-medium text-green-700">₹{data.profile.rate.toLocaleString('en-IN')}</dd>
-                      </div>
+                      {!selfView && (
+                        <>
+                          <div className="flex justify-between">
+                            <dt className="text-gray-500">Payout Type</dt>
+                            <dd className="font-medium">{PAYOUT_TYPE_LABELS[data.profile.payout_type] || data.profile.payout_type}</dd>
+                          </div>
+                          <div className="flex justify-between">
+                            <dt className="text-gray-500">Rate</dt>
+                            <dd className="font-medium text-green-700">₹{data.profile.rate.toLocaleString('en-IN')}</dd>
+                          </div>
+                        </>
+                      )}
                       <div className="flex justify-between">
                         <dt className="text-gray-500">Active Batches</dt>
                         <dd className="font-medium">{data.profile.batch_count}</dd>
