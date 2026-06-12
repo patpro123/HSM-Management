@@ -26,6 +26,8 @@ export default function PTMSessionView({ sessionId, onBack, onSessionUpdate }: P
   const [notifyingAll, setNotifyingAll] = useState(false);
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState('');
+  const [bulkTime, setBulkTime] = useState('');
+  const [applyingBulkTime, setApplyingBulkTime] = useState(false);
 
   useEffect(() => {
     loadSession();
@@ -44,8 +46,22 @@ export default function PTMSessionView({ sessionId, onBack, onSessionUpdate }: P
   };
 
   const handleBulkAdd = async (selections: { student_id: string; teacher_id: string }[]) => {
-    const res = await apiPost(`/api/ptm/sessions/${sessionId}/appointments/bulk`, { appointments: selections });
-    setAppointments(prev => [...prev, ...res.appointments]);
+    await apiPost(`/api/ptm/sessions/${sessionId}/appointments/bulk`, { appointments: selections });
+    await loadSession();
+  };
+
+  const handleBulkTime = async () => {
+    if (!bulkTime || !visible.length) return;
+    setApplyingBulkTime(true);
+    try {
+      await Promise.all(visible.map(a =>
+        apiPut(`/api/ptm/appointments/${a.id}`, { scheduled_time: new Date(bulkTime).toISOString() })
+      ));
+      await loadSession();
+      setBulkTime('');
+    } finally {
+      setApplyingBulkTime(false);
+    }
   };
 
   const handleAppointmentChange = (updated: PTMAppointment) => {
@@ -223,6 +239,29 @@ export default function PTMSessionView({ sessionId, onBack, onSessionUpdate }: P
           </select>
         </div>
       </div>
+
+      {/* Bulk time setter */}
+      {appointments.length > 0 && (
+        <div className="flex flex-wrap items-center gap-3 p-3 bg-amber-50 rounded-lg border border-amber-100 mb-4">
+          <span className="text-sm font-medium text-amber-800 whitespace-nowrap">Common slot:</span>
+          <input
+            type="datetime-local"
+            className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 bg-white flex-1 min-w-[180px]"
+            value={bulkTime}
+            onChange={e => setBulkTime(e.target.value)}
+          />
+          <button
+            onClick={handleBulkTime}
+            disabled={!bulkTime || !visible.length || applyingBulkTime}
+            className="bg-amber-600 text-white px-4 py-1.5 rounded-lg text-sm font-semibold hover:bg-amber-700 disabled:opacity-40 whitespace-nowrap"
+          >
+            {applyingBulkTime ? 'Applying...' : `Apply to ${visible.length} student${visible.length !== 1 ? 's' : ''}`}
+          </button>
+          {bulkTime && (
+            <button onClick={() => setBulkTime('')} className="text-slate-400 hover:text-slate-600 text-xs">clear</button>
+          )}
+        </div>
+      )}
 
       {/* Appointments */}
       {visible.length === 0 ? (

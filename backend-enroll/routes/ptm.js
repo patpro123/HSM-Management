@@ -419,4 +419,34 @@ router.get('/teachers/:teacherId/appointments', authenticateJWT, async (req, res
   }
 });
 
+// GET /api/ptm/eligible-students
+// Returns active permanent students enriched with their primary batch teacher
+router.get('/eligible-students', adminOnly, async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT DISTINCT ON (s.id)
+        s.id,
+        s.name,
+        s.phone AS student_phone,
+        s.guardian_contact,
+        s.metadata->>'guardian_phone' AS guardian_phone,
+        s.metadata->>'guardian_name'  AS guardian_name,
+        t.id   AS teacher_id,
+        t.name AS teacher_name,
+        i.name AS instrument_name
+      FROM students s
+      LEFT JOIN enrollments e        ON e.student_id = s.id AND e.status = 'active'
+      LEFT JOIN enrollment_batches eb ON eb.enrollment_id = e.id
+      LEFT JOIN batches b             ON b.id = eb.batch_id
+      LEFT JOIN teachers t           ON t.id = b.teacher_id
+      LEFT JOIN instruments i        ON i.id = b.instrument_id
+      WHERE (s.student_type = 'permanent' OR s.student_type IS NULL)
+      ORDER BY s.id, eb.assigned_on ASC
+    `);
+    res.json({ students: result.rows });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;

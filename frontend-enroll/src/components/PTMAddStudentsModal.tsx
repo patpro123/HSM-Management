@@ -27,26 +27,23 @@ export default function PTMAddStudentsModal({ existingStudentIds, onClose, onAdd
   const [adding, setAdding] = useState(false);
 
   useEffect(() => {
-    Promise.all([
-      apiGet('/api/students?status=active&student_type=permanent'),
-      apiGet('/api/teachers'),
-    ]).then(([sRes, tRes]) => {
-      const rawStudents: any[] = sRes.students || [];
-      const rawTeachers: any[] = tRes.teachers || [];
+    apiGet('/api/ptm/eligible-students').then(res => {
+      const rawStudents: any[] = res.students || [];
 
-      const opts: StudentOption[] = rawStudents.map((s: any) => {
-        const primaryBatch = (s.batches || [])[0];
-        return {
-          id: String(s.id),
-          name: s.name || `${s.first_name || ''} ${s.last_name || ''}`.trim(),
-          teacher_id: primaryBatch?.teacher_id ? String(primaryBatch.teacher_id) : undefined,
-          teacher_name: primaryBatch?.teacher_name,
-          instrument_name: primaryBatch?.instrument_name,
-        };
-      });
+      const opts: StudentOption[] = rawStudents.map((s: any) => ({
+        id: String(s.id),
+        name: s.name || '',
+        teacher_id: s.teacher_id ? String(s.teacher_id) : undefined,
+        teacher_name: s.teacher_name || undefined,
+        instrument_name: s.instrument_name || undefined,
+      }));
 
       setStudents(opts);
-      setTeachers(rawTeachers.map((t: any) => ({ id: String(t.id), name: t.name })));
+
+      // Build unique teacher list from the students themselves
+      const teacherMap = new Map<string, string>();
+      opts.forEach(s => { if (s.teacher_id) teacherMap.set(s.teacher_id, s.teacher_name || ''); });
+      setTeachers([...teacherMap.entries()].map(([id, name]) => ({ id, name })));
 
       const map: Record<string, string> = {};
       opts.forEach(s => { if (s.teacher_id) map[s.id] = s.teacher_id; });
