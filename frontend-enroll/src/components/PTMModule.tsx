@@ -195,20 +195,21 @@ export default function PTMModule() {
   }
 
   return (
-    <div className="p-4 md:p-6 max-w-5xl mx-auto">
-      <div className="flex items-center justify-between mb-6">
+    <div className="p-3 md:p-6 max-w-5xl mx-auto">
+      <div className="flex items-start justify-between gap-3 mb-5">
         <div>
-          <h1 className="text-2xl font-bold text-slate-800">Parent-Teacher Meetings</h1>
-          <p className="text-slate-500 text-sm mt-0.5">Schedule PTMs, send WhatsApp invites, and capture action items.</p>
+          <h1 className="text-xl md:text-2xl font-bold text-slate-800">Parent-Teacher Meetings</h1>
+          <p className="text-slate-500 text-xs md:text-sm mt-0.5 hidden sm:block">Schedule PTMs, send WhatsApp invites, and capture action items.</p>
         </div>
         <button
           onClick={() => setShowCreate(true)}
-          className="bg-orange-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-orange-700 flex items-center gap-2"
+          className="flex-shrink-0 bg-orange-600 text-white px-3 py-2 rounded-lg text-sm font-semibold hover:bg-orange-700 flex items-center gap-1.5"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
           </svg>
-          New PTM
+          <span className="hidden sm:inline">New PTM</span>
+          <span className="sm:hidden">New</span>
         </button>
       </div>
 
