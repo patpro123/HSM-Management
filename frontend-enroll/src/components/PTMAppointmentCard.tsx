@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { PTMAppointment, PTMActionItem } from '../types';
-import { apiPut, apiPost, apiDelete } from '../api';
+import { apiPut, apiPost, apiDelete, apiGet } from '../api';
 import PTMNotifyModal from './PTMNotifyModal';
+import PTMMOMModal from './PTMMOMModal';
 
 const STATUS_OPTIONS = [
   { value: 'scheduled', label: 'Scheduled', color: 'bg-blue-100 text-blue-700' },
@@ -23,6 +24,10 @@ function statusColor(s: string) {
 
 function formatTime(dt: string) {
   return new Date(dt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
+}
+
+function formatDate(d: string) {
+  return new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
 function localDatetimeValue(dt: string | undefined): string {
@@ -68,16 +73,30 @@ interface PTMAppointmentCardProps {
   appointment: PTMAppointment;
   onChange: (updated: PTMAppointment) => void;
   onRemove: (id: string) => void;
+  sessionTitle?: string;
+  sessionDate?: string;
 }
 
-export default function PTMAppointmentCard({ appointment: initial, onChange, onRemove }: PTMAppointmentCardProps) {
+export default function PTMAppointmentCard({ appointment: initial, onChange, onRemove, sessionTitle, sessionDate }: PTMAppointmentCardProps) {
   const [appt, setAppt] = useState<PTMAppointment>(initial);
   const [showNotify, setShowNotify] = useState(false);
+  const [showMOM, setShowMOM] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [notes, setNotes] = useState(initial.notes || '');
   const [newAction, setNewAction] = useState('');
   const [newAssignee, setNewAssignee] = useState<'parent' | 'teacher' | 'admin' | 'student'>('parent');
   const [savingNotes, setSavingNotes] = useState(false);
+  const [carryForwards, setCarryForwards] = useState<PTMAppointment[] | null>(null);
+  const [carryForwardsLoaded, setCarryForwardsLoaded] = useState(false);
+
+  useEffect(() => {
+    if (expanded && !carryForwardsLoaded) {
+      setCarryForwardsLoaded(true);
+      apiGet(`/api/ptm/appointments/${initial.id}/carry-forwards`)
+        .then(res => setCarryForwards(res.carry_forwards || []))
+        .catch(() => setCarryForwards([]));
+    }
+  }, [expanded, carryForwardsLoaded, initial.id]);
 
   const update = (patch: Partial<PTMAppointment>) => {
     const updated = { ...appt, ...patch };
@@ -180,6 +199,33 @@ export default function PTMAppointmentCard({ appointment: initial, onChange, onR
 
       {expanded && (
         <div className="border-t border-slate-100 p-4 space-y-4">
+          {/* Carry-forwards from previous PTMs */}
+          {carryForwards && carryForwards.length > 0 && (
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+              <p className="text-xs font-semibold text-amber-800 mb-2">From previous PTMs</p>
+              <div className="space-y-3">
+                {carryForwards.map(cf => (
+                  <div key={cf.id} className="text-xs">
+                    <div className="font-medium text-amber-700">
+                      {cf.session_title}{cf.scheduled_date ? ` — ${formatDate(cf.scheduled_date)}` : ''}
+                    </div>
+                    {cf.notes && <p className="text-amber-700 mt-0.5 italic">{cf.notes}</p>}
+                    {(cf.action_items || []).length > 0 && (
+                      <ul className="mt-1 space-y-0.5">
+                        {(cf.action_items || []).map(ai => (
+                          <li key={ai.id} className={`flex items-start gap-1 ${ai.status === 'done' ? 'text-slate-400 line-through' : 'text-amber-800'}`}>
+                            <span className="mt-0.5 flex-shrink-0">•</span>
+                            <span>[{ai.assigned_to}] {ai.action_text}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Contact info */}
           <div className="grid grid-cols-2 gap-3 text-xs text-slate-600 bg-slate-50 rounded-lg p-3">
             <div>
@@ -231,6 +277,15 @@ export default function PTMAppointmentCard({ appointment: initial, onChange, onR
                 <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51a12.8 12.8 0 00-.57-.01c-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
               </svg>
               WhatsApp Invite
+            </button>
+            <button
+              onClick={() => setShowMOM(true)}
+              className="flex items-center gap-1.5 bg-blue-600 text-white text-xs font-semibold px-3 py-1.5 rounded-lg hover:bg-blue-700"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              Share MOM
             </button>
             {appt.parent_notified_at && (
               <span className="text-xs text-slate-400 self-center">Parent notified {new Date(appt.parent_notified_at).toLocaleDateString('en-IN')}</span>
@@ -308,6 +363,15 @@ export default function PTMAppointmentCard({ appointment: initial, onChange, onR
           appointment={appt}
           onClose={() => setShowNotify(false)}
           onNotified={updated => { update(updated); setShowNotify(false); }}
+        />
+      )}
+
+      {showMOM && (
+        <PTMMOMModal
+          appointment={appt}
+          sessionTitle={sessionTitle}
+          sessionDate={sessionDate}
+          onClose={() => setShowMOM(false)}
         />
       )}
     </div>

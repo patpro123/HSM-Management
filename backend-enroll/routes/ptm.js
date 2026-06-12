@@ -59,6 +59,7 @@ router.get('/sessions/:sessionId', adminOnly, async (req, res) => {
         s.guardian_contact,
         s.metadata->>'guardian_name' AS guardian_name,
         s.metadata->>'guardian_phone' AS guardian_phone,
+        (SELECT u.email FROM student_guardians sg JOIN users u ON u.id = sg.user_id WHERE sg.student_id = s.id AND sg.is_active = true ORDER BY sg.is_primary DESC LIMIT 1) AS guardian_email,
         t.name AS teacher_name,
         t.phone AS teacher_phone,
         i.name AS instrument_name
@@ -388,15 +389,20 @@ router.get('/students/:studentId/history', authenticateJWT, async (req, res) => 
 });
 
 // GET /api/ptm/teachers/:teacherId/appointments
-// Teacher sees their own upcoming/past PTM slots
+// Teacher sees their own upcoming/past PTM slots (with action items)
 router.get('/teachers/:teacherId/appointments', authenticateJWT, async (req, res) => {
   try {
-    const result = await pool.query(`
+    const apptRes = await pool.query(`
       SELECT
         a.*,
         s.title AS session_title,
         s.scheduled_date,
         st.name AS student_name,
+        st.phone AS student_phone,
+        st.guardian_contact,
+        st.metadata->>'guardian_name' AS guardian_name,
+        st.metadata->>'guardian_phone' AS guardian_phone,
+        (SELECT u.email FROM student_guardians sg JOIN users u ON u.id = sg.user_id WHERE sg.student_id = st.id AND sg.is_active = true ORDER BY sg.is_primary DESC LIMIT 1) AS guardian_email,
         i.name AS instrument_name
       FROM ptm_appointments a
       JOIN ptm_sessions s ON s.id = a.ptm_session_id
@@ -413,7 +419,133 @@ router.get('/teachers/:teacherId/appointments', authenticateJWT, async (req, res
       WHERE a.teacher_id = $1
       ORDER BY s.scheduled_date DESC, a.scheduled_time ASC
     `, [req.params.teacherId]);
-    res.json({ appointments: result.rows });
+
+    let appointments = apptRes.rows;
+    if (appointments.length) {
+      const actionRes = await pool.query(
+        'SELECT * FROM ptm_action_items WHERE appointment_id = ANY($1) ORDER BY created_at ASC',
+        [appointments.map(r => r.id)]
+      );
+      const byAppt = actionRes.rows.reduce((acc, ai) => {
+        (acc[ai.appointment_id] = acc[ai.appointment_id] || []).push(ai);
+        return acc;
+      }, {});
+      appointments = appointments.map(a => ({ ...a, action_items: byAppt[a.id] || [] }));
+    }
+
+    res.json({ appointments });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/ptm/appointments/:appointmentId/carry-forwards
+// Returns last 2 completed PTMs for this student (excluding current session)
+router.get('/appointments/:appointmentId/carry-forwards', adminOnly, async (req, res) => {
+  try {
+    const ref = await pool.query(
+      'SELECT student_id, ptm_session_id FROM ptm_appointments WHERE id = $1',
+      [req.params.appointmentId]
+    );
+    if (!ref.rows.length) return res.status(404).json({ error: 'Appointment not found' });
+    const { student_id, ptm_session_id } = ref.rows[0];
+
+    const apptRes = await pool.query(`
+      SELECT
+        a.*,
+        s.title AS session_title,
+        s.scheduled_date,
+        t.name AS teacher_name,
+        i.name AS instrument_name
+      FROM ptm_appointments a
+      JOIN ptm_sessions s ON s.id = a.ptm_session_id
+      JOIN teachers t ON t.id = a.teacher_id
+      LEFT JOIN (
+        SELECT DISTINCT ON (eb.enrollment_id) e.student_id, i.name
+        FROM enrollment_batches eb
+        JOIN enrollments e ON e.id = eb.enrollment_id
+        JOIN batches b ON b.id = eb.batch_id
+        JOIN instruments i ON i.id = b.instrument_id
+        WHERE e.status = 'active'
+        ORDER BY eb.enrollment_id, eb.assigned_on ASC
+      ) i ON i.student_id = a.student_id
+      WHERE a.student_id = $1
+        AND a.ptm_session_id != $2
+        AND a.status = 'completed'
+      ORDER BY s.scheduled_date DESC
+      LIMIT 2
+    `, [student_id, ptm_session_id]);
+
+    let carry_forwards = apptRes.rows;
+    if (carry_forwards.length) {
+      const actionRes = await pool.query(
+        'SELECT * FROM ptm_action_items WHERE appointment_id = ANY($1) ORDER BY created_at ASC',
+        [carry_forwards.map(r => r.id)]
+      );
+      const byAppt = actionRes.rows.reduce((acc, ai) => {
+        (acc[ai.appointment_id] = acc[ai.appointment_id] || []).push(ai);
+        return acc;
+      }, {});
+      carry_forwards = carry_forwards.map(a => ({ ...a, action_items: byAppt[a.id] || [] }));
+    }
+
+    res.json({ carry_forwards });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/ptm/stats
+// Returns this-month completion count + students overdue for PTM (2+ months)
+router.get('/stats', adminOnly, async (req, res) => {
+  try {
+    const thisMonthRes = await pool.query(`
+      SELECT DISTINCT ON (s.id) s.id, s.name
+      FROM students s
+      JOIN ptm_appointments a ON a.student_id = s.id AND a.status = 'completed'
+      JOIN ptm_sessions sess ON sess.id = a.ptm_session_id
+      WHERE (s.student_type = 'permanent' OR s.student_type IS NULL)
+        AND DATE_TRUNC('month', sess.scheduled_date) = DATE_TRUNC('month', CURRENT_DATE)
+      ORDER BY s.id
+    `);
+
+    const allRes = await pool.query(`
+      SELECT DISTINCT ON (s.id)
+        s.id, s.name,
+        t.id   AS teacher_id,
+        t.name AS teacher_name,
+        i.name AS instrument_name,
+        (
+          SELECT MAX(sess2.scheduled_date)
+          FROM ptm_appointments a2
+          JOIN ptm_sessions sess2 ON sess2.id = a2.ptm_session_id
+          WHERE a2.student_id = s.id AND a2.status = 'completed'
+        ) AS last_ptm_date
+      FROM students s
+      LEFT JOIN enrollments e        ON e.student_id = s.id AND e.status = 'active'
+      LEFT JOIN enrollment_batches eb ON eb.enrollment_id = e.id
+      LEFT JOIN batches b             ON b.id = eb.batch_id
+      LEFT JOIN teachers t           ON t.id = b.teacher_id
+      LEFT JOIN instruments i        ON i.id = b.instrument_id
+      WHERE (s.student_type = 'permanent' OR s.student_type IS NULL)
+      ORDER BY s.id, eb.assigned_on ASC
+    `);
+
+    const twoMonthsAgo = new Date();
+    twoMonthsAgo.setMonth(twoMonthsAgo.getMonth() - 2);
+    const overdue = allRes.rows
+      .filter(s => !s.last_ptm_date || new Date(s.last_ptm_date) < twoMonthsAgo)
+      .sort((a, b) => {
+        if (!a.last_ptm_date) return -1;
+        if (!b.last_ptm_date) return 1;
+        return new Date(a.last_ptm_date) - new Date(b.last_ptm_date);
+      });
+
+    res.json({
+      this_month: { count: thisMonthRes.rows.length, students: thisMonthRes.rows },
+      overdue:    { count: overdue.length, students: overdue },
+      total_students: allRes.rows.length,
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

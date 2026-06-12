@@ -322,6 +322,8 @@ export default function PTMSessionView({ sessionId, onBack, onSessionUpdate }: P
               appointment={appt}
               onChange={handleAppointmentChange}
               onRemove={handleAppointmentRemove}
+              sessionTitle={session.title}
+              sessionDate={session.scheduled_date}
             />
           ))}
         </div>

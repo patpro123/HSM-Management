@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { PTMSession } from '../types';
 import { apiGet, apiPost, apiDelete } from '../api';
 import PTMSessionView from './PTMSessionView';
+import PTMStats from './PTMStats';
 
 function formatDate(d: string) {
   return new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
@@ -148,6 +149,7 @@ export default function PTMModule() {
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+  const [showStats, setShowStats] = useState(false);
 
   useEffect(() => {
     loadSessions();
@@ -169,6 +171,12 @@ export default function PTMModule() {
     setSessions(prev => [session, ...prev]);
     setShowCreate(false);
     setActiveSessionId(session.id);
+    setShowStats(false);
+  };
+
+  const handleNavigateToSession = (sessionId: string) => {
+    setActiveSessionId(sessionId);
+    setShowStats(false);
   };
 
   const handleDelete = async (sessionId: string) => {
@@ -194,6 +202,15 @@ export default function PTMModule() {
     );
   }
 
+  if (showStats) {
+    return (
+      <PTMStats
+        onNavigateToSession={handleNavigateToSession}
+        onBack={() => setShowStats(false)}
+      />
+    );
+  }
+
   return (
     <div className="p-3 md:p-6 max-w-5xl mx-auto">
       <div className="flex items-start justify-between gap-3 mb-5">
@@ -201,16 +218,27 @@ export default function PTMModule() {
           <h1 className="text-xl md:text-2xl font-bold text-slate-800">Parent-Teacher Meetings</h1>
           <p className="text-slate-500 text-xs md:text-sm mt-0.5 hidden sm:block">Schedule PTMs, send WhatsApp invites, and capture action items.</p>
         </div>
-        <button
-          onClick={() => setShowCreate(true)}
-          className="flex-shrink-0 bg-orange-600 text-white px-3 py-2 rounded-lg text-sm font-semibold hover:bg-orange-700 flex items-center gap-1.5"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
-          <span className="hidden sm:inline">New PTM</span>
-          <span className="sm:hidden">New</span>
-        </button>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <button
+            onClick={() => setShowStats(true)}
+            className="border border-slate-300 text-slate-600 px-3 py-2 rounded-lg text-sm font-semibold hover:bg-slate-50 flex items-center gap-1.5"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+            </svg>
+            <span className="hidden sm:inline">Stats</span>
+          </button>
+          <button
+            onClick={() => setShowCreate(true)}
+            className="bg-orange-600 text-white px-3 py-2 rounded-lg text-sm font-semibold hover:bg-orange-700 flex items-center gap-1.5"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            <span className="hidden sm:inline">New PTM</span>
+            <span className="sm:hidden">New</span>
+          </button>
+        </div>
       </div>
 
       {loading ? (

@@ -211,6 +211,7 @@ export interface PTMAppointment {
   guardian_contact?: string;
   guardian_name?: string;
   guardian_phone?: string;
+  guardian_email?: string;
   teacher_name?: string;
   teacher_phone?: string;
   instrument_name?: string;
