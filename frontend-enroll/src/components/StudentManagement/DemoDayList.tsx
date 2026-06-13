@@ -62,6 +62,73 @@ const DemoDayList: React.FC<DemoDayListProps> = ({
   const [schedulingId, setSchedulingId] = useState<string | number | null>(null);
   const [selectedTime, setSelectedTime] = useState<string>('');
   const [savingSlot, setSavingSlot] = useState<boolean>(false);
+  const [convertingId, setConvertingId] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkConverting, setBulkConverting] = useState(false);
+
+  const toggleSelect = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const selectAllVisible = () => {
+    setSelectedIds(new Set(displayedProspects.map(p => p.id)));
+  };
+
+  const clearSelection = () => setSelectedIds(new Set());
+
+  const handleBulkConvert = async () => {
+    if (selectedIds.size === 0) return;
+    const count = selectedIds.size;
+    if (!confirm(`Move ${count} prospect${count > 1 ? 's' : ''} to the regular prospect pipeline? They will no longer appear under Demo Day.`)) return;
+    setBulkConverting(true);
+    const convertedAt = new Date().toISOString();
+    const results = await Promise.allSettled(
+      [...selectedIds].map(async (id) => {
+        const prospect = prospectList.find(p => p.id === id);
+        if (!prospect) return;
+        const updatedMetadata = {
+          ...(prospect.metadata || {}),
+          demo_type: 'normal',
+          converted_from_demo_day: true,
+          converted_at: convertedAt,
+        };
+        const data = await apiPut(`/api/prospects/${id}`, { metadata: updatedMetadata });
+        if (data.prospect) onUpdateProspect(data.prospect);
+      })
+    );
+    const failed = results.filter(r => r.status === 'rejected').length;
+    if (failed > 0) alert(`${failed} prospect${failed > 1 ? 's' : ''} failed to convert. Please try again.`);
+    setSelectedIds(new Set());
+    setBulkConverting(false);
+  };
+
+  const handleConvertToNormal = async (prospect: any) => {
+    if (!confirm(`Move ${prospect.name} to the regular prospect pipeline? They will no longer appear under Demo Day.`)) return;
+    setConvertingId(prospect.id);
+    try {
+      const updatedMetadata = {
+        ...(prospect.metadata || {}),
+        demo_type: 'normal',
+        converted_from_demo_day: true,
+        converted_at: new Date().toISOString(),
+      };
+      const data = await apiPut(`/api/prospects/${prospect.id}`, { metadata: updatedMetadata });
+      if (data.prospect) {
+        onUpdateProspect(data.prospect);
+      }
+    } catch (err) {
+      console.error('Error converting to normal prospect:', err);
+      alert('Failed to convert prospect. Please try again.');
+    } finally {
+      setConvertingId(null);
+    }
+  };
 
   const formatDemoDate = (dateStr?: string) => {
     if (!dateStr) return 'To be announced';
@@ -126,6 +193,8 @@ const DemoDayList: React.FC<DemoDayListProps> = ({
 
     return `https://wa.me/${cleanPhone}?text=${encodeURIComponent(text)}`;
   };
+
+  const allVisibleSelected = displayedProspects.length > 0 && displayedProspects.every(p => selectedIds.has(p.id));
 
   return (
     <>
@@ -204,6 +273,59 @@ const DemoDayList: React.FC<DemoDayListProps> = ({
         </div>
       )}
 
+      {/* Bulk action bar */}
+      {displayedProspects.length > 0 && (
+        <div className={`flex items-center justify-between gap-3 mb-4 px-4 py-3 rounded-xl border transition-all ${
+          selectedIds.size > 0
+            ? 'bg-indigo-50 border-indigo-200'
+            : 'bg-slate-50 border-slate-200'
+        }`}>
+          <div className="flex items-center gap-3">
+            <input
+              type="checkbox"
+              checked={allVisibleSelected}
+              onChange={allVisibleSelected ? clearSelection : selectAllVisible}
+              className="w-4 h-4 rounded accent-indigo-600 cursor-pointer"
+              title={allVisibleSelected ? 'Deselect all' : 'Select all visible'}
+            />
+            {selectedIds.size > 0 ? (
+              <span className="text-sm font-semibold text-indigo-700">
+                {selectedIds.size} selected
+              </span>
+            ) : (
+              <span className="text-sm text-slate-500">Select all</span>
+            )}
+            {selectedIds.size > 0 && (
+              <button
+                onClick={clearSelection}
+                className="text-xs text-slate-400 hover:text-slate-600 underline"
+              >
+                Clear
+              </button>
+            )}
+          </div>
+          {selectedIds.size > 0 && (
+            <button
+              onClick={handleBulkConvert}
+              disabled={bulkConverting}
+              className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-semibold transition disabled:opacity-50"
+            >
+              {bulkConverting ? (
+                <>
+                  <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                  Moving…
+                </>
+              ) : (
+                <>↩ Move {selectedIds.size} to Regular Prospects</>
+              )}
+            </button>
+          )}
+        </div>
+      )}
+
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {prospectList.filter(p => p.metadata?.demo_type === 'demo_day').length === 0 ? (
           <div className="col-span-full text-center py-20 text-slate-400">
@@ -219,6 +341,7 @@ const DemoDayList: React.FC<DemoDayListProps> = ({
             const ageDays = getAgeDays(p.created_at);
             const age = getAgeBucket(ageDays);
             const isScheduling = schedulingId === p.id;
+            const isSelected = selectedIds.has(p.id);
             const prospectDate = p.metadata?.demo_day_date || flashConfig?.demo_day_date;
 
             const bookedSlots = prospectList.filter(other =>
@@ -232,18 +355,31 @@ const DemoDayList: React.FC<DemoDayListProps> = ({
               <div
                 key={p.id}
                 className={`bg-white rounded-xl p-5 hover:shadow-lg transition-shadow border-2 relative flex flex-col justify-between ${
-                  p.is_active === false ? 'border-slate-200 opacity-60' : 'border-amber-200'
+                  p.is_active === false
+                    ? 'border-slate-200 opacity-60'
+                    : isSelected
+                    ? 'border-indigo-400 bg-indigo-50/30'
+                    : 'border-amber-200'
                 }`}
               >
                 <div>
                   <div className="flex items-start justify-between mb-3">
-                    <div className="flex items-center gap-3 cursor-pointer" onClick={() => onSelectProspect(p)}>
-                      <div className="w-11 h-11 rounded-full bg-gradient-to-br from-orange-400 to-amber-500 text-white flex items-center justify-center font-bold text-base shadow">
-                        {initials}
-                      </div>
-                      <div>
-                        <h3 className="font-bold text-slate-900 text-sm hover:underline">{p.name}</h3>
-                        <p className="text-xs text-slate-500">{p.metadata?.email || 'No email'}</p>
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => {}}
+                        onClick={(e) => toggleSelect(p.id, e)}
+                        className="w-4 h-4 rounded accent-indigo-600 cursor-pointer flex-shrink-0 mt-0.5"
+                      />
+                      <div className="flex items-center gap-3 cursor-pointer" onClick={() => onSelectProspect(p)}>
+                        <div className="w-11 h-11 rounded-full bg-gradient-to-br from-orange-400 to-amber-500 text-white flex items-center justify-center font-bold text-base shadow">
+                          {initials}
+                        </div>
+                        <div>
+                          <h3 className="font-bold text-slate-900 text-sm hover:underline">{p.name}</h3>
+                          <p className="text-xs text-slate-500">{p.metadata?.email || 'No email'}</p>
+                        </div>
                       </div>
                     </div>
                     <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${age.color}`}>
@@ -406,6 +542,14 @@ const DemoDayList: React.FC<DemoDayListProps> = ({
                         className="w-full py-2 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white rounded-lg text-xs font-extrabold shadow-sm transition flex items-center justify-center gap-1.5"
                       >
                         🎓 Direct Enroll Student
+                      </button>
+
+                      <button
+                        onClick={() => handleConvertToNormal(p)}
+                        disabled={convertingId === p.id}
+                        className="w-full py-1.5 border border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-slate-700 rounded-lg text-xs font-semibold transition disabled:opacity-50"
+                      >
+                        {convertingId === p.id ? 'Moving...' : '↩ Move to Regular Prospects'}
                       </button>
                     </div>
                   )}

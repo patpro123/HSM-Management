@@ -104,7 +104,9 @@ const ProspectList: React.FC<ProspectListProps> = ({
         ) : (
           displayedProspects.map(p => {
             const initials = (p.name || 'P').split(' ').map((n: string) => n[0]).slice(0, 2).join('');
-            const ageDays = getAgeDays(p.created_at);
+            const fromDemoDay = !!p.metadata?.converted_from_demo_day;
+            const effectiveDate = fromDemoDay && p.metadata?.converted_at ? p.metadata.converted_at : p.created_at;
+            const ageDays = getAgeDays(effectiveDate);
             const age = getAgeBucket(ageDays);
             return (
               <div
@@ -131,6 +133,13 @@ const ProspectList: React.FC<ProspectListProps> = ({
                 {p.metadata?.location && (
                   <div className="text-xs text-slate-400">
                     📍 {p.metadata.location === 'hsm_main' ? 'HSM Main Branch' : p.metadata.location === 'pbel_city' ? 'PBEL City' : p.metadata.location}
+                  </div>
+                )}
+                {fromDemoDay && (
+                  <div className="mt-2">
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-amber-50 border border-amber-200 text-amber-700 rounded-full text-[10px] font-semibold">
+                      ✦ Demo Day
+                    </span>
                   </div>
                 )}
                 {p.is_active === false && <p className="text-xs text-red-500 mt-2 font-semibold">Inactive</p>}

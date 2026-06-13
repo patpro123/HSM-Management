@@ -193,7 +193,10 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students: propStu
     })
     .filter(p => {
       if (!ageFilter) return true;
-      return getAgeBucket(getAgeDays(p.created_at)).key === ageFilter;
+      const effectiveDate = p.metadata?.converted_from_demo_day && p.metadata?.converted_at
+        ? p.metadata.converted_at
+        : p.created_at;
+      return getAgeBucket(getAgeDays(effectiveDate)).key === ageFilter;
     })
     .filter(p => {
       if (locationFilter === 'all') return true;
@@ -449,7 +452,7 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students: propStu
         instruments={instruments}
         batches={batches}
         teachers={teachers}
-        prospects={prospects}
+        prospects={prospectList.length > 0 ? prospectList : prospects}
         intentfulCount={intentfulList.length}
         relevantBatches={relevantBatches}
         onFilterTypeChange={(type) => { setFilterType(type); setAgeFilter(null); }}

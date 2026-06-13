@@ -203,6 +203,13 @@ const ProspectModal: React.FC<ProspectModalProps> = ({ prospect, onClose, onUpda
               <p className="text-xs font-semibold text-slate-500 uppercase mb-1">Signed Up</p>
               <p className="text-slate-900">{new Date(prospect.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</p>
             </div>
+            {meta.converted_from_demo_day && (
+              <div className="col-span-2">
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-amber-50 border border-amber-200 text-amber-700 rounded-full text-xs font-semibold">
+                  Originally registered for Demo Day
+                </span>
+              </div>
+            )}
           </div>
 
           {/* Status selector */}
