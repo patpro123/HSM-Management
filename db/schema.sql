@@ -531,6 +531,13 @@ CREATE INDEX IF NOT EXISTS idx_homework_assignments_student ON homework_assignme
 CREATE INDEX IF NOT EXISTS idx_homework_submissions_assignment ON homework_submissions(assignment_id);
 
 
+-- Landing page configuration (persists across deploys, managed via admin UI)
+CREATE TABLE IF NOT EXISTS landing_config (
+  key   TEXT PRIMARY KEY,
+  value JSONB NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 -- ==================== NOTES ====================
 -- 
 -- Migrations Applied:
@@ -543,6 +550,7 @@ CREATE INDEX IF NOT EXISTS idx_homework_submissions_assignment ON homework_submi
 -- 6. migration 020: Created instrument_grade_rates table
 -- 7. migration 021: Created teacher_grade_rate_overrides table
 -- 8. migration 048: Added deactivated_at to students for reliable active-student trend tracking
+-- 9. migration 051: Created landing_config table (moved from filesystem to DB for deploy persistence)
 --
 -- Key Design Decisions:
 -- - One enrollment per student (not per instrument)
