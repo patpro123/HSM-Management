@@ -230,3 +230,74 @@ export interface PTMActionItem {
   created_at: string;
   resolved_at?: string;
 }
+
+// ---------------------------------------------------------------------------
+// Marketing module types
+// ---------------------------------------------------------------------------
+
+export interface MarketingFunnelStage {
+  stage: 'intentful_user' | 'prospect' | 'demo_day' | 'permanent';
+  count: string;
+  active_count: string;
+  oldest: string;
+  newest: string;
+}
+
+export interface LeadSource {
+  source: string;
+  medium: string;
+  count: string;
+}
+
+export interface OverdueProspect {
+  id: string;
+  name: string;
+  phone: string;
+  student_type: string;
+  created_at: string;
+  metadata: Record<string, unknown>;
+  last_note_at: string | null;
+  hours_since_contact: number;
+}
+
+export interface EligibleEvaluation {
+  evaluation_id: string;
+  student_id: string;
+  student_name: string;
+  rating: number | null;
+  milestone_reached: string | null;
+  notes: string | null;
+  evaluation_date: string;
+  instrument: string | null;
+  already_promoted: boolean;
+}
+
+export interface MarketingTestimonial {
+  id: string;
+  student_id: string | null;
+  evaluation_id: string | null;
+  quote: string;
+  author_name: string;
+  instrument: string | null;
+  media_url: string | null;
+  rating: number | null;
+  is_published: boolean;
+  consent_obtained: boolean;
+  display_order: number;
+  created_at: string;
+  updated_at: string;
+  student_name?: string;
+}
+
+export type BrandAssetKind = 'logo' | 'color' | 'tagline' | 'photo' | 'doc' | 'template';
+
+export interface BrandAsset {
+  id: string;
+  kind: BrandAssetKind;
+  name: string;
+  value: string | null;
+  file_id: string | null;
+  is_active: boolean;
+  metadata: Record<string, unknown> | null;
+  created_at: string;
+}
