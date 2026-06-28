@@ -111,30 +111,33 @@ router.get('/overdue-prospects', ...adminOnly, async (req, res) => {
 // ---------------------------------------------------------------------------
 
 // GET /api/marketing/eligible-evaluations
-// Student evaluations with rating >= 4 or a milestone_reached that haven't been promoted yet
+// Student evaluations with rating >= 4 that haven't been promoted to testimonials yet
 router.get('/eligible-evaluations', ...adminOnly, async (req, res) => {
   try {
     const { rows } = await pool.query(`
       SELECT
-        se.id          AS evaluation_id,
+        se.id             AS evaluation_id,
         se.student_id,
-        s.name         AS student_name,
+        s.name            AS student_name,
         se.rating,
-        se.milestone_reached,
-        se.notes,
+        se.title,
+        se.feedback,
         se.evaluation_date,
-        i.name         AS instrument,
+        (
+          SELECT i.name
+          FROM enrollments en
+          JOIN enrollment_batches eb ON eb.enrollment_id = en.id
+          JOIN batches b ON b.id = eb.batch_id
+          JOIN instruments i ON i.id = b.instrument_id
+          WHERE en.student_id = se.student_id
+          LIMIT 1
+        ) AS instrument,
         EXISTS (
           SELECT 1 FROM marketing_testimonials mt WHERE mt.evaluation_id = se.id
         ) AS already_promoted
       FROM student_evaluations se
       JOIN students s ON s.id = se.student_id
-      LEFT JOIN enrollment_batches eb ON eb.enrollment_id = (
-        SELECT id FROM enrollments WHERE student_id = se.student_id LIMIT 1
-      )
-      LEFT JOIN batches b ON b.id = eb.batch_id
-      LEFT JOIN instruments i ON i.id = b.instrument_id
-      WHERE (se.rating >= 4 OR se.milestone_reached IS NOT NULL)
+      WHERE se.rating >= 4
       ORDER BY se.evaluation_date DESC
       LIMIT 100
     `);

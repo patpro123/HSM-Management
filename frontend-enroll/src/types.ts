@@ -265,8 +265,8 @@ export interface EligibleEvaluation {
   student_id: string;
   student_name: string;
   rating: number | null;
-  milestone_reached: string | null;
-  notes: string | null;
+  title: string | null;
+  feedback: string | null;
   evaluation_date: string;
   instrument: string | null;
   already_promoted: boolean;

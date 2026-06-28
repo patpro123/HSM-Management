@@ -47,7 +47,7 @@ export default function TestimonialsManager() {
       await apiPost('/api/marketing/testimonials', {
         student_id: ev.student_id,
         evaluation_id: ev.evaluation_id,
-        quote: ev.notes || ev.milestone_reached || '',
+        quote: ev.feedback || ev.title || '',
         author_name: ev.student_name,
         instrument: ev.instrument,
         rating: ev.rating,
@@ -270,19 +270,19 @@ export default function TestimonialsManager() {
                     {ev.instrument && <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">{ev.instrument}</span>}
                     <StarRating rating={ev.rating} />
                   </div>
-                  {ev.milestone_reached && (
-                    <p className="text-xs text-orange-600 mt-0.5">Milestone: {ev.milestone_reached}</p>
+                  {ev.title && (
+                    <p className="text-xs text-orange-600 mt-0.5">{ev.title}</p>
                   )}
-                  {ev.notes && (
-                    <p className="text-xs text-gray-500 mt-0.5 line-clamp-2 italic">"{ev.notes}"</p>
+                  {ev.feedback && (
+                    <p className="text-xs text-gray-500 mt-0.5 line-clamp-2 italic">"{ev.feedback}"</p>
                   )}
                   <p className="text-xs text-gray-400 mt-0.5">{new Date(ev.evaluation_date).toLocaleDateString()}</p>
                 </div>
                 <button
                   onClick={() => promoteEvaluation(ev)}
-                  disabled={saving === ev.evaluation_id || (!ev.notes && !ev.milestone_reached)}
+                  disabled={saving === ev.evaluation_id || (!ev.feedback && !ev.title)}
                   className="bg-blue-600 text-white px-3 py-1.5 rounded hover:bg-blue-700 text-xs shrink-0 disabled:opacity-40"
-                  title={!ev.notes && !ev.milestone_reached ? 'No quote text — teacher notes are empty' : undefined}
+                  title={!ev.feedback && !ev.title ? 'No feedback text — teacher feedback is empty' : undefined}
                 >
                   {saving === ev.evaluation_id ? 'Promoting...' : 'Promote'}
                 </button>
