@@ -3,8 +3,10 @@ import FunnelWidget from './FunnelWidget';
 import OverdueProspects from './OverdueProspects';
 import TestimonialsManager from './TestimonialsManager';
 import BrandAssetLibrary from './BrandAssetLibrary';
+import SettingsPanel from '../SettingsPanel';
 
-type Section = 'overview' | 'testimonials' | 'brand';
+type Section = 'overview' | 'website' | 'brand';
+type WebsiteTab = 'announcements' | 'testimonials';
 
 const NAV: { key: Section; label: string; icon: string }[] = [
   {
@@ -13,9 +15,9 @@ const NAV: { key: Section; label: string; icon: string }[] = [
     icon: 'M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12',
   },
   {
-    key: 'testimonials',
-    label: 'Testimonials',
-    icon: 'M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z',
+    key: 'website',
+    label: 'Website Content',
+    icon: 'M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z',
   },
   {
     key: 'brand',
@@ -26,6 +28,7 @@ const NAV: { key: Section; label: string; icon: string }[] = [
 
 export default function MarketingDashboard() {
   const [section, setSection] = useState<Section>('overview');
+  const [websiteTab, setWebsiteTab] = useState<WebsiteTab>('announcements');
 
   return (
     <div className="space-y-6">
@@ -33,14 +36,11 @@ export default function MarketingDashboard() {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-xl font-semibold text-gray-900">Marketing</h2>
-          <p className="text-sm text-gray-500 mt-0.5">Brand building, lead pipeline, and social proof</p>
+          <p className="text-sm text-gray-500 mt-0.5">Lead pipeline, website content, and brand building</p>
         </div>
-        <span className="text-xs bg-orange-100 text-orange-700 border border-orange-200 px-3 py-1 rounded-full font-medium">
-          P0 — Measure First
-        </span>
       </div>
 
-      {/* Section nav */}
+      {/* Top nav */}
       <div className="flex gap-1 bg-gray-100 rounded-lg p-1 w-fit">
         {NAV.map(item => (
           <button
@@ -58,7 +58,7 @@ export default function MarketingDashboard() {
         ))}
       </div>
 
-      {/* Section content */}
+      {/* Funnel & Leads */}
       {section === 'overview' && (
         <div className="space-y-8">
           <div className="bg-white rounded-lg shadow p-6">
@@ -76,18 +76,59 @@ export default function MarketingDashboard() {
         </div>
       )}
 
-      {section === 'testimonials' && (
-        <div className="bg-white rounded-lg shadow p-6">
-          <div className="mb-4">
-            <h3 className="text-base font-semibold text-gray-900">Student Testimonials</h3>
-            <p className="text-sm text-gray-500 mt-0.5">
-              Promote high-rating evaluations to consented testimonials. Publish to the landing page once consent is obtained.
+      {/* Website Content */}
+      {section === 'website' && (
+        <div className="space-y-4">
+          <div className="bg-amber-50 border border-amber-100 rounded-lg px-4 py-3 flex items-center gap-2">
+            <svg className="w-4 h-4 text-amber-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <p className="text-xs text-amber-700">
+              Changes here go live on the public HSM website immediately after saving.
             </p>
           </div>
-          <TestimonialsManager />
+
+          {/* Website sub-tabs */}
+          <div className="flex gap-2 border-b border-gray-200">
+            {([
+              { key: 'announcements' as WebsiteTab, label: 'Announcements & Banners' },
+              { key: 'testimonials' as WebsiteTab, label: 'Testimonials' },
+            ]).map(t => (
+              <button
+                key={t.key}
+                onClick={() => setWebsiteTab(t.key)}
+                className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors -mb-px ${
+                  websiteTab === t.key
+                    ? 'border-orange-500 text-orange-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+
+          {websiteTab === 'announcements' && (
+            <div className="bg-white rounded-lg shadow p-6">
+              <SettingsPanel />
+            </div>
+          )}
+
+          {websiteTab === 'testimonials' && (
+            <div className="bg-white rounded-lg shadow p-6">
+              <div className="mb-4">
+                <h3 className="text-base font-semibold text-gray-900">Website Testimonials</h3>
+                <p className="text-sm text-gray-500 mt-0.5">
+                  Published testimonials with parent consent appear on the public HSM website. Promote from student evaluations or add manually.
+                </p>
+              </div>
+              <TestimonialsManager />
+            </div>
+          )}
         </div>
       )}
 
+      {/* Brand Assets */}
       {section === 'brand' && (
         <div className="bg-white rounded-lg shadow p-6">
           <div className="mb-4">

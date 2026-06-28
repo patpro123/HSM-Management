@@ -35,6 +35,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLogin, authError }) => {
     const [flashConfig, setFlashConfig] = useState<any>(null);
     const [isDemoDayFlow, setIsDemoDayFlow] = useState(false);
     const [isToUOpen, setIsToUOpen] = useState(false);
+    const [dbTestimonials, setDbTestimonials] = useState<{ quote: string; author: string; role: string; initials: string; color: string }[]>([]);
 
     const faqs = [
         { q: "Does my child need prior experience?", a: "Not at all. We start from the very beginning and move at your child's pace." },
@@ -45,13 +46,16 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLogin, authError }) => {
         { q: "What if we need to pause or stop?", a: "No problem. We have a flexible pause policy — life happens and we understand." }
     ];
 
-    const testimonials = [
+    const FALLBACK_TESTIMONIALS = [
         { quote: "I recently started learning guitar at HSM near Bandlaguda and I'm really happy! The teachers are outstanding — they break down concepts from the very basics, making learning easy and enjoyable. Visit and speak with the team — you'll immediately sense their dedication and passion for teaching.", author: "Kishore Gandhi", role: "Guitar student", initials: "KG", color: "#4285F4" },
         { quote: "I was looking for drum classes for my son and, after a bit of searching, decided to visit Hyderabad School of Music because it was nearby. From the moment I walked in, I was thrilled by the lively activities and the welcoming atmosphere. The staff is not only talented but also incredibly friendly, creating a perfect environment for learning and creativity. My son is now learning drums here and making amazing progress, thanks to the patient and skilled instructors. My wife has also joined for advanced Hindustani music lessons, and she's just as impressed with the quality of teaching and the dedication of the faculty.", author: "Bharath Raj Kuttikad", role: "Parent", initials: "BK", color: "#34A853" },
         { quote: "My son is learning guitar in HSM from past 3 months. I am really happy with my decision. He is getting practical teaching lessons from good teachers who are very friendly. The HSM members have a lot of interest in music and take good care of the students. Recently, the members organized a musical event involving all age groups which was awesome. It was a good exposure for the students.", author: "Yodesh Shaw", role: "Parent of Guitar student", initials: "YS", color: "#EA4335" },
         { quote: "Nestled in the heart of our community, Hyderabad School Of Music (HSM) is a beacon of musical excellence. From the moment you step through the door, you're greeted with a warm atmosphere and a sense of belonging. I've had the pleasure of experiencing music education in various settings, and HSM stands out for its unwavering commitment to nurturing talent and fostering a love for music in students of all ages.", author: "Jayasudha Venkatesh", role: "Student", initials: "JV", color: "#9C27B0" },
         { quote: "Enrolled my kid for keyboard. He is enjoying the learning. Good facilities, sir pays attention to each student which is good. Would definitely recommend.", author: "B Srinivasu", role: "Parent of Keyboard student", initials: "BS", color: "#FBBC04" },
     ];
+
+    // Use DB-managed testimonials when available; fall back to hardcoded set
+    const testimonials = dbTestimonials.length > 0 ? dbTestimonials : FALLBACK_TESTIMONIALS;
 
     useEffect(() => {
         const handleScroll = () => { setIsScrolled(window.scrollY > 50); };
@@ -72,6 +76,29 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLogin, authError }) => {
             }
         };
         fetchConfig();
+    }, []);
+
+    useEffect(() => {
+        const AVATAR_COLORS = ['#4285F4', '#34A853', '#EA4335', '#9C27B0', '#FBBC04', '#FF6B35', '#00BCD4'];
+        const fetchTestimonials = async () => {
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/marketing/testimonials/published`);
+                if (response.ok) {
+                    const data = await response.json();
+                    const mapped = (data.testimonials || []).map((t: { author_name: string; quote: string; instrument?: string }, i: number) => ({
+                        quote: t.quote,
+                        author: t.author_name,
+                        role: t.instrument ? `${t.instrument} student` : 'Student',
+                        initials: t.author_name.split(' ').map((w: string) => w[0]).slice(0, 2).join('').toUpperCase(),
+                        color: AVATAR_COLORS[i % AVATAR_COLORS.length],
+                    }));
+                    if (mapped.length > 0) setDbTestimonials(mapped);
+                }
+            } catch {
+                // silently fall back to hardcoded testimonials
+            }
+        };
+        fetchTestimonials();
     }, []);
 
 
