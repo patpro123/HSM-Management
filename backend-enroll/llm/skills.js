@@ -1609,6 +1609,250 @@ const skills = {
     );
   },
 
+  // ── Student turnover ─────────────────────────────────────────────────────
+
+  'stats.turnover': async () => {
+    const row = (await pool.query(`
+      SELECT
+        COUNT(*) FILTER (WHERE created_at  >= date_trunc('month', CURRENT_DATE)
+                           AND student_type = 'permanent')::int AS added_this,
+        COUNT(*) FILTER (WHERE deactivated_at >= date_trunc('month', CURRENT_DATE)
+                           AND student_type = 'permanent')::int AS removed_this,
+        COUNT(*) FILTER (WHERE created_at  >= date_trunc('month', CURRENT_DATE) - INTERVAL '1 month'
+                           AND created_at   < date_trunc('month', CURRENT_DATE)
+                           AND student_type = 'permanent')::int AS added_last,
+        COUNT(*) FILTER (WHERE deactivated_at >= date_trunc('month', CURRENT_DATE) - INTERVAL '1 month'
+                           AND deactivated_at  < date_trunc('month', CURRENT_DATE)
+                           AND student_type = 'permanent')::int AS removed_last
+      FROM students
+    `)).rows[0];
+
+    const fmtNet = n => n > 0 ? `+${n}` : String(n);
+    const netThis = row.added_this - row.removed_this;
+    const netLast = row.added_last - row.removed_last;
+
+    return makeResponse('card',
+      'Student turnover — this month vs last month',
+      ['Turnover by stream', 'Turnover by teacher', 'Show turnover chart by month'],
+      {
+        student: {
+          'This month': `+${row.added_this} added, -${row.removed_this} removed (net ${fmtNet(netThis)})`,
+          'Last month': `+${row.added_last} added, -${row.removed_last} removed (net ${fmtNet(netLast)})`,
+        },
+      }
+    );
+  },
+
+  'stats.turnover_by_stream': async ({ params }) => {
+    const period = (params.period || 'this_month').toLowerCase().replace(' ', '_');
+    const now = new Date();
+    let start, end, label;
+    if (period === 'last_month') {
+      start = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString().slice(0, 10);
+      end   = new Date(now.getFullYear(), now.getMonth(), 0).toISOString().slice(0, 10);
+      label = 'last month';
+    } else {
+      start = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
+      end   = now.toISOString().slice(0, 10);
+      label = 'this month';
+    }
+
+    const rows = (await pool.query(`
+      SELECT
+        i.name AS instrument,
+        COUNT(DISTINCT CASE WHEN s.created_at::date    BETWEEN $1 AND $2 THEN s.id END)::int AS added,
+        COUNT(DISTINCT CASE WHEN s.deactivated_at::date BETWEEN $1 AND $2 THEN s.id END)::int AS removed
+      FROM instruments i
+      JOIN batches b            ON b.instrument_id = i.id AND b.is_makeup = false
+      JOIN enrollment_batches eb ON eb.batch_id    = b.id
+      JOIN enrollments e        ON e.id            = eb.enrollment_id
+      JOIN students s           ON s.id            = e.student_id AND s.student_type = 'permanent'
+      GROUP BY i.id, i.name
+      HAVING
+        COUNT(DISTINCT CASE WHEN s.created_at::date    BETWEEN $1 AND $2 THEN s.id END) > 0
+        OR COUNT(DISTINCT CASE WHEN s.deactivated_at::date BETWEEN $1 AND $2 THEN s.id END) > 0
+      ORDER BY (
+        COUNT(DISTINCT CASE WHEN s.created_at::date    BETWEEN $1 AND $2 THEN s.id END) +
+        COUNT(DISTINCT CASE WHEN s.deactivated_at::date BETWEEN $1 AND $2 THEN s.id END)
+      ) DESC
+    `, [start, end])).rows;
+
+    if (!rows.length) return makeResponse('text', `No student movement in any stream for ${label}.`, ['Check last month', 'View overall turnover']);
+
+    return makeResponse('list',
+      `Student turnover by stream — ${label}`,
+      ['Show as chart', 'Turnover by teacher', 'View overall turnover'],
+      {
+        students: rows.map(r => {
+          const net = r.added - r.removed;
+          const netStr = net > 0 ? `net +${net}` : net < 0 ? `net ${net}` : 'no net change';
+          return { name: r.instrument, label: `+${r.added} added · -${r.removed} removed · ${netStr}`, value: r.instrument };
+        }),
+      }
+    );
+  },
+
+  'stats.turnover_by_teacher': async ({ params }) => {
+    const period = (params.period || 'this_month').toLowerCase().replace(' ', '_');
+    const now = new Date();
+    let start, end, label;
+    if (period === 'last_month') {
+      start = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString().slice(0, 10);
+      end   = new Date(now.getFullYear(), now.getMonth(), 0).toISOString().slice(0, 10);
+      label = 'last month';
+    } else {
+      start = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
+      end   = now.toISOString().slice(0, 10);
+      label = 'this month';
+    }
+
+    const rows = (await pool.query(`
+      SELECT
+        t.name AS teacher,
+        COUNT(DISTINCT CASE WHEN s.created_at::date    BETWEEN $1 AND $2 THEN s.id END)::int AS added,
+        COUNT(DISTINCT CASE WHEN s.deactivated_at::date BETWEEN $1 AND $2 THEN s.id END)::int AS removed
+      FROM teachers t
+      JOIN batches b            ON b.teacher_id     = t.id AND b.is_makeup = false
+      JOIN enrollment_batches eb ON eb.batch_id     = b.id
+      JOIN enrollments e        ON e.id             = eb.enrollment_id
+      JOIN students s           ON s.id             = e.student_id AND s.student_type = 'permanent'
+      GROUP BY t.id, t.name
+      HAVING
+        COUNT(DISTINCT CASE WHEN s.created_at::date    BETWEEN $1 AND $2 THEN s.id END) > 0
+        OR COUNT(DISTINCT CASE WHEN s.deactivated_at::date BETWEEN $1 AND $2 THEN s.id END) > 0
+      ORDER BY (
+        COUNT(DISTINCT CASE WHEN s.created_at::date    BETWEEN $1 AND $2 THEN s.id END) +
+        COUNT(DISTINCT CASE WHEN s.deactivated_at::date BETWEEN $1 AND $2 THEN s.id END)
+      ) DESC
+    `, [start, end])).rows;
+
+    if (!rows.length) return makeResponse('text', `No student movement under any teacher for ${label}.`, ['Check last month', 'View overall turnover']);
+
+    return makeResponse('list',
+      `Student turnover by teacher — ${label}`,
+      ['Show as chart', 'Turnover by stream', 'View overall turnover'],
+      {
+        students: rows.map(r => {
+          const net = r.added - r.removed;
+          const netStr = net > 0 ? `net +${net}` : net < 0 ? `net ${net}` : 'no net change';
+          return { name: r.teacher, label: `+${r.added} added · -${r.removed} removed · ${netStr}`, value: r.teacher };
+        }),
+      }
+    );
+  },
+
+  'chart.turnover': async ({ params }) => {
+    const groupBy    = (params.group_by   || 'month').toLowerCase();
+    const chartType  = (params.chart_type || 'bar').toLowerCase();
+    const period     = (params.period     || 'this_month').toLowerCase().replace(' ', '_');
+    const now = new Date();
+    let rows, title;
+
+    if (groupBy === 'month') {
+      rows = (await pool.query(`
+        WITH months AS (
+          SELECT generate_series(
+            date_trunc('month', CURRENT_DATE) - INTERVAL '1 month',
+            date_trunc('month', CURRENT_DATE),
+            '1 month'
+          ) AS month_start
+        )
+        SELECT
+          TO_CHAR(m.month_start, 'Mon YY') AS label,
+          COUNT(DISTINCT sa.id)::int AS added,
+          COUNT(DISTINCT sr.id)::int AS removed
+        FROM months m
+        LEFT JOIN students sa ON sa.student_type = 'permanent'
+          AND sa.created_at     >= m.month_start
+          AND sa.created_at      < m.month_start + INTERVAL '1 month'
+        LEFT JOIN students sr ON sr.student_type = 'permanent'
+          AND sr.deactivated_at >= m.month_start
+          AND sr.deactivated_at  < m.month_start + INTERVAL '1 month'
+        GROUP BY m.month_start
+        ORDER BY m.month_start
+      `)).rows;
+      title = 'Student turnover — this month vs last month';
+
+    } else if (groupBy === 'stream') {
+      let start, end;
+      if (period === 'last_month') {
+        start = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString().slice(0, 10);
+        end   = new Date(now.getFullYear(), now.getMonth(), 0).toISOString().slice(0, 10);
+        title = 'Student turnover by stream — last month';
+      } else {
+        start = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
+        end   = now.toISOString().slice(0, 10);
+        title = 'Student turnover by stream — this month';
+      }
+      rows = (await pool.query(`
+        SELECT
+          i.name AS label,
+          COUNT(DISTINCT CASE WHEN s.created_at::date    BETWEEN $1 AND $2 THEN s.id END)::int AS added,
+          COUNT(DISTINCT CASE WHEN s.deactivated_at::date BETWEEN $1 AND $2 THEN s.id END)::int AS removed
+        FROM instruments i
+        JOIN batches b            ON b.instrument_id = i.id AND b.is_makeup = false
+        JOIN enrollment_batches eb ON eb.batch_id    = b.id
+        JOIN enrollments e        ON e.id            = eb.enrollment_id
+        JOIN students s           ON s.id            = e.student_id AND s.student_type = 'permanent'
+        GROUP BY i.id, i.name
+        HAVING
+          COUNT(DISTINCT CASE WHEN s.created_at::date    BETWEEN $1 AND $2 THEN s.id END) > 0
+          OR COUNT(DISTINCT CASE WHEN s.deactivated_at::date BETWEEN $1 AND $2 THEN s.id END) > 0
+        ORDER BY (
+          COUNT(DISTINCT CASE WHEN s.created_at::date    BETWEEN $1 AND $2 THEN s.id END) +
+          COUNT(DISTINCT CASE WHEN s.deactivated_at::date BETWEEN $1 AND $2 THEN s.id END)
+        ) DESC
+      `, [start, end])).rows;
+
+    } else { // teacher
+      let start, end;
+      if (period === 'last_month') {
+        start = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString().slice(0, 10);
+        end   = new Date(now.getFullYear(), now.getMonth(), 0).toISOString().slice(0, 10);
+        title = 'Student turnover by teacher — last month';
+      } else {
+        start = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
+        end   = now.toISOString().slice(0, 10);
+        title = 'Student turnover by teacher — this month';
+      }
+      rows = (await pool.query(`
+        SELECT
+          t.name AS label,
+          COUNT(DISTINCT CASE WHEN s.created_at::date    BETWEEN $1 AND $2 THEN s.id END)::int AS added,
+          COUNT(DISTINCT CASE WHEN s.deactivated_at::date BETWEEN $1 AND $2 THEN s.id END)::int AS removed
+        FROM teachers t
+        JOIN batches b            ON b.teacher_id    = t.id AND b.is_makeup = false
+        JOIN enrollment_batches eb ON eb.batch_id    = b.id
+        JOIN enrollments e        ON e.id            = eb.enrollment_id
+        JOIN students s           ON s.id            = e.student_id AND s.student_type = 'permanent'
+        GROUP BY t.id, t.name
+        HAVING
+          COUNT(DISTINCT CASE WHEN s.created_at::date    BETWEEN $1 AND $2 THEN s.id END) > 0
+          OR COUNT(DISTINCT CASE WHEN s.deactivated_at::date BETWEEN $1 AND $2 THEN s.id END) > 0
+        ORDER BY (
+          COUNT(DISTINCT CASE WHEN s.created_at::date    BETWEEN $1 AND $2 THEN s.id END) +
+          COUNT(DISTINCT CASE WHEN s.deactivated_at::date BETWEEN $1 AND $2 THEN s.id END)
+        ) DESC
+      `, [start, end])).rows;
+    }
+
+    if (!rows.length || rows.every(r => r.added === 0 && r.removed === 0)) {
+      return makeResponse('text', 'No student movement data available for a chart.', ['View turnover summary']);
+    }
+
+    return makeResponse('chart', title, ['View details', 'Turnover by stream', 'Turnover by teacher'], {
+      chart: {
+        type: chartType,
+        data: rows,
+        xKey: 'label',
+        series: [
+          { key: 'added',   color: '#27ae60', label: 'Added'   },
+          { key: 'removed', color: '#e74c3c', label: 'Removed' },
+        ],
+      },
+    });
+  },
+
   'teacher.payout': async ({ params }) => {
     let { teacher_id } = params;
     if (teacher_id && !isUUID(teacher_id)) {
@@ -1708,6 +1952,11 @@ const TOOL_DEFINITIONS = [
   T('finance.pnl', 'Profit & Loss: revenue minus expenses and teacher payouts, margin, vs last month', { month: S('YYYY-MM, defaults to current month') }),
   T('finance.payouts', 'Total teacher payouts and per-teacher breakdown for a period', { period: S('this_month | last_month | this_year') }),
   T('chart.finance', 'Finance chart. view=revenue_vs_expenses|expenses_by_category|revenue_by_instrument', { view: S('revenue_vs_expenses | expenses_by_category | revenue_by_instrument'), chart_type: S('bar | line') }),
+  // Student turnover
+  T('stats.turnover', 'Student turnover summary: how many permanent students joined vs left, this month vs last month', {}),
+  T('stats.turnover_by_stream', 'Students added vs removed per instrument/stream for a period', { period: S('this_month | last_month') }),
+  T('stats.turnover_by_teacher', 'Students added vs removed per teacher for a period, sorted by most impacted', { period: S('this_month | last_month') }),
+  T('chart.turnover', 'Grouped bar chart of student turnover. group_by=month compares this vs last month; group_by=stream breaks down by instrument; group_by=teacher breaks down by teacher', { group_by: S('month | stream | teacher'), period: S('this_month | last_month'), chart_type: S('bar | line') }),
   // Actions
   T('attendance.mark_batch',
     'Mark attendance for ALL students in a batch at once. ' +
@@ -1731,6 +1980,6 @@ const TOOL_DEFINITIONS = [
 ];
 
 const ACTION_SKILLS = new Set(['attendance.mark', 'attendance.mark_batch', 'payment.record', 'enroll.student', 'student.update', 'batch.move', 'payout.record']);
-const LOOKUP_SKILLS = new Set(['school.locations', 'student.lookup', 'student.credits', 'student.profile', 'student.list', 'teacher.list', 'teacher.profile', 'teacher.students', 'teacher.payout', 'batch.roster', 'batch.schedule', 'payment.status', 'fee.query', 'stats.students', 'stats.unpaid', 'stats.attendance', 'report.lowcredits', 'reminder.payment', 'chart.attendance', 'chart.students', 'chart.revenue', 'prospect.summary', 'prospect.list', 'prospect.aging', 'prospect.followup', 'chart.prospects', 'finance.summary', 'finance.revenue', 'finance.expenses', 'finance.pnl', 'finance.payouts', 'chart.finance']);
+const LOOKUP_SKILLS = new Set(['school.locations', 'student.lookup', 'student.credits', 'student.profile', 'student.list', 'teacher.list', 'teacher.profile', 'teacher.students', 'teacher.payout', 'batch.roster', 'batch.schedule', 'payment.status', 'fee.query', 'stats.students', 'stats.unpaid', 'stats.attendance', 'report.lowcredits', 'reminder.payment', 'chart.attendance', 'chart.students', 'chart.revenue', 'prospect.summary', 'prospect.list', 'prospect.aging', 'prospect.followup', 'chart.prospects', 'finance.summary', 'finance.revenue', 'finance.expenses', 'finance.pnl', 'finance.payouts', 'chart.finance', 'stats.turnover', 'stats.turnover_by_stream', 'stats.turnover_by_teacher', 'chart.turnover']);
 
 module.exports = { skills, TOOL_DEFINITIONS, ACTION_SKILLS, LOOKUP_SKILLS };

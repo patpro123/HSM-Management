@@ -3,9 +3,11 @@ import FunnelWidget from './FunnelWidget';
 import OverdueProspects from './OverdueProspects';
 import TestimonialsManager from './TestimonialsManager';
 import BrandAssetLibrary from './BrandAssetLibrary';
+import CopywriterPanel from './CopywriterPanel';
+import WhatsAppPromoPanel from './WhatsAppPromoPanel';
 import SettingsPanel from '../SettingsPanel';
 
-type Section = 'overview' | 'website' | 'brand';
+type Section = 'overview' | 'whatsapp' | 'copywriter' | 'website' | 'brand';
 type WebsiteTab = 'announcements' | 'testimonials';
 
 const NAV: { key: Section; label: string; icon: string }[] = [
@@ -13,6 +15,16 @@ const NAV: { key: Section; label: string; icon: string }[] = [
     key: 'overview',
     label: 'Funnel & Leads',
     icon: 'M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12',
+  },
+  {
+    key: 'whatsapp',
+    label: 'WhatsApp Promos',
+    icon: 'M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z',
+  },
+  {
+    key: 'copywriter',
+    label: 'AI Copywriter',
+    icon: 'M13 10V3L4 14h7v7l9-11h-7z',
   },
   {
     key: 'website',
@@ -40,13 +52,14 @@ export default function MarketingDashboard() {
         </div>
       </div>
 
-      {/* Top nav */}
-      <div className="flex gap-1 bg-gray-100 rounded-lg p-1 w-fit">
+      {/* Top nav — horizontally scrollable on mobile */}
+      <div className="overflow-x-auto -mx-1 px-1 pb-1">
+        <div className="flex gap-1 bg-gray-100 rounded-lg p-1 w-max min-w-full sm:w-fit">
         {NAV.map(item => (
           <button
             key={item.key}
             onClick={() => setSection(item.key)}
-            className={`flex items-center gap-1.5 px-4 py-2 rounded text-sm font-medium transition-colors ${
+            className={`flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded text-xs sm:text-sm font-medium transition-colors whitespace-nowrap ${
               section === item.key ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'
             }`}
           >
@@ -56,6 +69,7 @@ export default function MarketingDashboard() {
             {item.label}
           </button>
         ))}
+        </div>
       </div>
 
       {/* Funnel & Leads */}
@@ -73,6 +87,20 @@ export default function MarketingDashboard() {
               WhatsApp broadcast campaigns, email newsletters, content calendar, milestone celebration automation, Google review nudges, and GA4 attribution.
             </p>
           </div>
+        </div>
+      )}
+
+      {/* WhatsApp Promos */}
+      {section === 'whatsapp' && (
+        <div className="bg-white rounded-lg shadow p-6">
+          <WhatsAppPromoPanel />
+        </div>
+      )}
+
+      {/* AI Copywriter */}
+      {section === 'copywriter' && (
+        <div className="bg-white rounded-lg shadow p-6">
+          <CopywriterPanel />
         </div>
       )}
 

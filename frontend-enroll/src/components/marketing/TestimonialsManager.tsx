@@ -141,16 +141,18 @@ export default function TestimonialsManager() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 bg-gray-100 rounded-lg p-1 w-fit">
-        {(['published', 'promote'] as Tab[]).map(t => (
-          <button
-            key={t}
-            onClick={() => setTab(t)}
-            className={`px-4 py-1.5 rounded text-sm font-medium transition-colors ${tab === t ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
-          >
-            {t === 'published' ? `All (${testimonials.length})` : `Promote from Evaluations (${evaluations.filter(e => !e.already_promoted).length})`}
-          </button>
-        ))}
+      <div className="overflow-x-auto -mx-1 px-1">
+        <div className="flex gap-1 bg-gray-100 rounded-lg p-1 w-max">
+          {(['published', 'promote'] as Tab[]).map(t => (
+            <button
+              key={t}
+              onClick={() => setTab(t)}
+              className={`px-4 py-1.5 rounded text-sm font-medium transition-colors whitespace-nowrap ${tab === t ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
+            >
+              {t === 'published' ? `All (${testimonials.length})` : `Promote from Evaluations (${evaluations.filter(e => !e.already_promoted).length})`}
+            </button>
+          ))}
+        </div>
       </div>
 
       {tab === 'published' && (
@@ -174,7 +176,7 @@ export default function TestimonialsManager() {
                 value={form.quote}
                 onChange={e => setForm(f => ({ ...f, quote: e.target.value }))}
               />
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <input
                   className="border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   placeholder="Author name"

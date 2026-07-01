@@ -53,7 +53,6 @@ export function ChatMessage({ message, onChipSelect, onAttendanceSave }: ChatMes
   const ref = useRef<HTMLDivElement>(null);
   const isUser = message.sender === 'user';
   const [copied, setCopied] = useState(false);
-  const [hovered, setHovered] = useState(false);
 
   useEffect(() => {
     const el = ref.current;
@@ -213,8 +212,6 @@ export function ChatMessage({ message, onChipSelect, onAttendanceSave }: ChatMes
     <div
       ref={ref}
       style={{ display: 'flex', flexDirection: 'column', alignItems: isUser ? 'flex-end' : 'flex-start' }}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
     >
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, width: isStructured && !isUser ? '100%' : undefined }}>
         {/* Cleff avatar for bot messages */}
@@ -222,7 +219,7 @@ export function ChatMessage({ message, onChipSelect, onAttendanceSave }: ChatMes
 
         <div style={{ position: 'relative', flex: isStructured ? 1 : undefined, maxWidth: isUser ? '80%' : isStructured ? undefined : '85%' }}>
           {renderContent()}
-          {copyable && (hovered || copied) && (
+          {copyable && (
             <button
               onClick={handleCopy}
               title="Copy for WhatsApp"
@@ -252,7 +249,7 @@ export function ChatMessage({ message, onChipSelect, onAttendanceSave }: ChatMes
           )}
         </div>
       </div>
-      <span style={{ fontSize: 10, color: '#999', marginTop: copied || hovered ? 28 : 4, marginLeft: isUser ? 0 : 36, transition: 'margin-top 0.15s' }}>
+      <span style={{ fontSize: 10, color: '#999', marginTop: copyable && !isUser ? 28 : 4, marginLeft: isUser ? 0 : 36 }}>
         {timestamp}
       </span>
     </div>

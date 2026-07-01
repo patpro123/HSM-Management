@@ -2,15 +2,17 @@
 
 const https = require('https');
 
-const GROQ_API_KEY = process.env.GROQ_API_KEY;
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-const XAI_API_KEY = process.env.XAI_API_KEY;
-const DEFAULT_PROVIDER = process.env.LLM_PROVIDER || 'groq';
+const GROQ_API_KEY      = process.env.GROQ_API_KEY;
+const GEMINI_API_KEY    = process.env.GEMINI_API_KEY;
+const XAI_API_KEY       = process.env.XAI_API_KEY;
+const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
+const DEFAULT_PROVIDER  = process.env.LLM_PROVIDER || 'groq';
 const FALLBACK_PROVIDER = process.env.LLM_FALLBACK_PROVIDER || 'groq';
-const OLLAMA_HOST = process.env.OLLAMA_HOST || 'http://localhost:11434';
-const GROQ_MODEL = process.env.GROQ_MODEL || 'llama-3.1-8b-instant';
-const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
-const XAI_MODEL = process.env.XAI_MODEL || 'grok-3-mini';
+const OLLAMA_HOST       = process.env.OLLAMA_HOST || 'http://localhost:11434';
+const GROQ_MODEL        = process.env.GROQ_MODEL || 'llama-3.1-8b-instant';
+const GEMINI_MODEL      = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+const XAI_MODEL         = process.env.XAI_MODEL || 'grok-3-mini';
+const OPENROUTER_MODEL  = process.env.OPENROUTER_MODEL || 'google/gemini-2.0-flash-exp:free';
 
 const postJson = (urlString, payload, headers = {}) => new Promise((resolve, reject) => {
   const url = new URL(urlString);
@@ -82,7 +84,12 @@ const callGroq = (messages, tools) => withRetry(() =>
   })
 );
 
-const callGemini = (messages, tools) => withRetry(() => {
+/**
+ * @param {Array}   messages
+ * @param {Array}   tools
+ * @param {boolean} jsonMode - when true, instructs Gemini to return valid JSON (default: true)
+ */
+const callGemini = (messages, tools, jsonMode = true) => withRetry(() => {
   const systemMsg = messages.find(m => m.role === 'system');
   const turns = messages.filter(m => m.role !== 'system');
 
@@ -96,7 +103,9 @@ const callGemini = (messages, tools) => withRetry(() => {
     systemInstruction: systemMsg
       ? { parts: [{ text: systemMsg.content }] }
       : undefined,
-    generationConfig: (tools && tools.length) ? undefined : { responseMimeType: 'application/json' },
+    generationConfig: (tools && tools.length)
+      ? undefined
+      : (jsonMode ? { responseMimeType: 'application/json' } : undefined),
   };
 
   if (tools && tools.length) {
@@ -135,6 +144,32 @@ const callGemini = (messages, tools) => withRetry(() => {
     };
   });
 });
+
+// OpenRouter — OpenAI-compatible, routes to hundreds of models including free tier
+const callOpenRouter = (messages, tools) => withRetry(() =>
+  postJson(
+    'https://openrouter.ai/api/v1/chat/completions',
+    {
+      model: OPENROUTER_MODEL,
+      messages,
+      tools: tools && tools.length ? tools : undefined,
+      tool_choice: tools && tools.length ? 'auto' : undefined,
+    },
+    {
+      Authorization: `Bearer ${OPENROUTER_API_KEY}`,
+      'HTTP-Referer': 'https://hsm.school',
+      'X-Title': 'HSM Management',
+    }
+  ).then(({ data }) => {
+    const choice = data.choices[0];
+    const message = choice.message;
+    return {
+      content: message.content || null,
+      tool_calls: message.tool_calls || [],
+      finish_reason: choice.finish_reason,
+    };
+  })
+);
 
 // xAI (Grok) — same OpenAI-compatible format as Groq, different base URL
 const callXAI = (messages, tools) => withRetry(() =>
@@ -184,35 +219,60 @@ const callOllama = (messages) => {
   });
 };
 
-/**
- * @param {object} opts
- * @param {Array}  opts.messages   - OpenAI-style [{role, content}]
- * @param {Array}  [opts.tools]    - OpenAI-style tool definitions
- * @param {string} [opts.provider] - 'groq' | 'gemini' | 'xai' | 'ollama'
- * @returns {Promise<{ content: string|null, tool_calls: Array }>}
- */
-const callProvider = (provider, messages, tools) => {
+const isProviderConfigured = (provider) => {
   switch (provider) {
-    case 'groq': return callGroq(messages, tools);
-    case 'gemini': return callGemini(messages, tools);
-    case 'xai': return callXAI(messages, tools);
-    case 'ollama': return callOllama(messages);
-    default: throw new Error(`Unknown LLM provider: ${provider}`);
+    case 'groq':       return !!GROQ_API_KEY;
+    case 'gemini':     return !!GEMINI_API_KEY;
+    case 'xai':        return !!XAI_API_KEY;
+    case 'openrouter': return !!OPENROUTER_API_KEY;
+    case 'ollama':     return true;
+    default:           return false;
   }
 };
 
-const callLLM = async ({ messages, tools = [], provider = DEFAULT_PROVIDER }) => {
-  try {
-    return await callProvider(provider, messages, tools);
-  } catch (err) {
-    const isRateLimited = err.statusCode === 429;
-    const fallback = FALLBACK_PROVIDER;
-    if (isRateLimited && fallback && fallback !== provider) {
-      console.warn(`[LLM] ${provider} rate-limited — falling back to ${fallback}`);
-      return callProvider(fallback, messages, tools);
+const callProvider = (provider, messages, tools, jsonMode) => {
+  switch (provider) {
+    case 'groq':       return callGroq(messages, tools);
+    case 'gemini':     return callGemini(messages, tools, jsonMode);
+    case 'xai':        return callXAI(messages, tools);
+    case 'openrouter': return callOpenRouter(messages, tools);
+    case 'ollama':     return callOllama(messages);
+    default:           throw new Error(`Unknown LLM provider: ${provider}`);
+  }
+};
+
+/**
+ * Call an LLM with automatic provider fallback.
+ *
+ * @param {object}   opts
+ * @param {Array}    opts.messages       - OpenAI-style [{role, content}]
+ * @param {Array}    [opts.tools]        - OpenAI-style tool definitions
+ * @param {string}   [opts.provider]     - Primary provider
+ * @param {string[]} [opts.fallbackChain] - Providers to try in order if the primary fails
+ * @param {boolean}  [opts.jsonMode]     - Pass false to let Gemini return plain text (default: true)
+ */
+const callLLM = async ({ messages, tools = [], provider = DEFAULT_PROVIDER, fallbackChain = [], jsonMode = true }) => {
+  const chain = [provider, ...fallbackChain].filter(isProviderConfigured);
+
+  if (!chain.length) {
+    throw new Error('No AI provider configured. Set OPENROUTER_API_KEY, GEMINI_API_KEY, or GROQ_API_KEY.');
+  }
+
+  let lastErr;
+  for (const p of chain) {
+    try {
+      const result = await callProvider(p, messages, tools, jsonMode);
+      if (p !== chain[0]) {
+        console.info(`[LLM] Successfully used fallback provider: ${p}`);
+      }
+      return result;
+    } catch (err) {
+      console.warn(`[LLM] ${p} failed (${err.statusCode || err.message}) — trying next provider`);
+      lastErr = err;
     }
-    throw err;
   }
+
+  throw lastErr;
 };
 
-module.exports = { callLLM };
+module.exports = { callLLM, isProviderConfigured };

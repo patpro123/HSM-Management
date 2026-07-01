@@ -3,6 +3,7 @@ const router = express.Router();
 const pool = require('../db');
 const { authenticateJWT } = require('../auth/jwtMiddleware');
 const { authorizeRole } = require('../auth/rbacMiddleware');
+const { callLLM } = require('../llm/client');
 
 const adminOnly = [authenticateJWT, authorizeRole(['admin'])];
 
@@ -335,6 +336,412 @@ router.delete('/brand-assets/:id', ...adminOnly, async (req, res) => {
   } catch (err) {
     console.error('[DELETE /api/marketing/brand-assets/:id]', err.message);
     res.status(500).json({ error: 'Failed to deactivate brand asset' });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// AI COPYWRITER
+// ---------------------------------------------------------------------------
+
+// POST /api/marketing/ai-copy
+router.post('/ai-copy', ...adminOnly, async (req, res) => {
+  if (!process.env.OPENROUTER_API_KEY && !process.env.GEMINI_API_KEY) {
+    return res.status(503).json({ error: 'No AI provider configured. Set OPENROUTER_API_KEY or GEMINI_API_KEY.' });
+  }
+
+  const { content_type, audience, tone, instrument, custom_context } = req.body;
+
+  const validTypes = ['tagline', 'social_post', 'ad_copy', 'whatsapp_message', 'email_subject', 'email_body'];
+  if (!content_type || !validTypes.includes(content_type)) {
+    return res.status(400).json({ error: `content_type must be one of: ${validTypes.join(', ')}` });
+  }
+
+  try {
+    const [instrRows, countRow, testimonialRows] = await Promise.all([
+      pool.query('SELECT name FROM instruments ORDER BY name'),
+      pool.query("SELECT COUNT(*) FROM students WHERE student_type = 'permanent' AND is_active = true"),
+      pool.query(`
+        SELECT quote, author_name, instrument
+        FROM marketing_testimonials
+        WHERE is_published = true AND consent_obtained = true
+        ORDER BY rating DESC NULLS LAST
+        LIMIT 3
+      `),
+    ]);
+
+    const instrumentList = instrRows.rows.map(r => r.name).join(', ');
+    const studentCount = countRow.rows[0].count;
+    const testimonialSample = testimonialRows.rows.length
+      ? testimonialRows.rows.map(t => `"${t.quote}" — ${t.author_name}${t.instrument ? ` (${t.instrument})` : ''}`).join('\n')
+      : 'None yet';
+
+    const hsmContext = `
+School: Hyderabad School of Music (HSM)
+Location: Hyderabad, India
+Instruments: ${instrumentList}
+Active enrolled students: ${studentCount}+
+Schedule: Tue–Fri evenings, Sat–Sun afternoons & evenings
+Unique strengths: Personal attention, experienced teachers, structured curriculum, friendly community
+Sample testimonials:
+${testimonialSample}
+${instrument ? `Focus instrument for this copy: ${instrument}` : ''}
+${custom_context ? `Additional context: ${custom_context}` : ''}
+`.trim();
+
+    const contentTypeDescriptions = {
+      tagline: 'a punchy brand tagline (under 10 words)',
+      social_post: 'a social media post for Instagram/Facebook (2-4 sentences with a call to action)',
+      ad_copy: 'short ad copy for Google/Meta ads (headline + 2-line description)',
+      whatsapp_message: 'a warm WhatsApp broadcast message to prospective parents (3-5 sentences)',
+      email_subject: 'an email subject line (under 60 characters, compelling)',
+      email_body: 'a short marketing email body (3-4 paragraphs, warm and professional)',
+    };
+
+    const audienceDescriptions = {
+      parents_kids: 'parents of children (6–16 years) looking for music classes',
+      adult_learners: 'adults who want to learn music as a hobby or for personal growth',
+      general: 'a broad audience of music enthusiasts in Hyderabad',
+      corporate: 'corporate professionals interested in team music experiences or gift cards',
+    };
+
+    const toneDescriptions = {
+      warm: 'warm, personal, and community-focused',
+      professional: 'professional, credible, and achievement-oriented',
+      playful: 'playful, energetic, and fun',
+      inspiring: 'inspiring, aspirational, and emotionally resonant',
+    };
+
+    const selectedAudience = audienceDescriptions[audience] || audienceDescriptions['general'];
+    const selectedTone = toneDescriptions[tone] || toneDescriptions['warm'];
+
+    const prompt = `You are a creative marketing copywriter for a music school in India.
+
+SCHOOL CONTEXT:
+${hsmContext}
+
+TASK:
+Write 3 distinct variations of ${contentTypeDescriptions[content_type]}.
+
+TARGET AUDIENCE: ${selectedAudience}
+TONE: ${selectedTone}
+
+Requirements:
+- Each variation must be meaningfully different (different angle, emotion, or hook)
+- Stay authentic to HSM's community-focused culture
+- Use natural, relatable language (avoid corporate jargon)
+- Do not use excessive exclamation marks
+- Each variation should stand alone and be immediately usable
+
+Return a JSON array with exactly 3 objects, each having:
+- "text": the copy text
+- "angle": a 2-4 word label for the creative angle (e.g. "Community focus", "Achievement story")`;
+
+    const result = await callLLM({
+      messages: [{ role: 'user', content: prompt }],
+      provider: 'openrouter',
+      fallbackChain: ['gemini'],
+      jsonMode: true,
+    });
+
+    let variants;
+    try {
+      const rawText = (result.content || '').trim();
+      const jsonMatch = rawText.match(/\[[\s\S]*\]/);
+      variants = JSON.parse(jsonMatch ? jsonMatch[0] : rawText);
+    } catch {
+      return res.status(500).json({ error: 'AI returned unexpected format', raw: result.content });
+    }
+
+    res.json({ variants, content_type, audience, tone });
+  } catch (err) {
+    console.error('[POST /api/marketing/ai-copy]', err.message);
+    res.status(500).json({ error: 'Failed to generate copy' });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// AI IMAGE PROMPT GENERATOR (Pollinations.ai)
+// ---------------------------------------------------------------------------
+
+const IMAGE_DIMENSIONS = {
+  social_square: { width: 1080, height: 1080, label: 'Social Square (1:1)' },
+  banner:        { width: 1200, height: 630,  label: 'Banner (1.9:1)' },
+  story:         { width: 768,  height: 1344, label: 'Story (9:16)' },
+  logo_concept:  { width: 512,  height: 512,  label: 'Logo Concept' },
+  whatsapp:      { width: 800,  height: 800,  label: 'WhatsApp Image' },
+};
+
+// POST /api/marketing/ai-image-prompt
+router.post('/ai-image-prompt', ...adminOnly, async (req, res) => {
+  if (!process.env.OPENROUTER_API_KEY && !process.env.GEMINI_API_KEY) {
+    return res.status(503).json({ error: 'No AI provider configured. Set OPENROUTER_API_KEY or GEMINI_API_KEY.' });
+  }
+
+  const { image_type = 'social_square', audience, instrument, custom_context } = req.body;
+
+  if (!IMAGE_DIMENSIONS[image_type]) {
+    return res.status(400).json({ error: `image_type must be one of: ${Object.keys(IMAGE_DIMENSIONS).join(', ')}` });
+  }
+
+  const { width, height } = IMAGE_DIMENSIONS[image_type];
+
+  try {
+    const [instrRows, countRow] = await Promise.all([
+      pool.query('SELECT name FROM instruments ORDER BY name'),
+      pool.query("SELECT COUNT(*) FROM students WHERE student_type = 'permanent' AND is_active = true"),
+    ]);
+
+    const instrumentList = instrRows.rows.map(r => r.name).join(', ');
+    const studentCount = countRow.rows[0].count;
+
+    const audienceDescriptions = {
+      parents_kids: 'parents of children aged 6–16',
+      adult_learners: 'adults learning music as a personal hobby',
+      general: 'a broad Indian urban audience',
+      corporate: 'corporate professionals interested in team experiences',
+    };
+
+    const prompt = `You are an expert at writing image generation prompts for AI image models (Stable Diffusion / FLUX style).
+
+SCHOOL CONTEXT:
+- Name: Hyderabad School of Music (HSM)
+- Location: Hyderabad, India
+- Instruments offered: ${instrumentList}
+- Active students: ${studentCount}+
+- Vibe: warm, community-focused, modern yet rooted in Indian classical music heritage
+- Brand colors: warm orange, white, deep charcoal
+${instrument ? `- Featured instrument: ${instrument}` : ''}
+${custom_context ? `- Additional context: ${custom_context}` : ''}
+
+TARGET AUDIENCE: ${audienceDescriptions[audience] || 'general music enthusiasts'}
+IMAGE FORMAT: ${IMAGE_DIMENSIONS[image_type].label} — optimized for ${image_type.replace('_', ' ')}
+
+Generate 3 distinct image prompts. Each must have a completely different visual concept:
+1. One featuring people / human emotion
+2. One featuring instruments / music objects
+3. One featuring atmosphere / abstract mood
+
+Each prompt must be:
+- Highly detailed and visual (describe subject, style, lighting, mood, colors)
+- Suitable for a professional music school's marketing
+- Culturally resonant with urban India
+- Between 40–80 words
+- NOT contain any text overlays or typography instructions
+
+Return a JSON array with exactly 3 objects:
+[
+  { "angle": "2-4 word concept label", "prompt": "the full image generation prompt" },
+  { "angle": "...", "prompt": "..." },
+  { "angle": "...", "prompt": "..." }
+]`;
+
+    const result = await callLLM({
+      messages: [{ role: 'user', content: prompt }],
+      provider: 'openrouter',
+      fallbackChain: ['gemini'],
+      jsonMode: true,
+    });
+
+    let concepts;
+    try {
+      const rawText = (result.content || '').trim();
+      const jsonMatch = rawText.match(/\[[\s\S]*\]/);
+      concepts = JSON.parse(jsonMatch ? jsonMatch[0] : rawText);
+    } catch {
+      return res.status(500).json({ error: 'AI returned unexpected format', raw: result.content });
+    }
+
+    const images = concepts.map((c, i) => {
+      const seed = Math.floor(Math.random() * 9000000) + 1000000;
+      const encodedPrompt = encodeURIComponent(
+        `${c.prompt}, professional photography, high quality, sharp focus`
+      );
+      return {
+        angle: c.angle,
+        prompt: c.prompt,
+        seed,
+        width,
+        height,
+        url: `https://image.pollinations.ai/prompt/${encodedPrompt}?width=${width}&height=${height}&nologo=true&model=flux&seed=${seed}`,
+        thumbnail_url: `https://image.pollinations.ai/prompt/${encodedPrompt}?width=${Math.round(width / 2)}&height=${Math.round(height / 2)}&nologo=true&model=flux&seed=${seed}`,
+      };
+    });
+
+    res.json({ images, image_type, dimensions: { width, height } });
+  } catch (err) {
+    console.error('[POST /api/marketing/ai-image-prompt]', err.message);
+    res.status(500).json({ error: 'Failed to generate image prompts' });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// AI WHATSAPP EVENT PROMO GENERATOR
+// ---------------------------------------------------------------------------
+
+// POST /api/marketing/ai-whatsapp-promo
+// Generates a warm, event-specific WhatsApp promo message from structured fields
+router.post('/ai-whatsapp-promo', ...adminOnly, async (req, res) => {
+  if (!process.env.OPENROUTER_API_KEY && !process.env.GEMINI_API_KEY) {
+    return res.status(503).json({ error: 'No AI provider configured. Set OPENROUTER_API_KEY or GEMINI_API_KEY.' });
+  }
+
+  const { event_name, event_date, event_time, venue, instruments, registration_link, special_info, max_words } = req.body;
+  const wordLimit = Math.max(50, Math.min(500, parseInt(max_words, 10) || 150));
+
+  try {
+    const [countRow, testimonialRows] = await Promise.all([
+      pool.query("SELECT COUNT(*) FROM students WHERE student_type = 'permanent' AND is_active = true"),
+      pool.query(`
+        SELECT quote, author_name
+        FROM marketing_testimonials
+        WHERE is_published = true AND consent_obtained = true
+        ORDER BY rating DESC NULLS LAST
+        LIMIT 2
+      `),
+    ]);
+
+    const studentCount = countRow.rows[0].count;
+    const testimonialSample = testimonialRows.rows.length
+      ? testimonialRows.rows.map(t => `"${t.quote}" — ${t.author_name}`).join('\n')
+      : '';
+
+    let dateDisplay = '';
+    if (event_date) {
+      const d = new Date(event_date + 'T00:00:00');
+      const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+      const months = ['January', 'February', 'March', 'April', 'May', 'June',
+        'July', 'August', 'September', 'October', 'November', 'December'];
+      dateDisplay = `${days[d.getDay()]}, ${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;
+    }
+
+    const prompt = `You are a warm, enthusiastic community writer for Hyderabad School of Music (HSM), a beloved music school in Hyderabad, India, with ${studentCount}+ enrolled students. You write like a trusted friend who genuinely loves music and the community.
+
+Write a WhatsApp broadcast message to promote the following event. The goal is to excite parents, students, and music lovers — and get them to register.
+
+EVENT DETAILS:
+- Event: ${event_name || 'Demo Day'}
+${dateDisplay ? `- Date: ${dateDisplay}` : ''}
+${event_time ? `- Time: ${event_time}` : ''}
+- Venue: ${venue || 'HSM Main Branch'}, Hyderabad
+${instruments && instruments.length > 0 ? `- Instruments showcased: ${instruments.join(', ')}` : ''}
+- Registration link: ${registration_link || 'https://portal.hsm.org.in/demoday'}
+${special_info ? `- Special information: ${special_info}` : ''}
+${testimonialSample ? `\nWhat our community says:\n${testimonialSample}` : ''}
+
+RULES:
+- Use WhatsApp markdown: *bold text* for key details like the event name, date, and CTA
+- Use emojis tastefully — 4 to 6 total, not at every line
+- Write in natural flowing paragraphs — no robotic bullet lists
+- Keep it under ${wordLimit} words — the user has requested this length limit; respect it strictly
+- Weave all event details into the narrative naturally
+- Include a clear, warm call-to-action with the registration link
+- End with a friendly sign-off from *Team HSM* 🎶
+- Do NOT use corporate phrases like "we are pleased to announce" or "kindly be informed"
+- Write as if personally inviting a close friend who would genuinely enjoy this
+
+Return ONLY the WhatsApp message text. No quotes, no explanation.`;
+
+    const result = await callLLM({
+      messages: [{ role: 'user', content: prompt }],
+      provider: 'openrouter',
+      fallbackChain: ['gemini'],
+      jsonMode: false,
+    });
+
+    const messageText = (result.content || '').trim();
+    if (!messageText) return res.status(500).json({ error: 'AI returned an empty response' });
+
+    res.json({ message: messageText });
+  } catch (err) {
+    console.error('[POST /api/marketing/ai-whatsapp-promo]', err.message);
+    res.status(500).json({ error: 'Failed to generate WhatsApp message' });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// WHATSAPP EVENT PROMOTION MESSAGES
+// ---------------------------------------------------------------------------
+
+// GET /api/marketing/whatsapp-messages
+router.get('/whatsapp-messages', ...adminOnly, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT * FROM marketing_whatsapp_messages WHERE is_active = true ORDER BY updated_at DESC`
+    );
+    res.json({ messages: rows });
+  } catch (err) {
+    console.error('[GET /api/marketing/whatsapp-messages]', err.message);
+    res.status(500).json({ error: 'Failed to fetch WhatsApp messages' });
+  }
+});
+
+// POST /api/marketing/whatsapp-messages
+router.post('/whatsapp-messages', ...adminOnly, async (req, res) => {
+  const { name, event_name, event_date, event_time, venue, instruments, registration_link, special_info } = req.body;
+  if (!name) return res.status(400).json({ error: 'name is required' });
+  try {
+    const { rows } = await pool.query(`
+      INSERT INTO marketing_whatsapp_messages
+        (name, event_name, event_date, event_time, venue, instruments, registration_link, special_info)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      RETURNING *
+    `, [
+      name,
+      event_name || 'Demo Day',
+      event_date || null,
+      event_time || null,
+      venue || 'HSM Main Branch',
+      instruments || [],
+      registration_link || 'https://portal.hsm.org.in/demoday',
+      special_info || null,
+    ]);
+    res.status(201).json({ message: rows[0] });
+  } catch (err) {
+    console.error('[POST /api/marketing/whatsapp-messages]', err.message);
+    res.status(500).json({ error: 'Failed to create WhatsApp message' });
+  }
+});
+
+// PUT /api/marketing/whatsapp-messages/:id
+router.put('/whatsapp-messages/:id', ...adminOnly, async (req, res) => {
+  const { id } = req.params;
+  const { name, event_name, event_date, event_time, venue, instruments, registration_link, special_info } = req.body;
+  try {
+    const { rows } = await pool.query(`
+      UPDATE marketing_whatsapp_messages SET
+        name              = COALESCE($1, name),
+        event_name        = COALESCE($2, event_name),
+        event_date        = $3,
+        event_time        = COALESCE($4, event_time),
+        venue             = COALESCE($5, venue),
+        instruments       = COALESCE($6, instruments),
+        registration_link = COALESCE($7, registration_link),
+        special_info      = $8,
+        updated_at        = NOW()
+      WHERE id = $9 AND is_active = true
+      RETURNING *
+    `, [name, event_name, event_date || null, event_time, venue, instruments, registration_link, special_info || null, id]);
+    if (!rows.length) return res.status(404).json({ error: 'Message not found' });
+    res.json({ message: rows[0] });
+  } catch (err) {
+    console.error('[PUT /api/marketing/whatsapp-messages/:id]', err.message);
+    res.status(500).json({ error: 'Failed to update WhatsApp message' });
+  }
+});
+
+// DELETE /api/marketing/whatsapp-messages/:id — soft delete
+router.delete('/whatsapp-messages/:id', ...adminOnly, async (req, res) => {
+  const { id } = req.params;
+  try {
+    const { rows } = await pool.query(
+      `UPDATE marketing_whatsapp_messages SET is_active = false WHERE id = $1 RETURNING id`,
+      [id]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Message not found' });
+    res.json({ success: true });
+  } catch (err) {
+    console.error('[DELETE /api/marketing/whatsapp-messages/:id]', err.message);
+    res.status(500).json({ error: 'Failed to delete WhatsApp message' });
   }
 });
 

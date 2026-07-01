@@ -67,7 +67,7 @@ export default function OverdueProspects() {
             const instrument = (p.metadata as Record<string, string>)?.interested_instrument || '';
             const stageLabel = p.student_type === 'demo_day' ? 'Demo booked' : 'Prospect';
             return (
-              <div key={p.id} className="flex items-center justify-between px-4 py-3 bg-white hover:bg-gray-50">
+              <div key={p.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between px-4 py-3 bg-white hover:bg-gray-50 gap-2">
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-medium text-gray-900 truncate">{p.name}</span>
@@ -82,7 +82,7 @@ export default function OverdueProspects() {
                     <div className="text-xs text-gray-400">No contact recorded</div>
                   )}
                 </div>
-                <div className="flex items-center gap-2 shrink-0">
+                <div className="flex items-center gap-2 sm:shrink-0">
                   <HoursLabel hours={p.hours_since_contact} />
                   <a
                     href={`https://wa.me/91${phone?.replace(/\D/g, '')}`}

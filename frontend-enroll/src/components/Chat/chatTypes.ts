@@ -117,10 +117,10 @@ export interface BotApiResponse {
 
 const DEFAULT_CHIPS: Record<ChatUserRole, QuickReplyChip[]> = {
   admin: [
-    { label: "Today's attendance", value: "Show me today's attendance summary",  icon: '📋' },
-    { label: 'Finance summary',    value: 'Give me this month finance summary',   icon: '💰' },
-    { label: 'Prospects',          value: 'Give me a prospect summary',            icon: '🎯' },
-    { label: 'Low credits',        value: 'Who has overdue payments?',             icon: '⚠️'  },
+    { label: "Today's attendance", value: "Show me today's attendance summary",                    icon: '📋' },
+    { label: 'Finance summary',    value: 'Give me this month finance summary',                    icon: '💰' },
+    { label: 'Student turnover',   value: 'Show me student turnover this month vs last month',     icon: '📊' },
+    { label: 'Low credits',        value: 'Who has overdue payments?',                             icon: '⚠️'  },
   ],
   teacher: [
     { label: 'My batches today',  value: 'Which of my batches are today?',          icon: '📅' },
