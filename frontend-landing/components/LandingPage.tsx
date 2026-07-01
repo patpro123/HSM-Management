@@ -128,7 +128,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ teachers, batches }) => {
 
     return (
         <div className={`landing-wrapper ${isPromoActive ? 'has-promo' : ''}`}>
-            <PromoBanner onVisibilityChange={setIsPromoActive} enabled={flashConfig?.demo_day_banner_enabled ?? true} flashConfig={flashConfig} />
+            <PromoBanner onVisibilityChange={setIsPromoActive} enabled={flashConfig !== null && (flashConfig?.demo_day_banner_enabled ?? false)} flashConfig={flashConfig} />
             <Navbar
                 isScrolled={isScrolled}
                 onLogin={() => { window.location.href = `${API_BASE_URL}/api/auth/google`; }}
