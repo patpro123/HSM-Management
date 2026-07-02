@@ -267,7 +267,8 @@ const callLLM = async ({ messages, tools = [], provider = DEFAULT_PROVIDER, fall
       }
       return result;
     } catch (err) {
-      console.warn(`[LLM] ${p} failed (${err.statusCode || err.message}) — trying next provider`);
+      const detail = err.body ? ` — ${err.body.slice(0, 300)}` : '';
+      console.warn(`[LLM] ${p} failed (${err.statusCode || err.message})${detail} — trying next provider`);
       lastErr = err;
     }
   }
