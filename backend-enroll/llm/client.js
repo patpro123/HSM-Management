@@ -89,7 +89,7 @@ const callGroq = (messages, tools) => withRetry(() =>
  * @param {Array}   tools
  * @param {boolean} jsonMode - when true, instructs Gemini to return valid JSON (default: true)
  */
-const callGemini = (messages, tools, jsonMode = true) => withRetry(() => {
+const callGemini = (messages, tools, jsonMode = true, modelOverride) => withRetry(() => {
   const systemMsg = messages.find(m => m.role === 'system');
   const turns = messages.filter(m => m.role !== 'system');
 
@@ -119,7 +119,7 @@ const callGemini = (messages, tools, jsonMode = true) => withRetry(() => {
   }
 
   return postJson(
-    `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/${modelOverride || GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`,
     body
   ).then(({ data }) => {
     const candidate = data.candidates[0];
@@ -146,11 +146,11 @@ const callGemini = (messages, tools, jsonMode = true) => withRetry(() => {
 });
 
 // OpenRouter — OpenAI-compatible, routes to hundreds of models including free tier
-const callOpenRouter = (messages, tools) => withRetry(() =>
+const callOpenRouter = (messages, tools, modelOverride) => withRetry(() =>
   postJson(
     'https://openrouter.ai/api/v1/chat/completions',
     {
-      model: OPENROUTER_MODEL,
+      model: modelOverride || OPENROUTER_MODEL,
       messages,
       tools: tools && tools.length ? tools : undefined,
       tool_choice: tools && tools.length ? 'auto' : undefined,
@@ -230,12 +230,12 @@ const isProviderConfigured = (provider) => {
   }
 };
 
-const callProvider = (provider, messages, tools, jsonMode) => {
+const callProvider = (provider, messages, tools, jsonMode, modelOverride) => {
   switch (provider) {
     case 'groq':       return callGroq(messages, tools);
-    case 'gemini':     return callGemini(messages, tools, jsonMode);
+    case 'gemini':     return callGemini(messages, tools, jsonMode, modelOverride);
     case 'xai':        return callXAI(messages, tools);
-    case 'openrouter': return callOpenRouter(messages, tools);
+    case 'openrouter': return callOpenRouter(messages, tools, modelOverride);
     case 'ollama':     return callOllama(messages);
     default:           throw new Error(`Unknown LLM provider: ${provider}`);
   }
@@ -251,7 +251,7 @@ const callProvider = (provider, messages, tools, jsonMode) => {
  * @param {string[]} [opts.fallbackChain] - Providers to try in order if the primary fails
  * @param {boolean}  [opts.jsonMode]     - Pass false to let Gemini return plain text (default: true)
  */
-const callLLM = async ({ messages, tools = [], provider = DEFAULT_PROVIDER, fallbackChain = [], jsonMode = true }) => {
+const callLLM = async ({ messages, tools = [], provider = DEFAULT_PROVIDER, fallbackChain = [], jsonMode = true, modelOverride }) => {
   const chain = [provider, ...fallbackChain].filter(isProviderConfigured);
 
   if (!chain.length) {
@@ -261,7 +261,7 @@ const callLLM = async ({ messages, tools = [], provider = DEFAULT_PROVIDER, fall
   let lastErr;
   for (const p of chain) {
     try {
-      const result = await callProvider(p, messages, tools, jsonMode);
+      const result = await callProvider(p, messages, tools, jsonMode, modelOverride);
       if (p !== chain[0]) {
         console.info(`[LLM] Successfully used fallback provider: ${p}`);
       }

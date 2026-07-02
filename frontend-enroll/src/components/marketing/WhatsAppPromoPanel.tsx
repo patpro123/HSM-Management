@@ -96,6 +96,14 @@ export default function WhatsAppPromoPanel() {
   const [aiIsStale, setAiIsStale]     = useState(false);
   const generatedSnapshotRef          = useRef('');
 
+  // ── LLM selector ──────────────────────────────────────────────────────────
+  const [llmMode, setLlmMode]           = useState<'default' | 'custom'>('default');
+  const [customProvider, setCustomProvider] = useState<'openrouter' | 'gemini'>('openrouter');
+  const [customModel, setCustomModel]   = useState('');
+  const [orModels, setOrModels]         = useState<{ id: string; name: string }[]>([]);
+  const [loadingModels, setLoadingModels] = useState(false);
+  const [modelsError, setModelsError]   = useState('');
+
   // ── shared ui ─────────────────────────────────────────────────────────────
   const [copied, setCopied] = useState(false);
   const [error, setError]   = useState('');
@@ -113,6 +121,28 @@ export default function WhatsAppPromoPanel() {
     setAiIsStale(snapshot !== generatedSnapshotRef.current);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [eventName, eventDate, eventTime, venue, JSON.stringify(instruments), registrationLink, specialInfo, maxWords]);
+
+  useEffect(() => {
+    if (llmMode === 'custom' && customProvider === 'openrouter' && orModels.length === 0 && !loadingModels) {
+      fetchOrModels();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [llmMode, customProvider]);
+
+  async function fetchOrModels() {
+    setLoadingModels(true);
+    setModelsError('');
+    try {
+      const data = await apiGet('/api/marketing/llm-models?provider=openrouter');
+      const models: { id: string; name: string }[] = data.models || [];
+      setOrModels(models);
+      if (models.length > 0) setCustomModel(prev => prev || models[0].id);
+    } catch (err) {
+      setModelsError(err instanceof Error ? err.message : 'Failed to load models');
+    } finally {
+      setLoadingModels(false);
+    }
+  }
 
   async function fetchSaved() {
     setLoadingList(true);
@@ -138,7 +168,7 @@ export default function WhatsAppPromoPanel() {
     setIsGenerating(true);
     setGenError('');
     try {
-      const data = await apiPost('/api/marketing/ai-whatsapp-promo', {
+      const body: Record<string, unknown> = {
         event_name: eventName,
         event_date: eventDate || null,
         event_time: eventTime || null,
@@ -147,7 +177,12 @@ export default function WhatsAppPromoPanel() {
         registration_link: registrationLink || DEFAULT_LINK,
         special_info: specialInfo || null,
         max_words: maxWords,
-      });
+      };
+      if (llmMode === 'custom') {
+        body.llm_provider = customProvider;
+        if (customProvider === 'openrouter' && customModel) body.llm_model = customModel;
+      }
+      const data = await apiPost('/api/marketing/ai-whatsapp-promo', body);
       setAiMessage(data.message);
       setPreviewMode('ai');
       generatedSnapshotRef.current = JSON.stringify({ eventName, eventDate, eventTime, venue, instruments, registrationLink, specialInfo, maxWords });
@@ -425,6 +460,67 @@ export default function WhatsAppPromoPanel() {
                     </button>
                   ))}
                 </div>
+              </div>
+
+              {/* LLM selector */}
+              <div className="border border-gray-100 rounded-lg px-3 py-2 space-y-2 bg-gray-50">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-medium text-gray-500 shrink-0">LLM</span>
+                  <div className="flex gap-1">
+                    {(['default', 'custom'] as const).map(m => (
+                      <button key={m} onClick={() => setLlmMode(m)}
+                        className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${
+                          llmMode === m ? 'bg-white shadow text-gray-800 border border-gray-200' : 'text-gray-400 hover:text-gray-600'
+                        }`}>
+                        {m === 'default' ? 'Default' : 'Custom'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {llmMode === 'custom' && (
+                  <div className="space-y-2">
+                    <div className="flex gap-1">
+                      {(['openrouter', 'gemini'] as const).map(p => (
+                        <button key={p} onClick={() => setCustomProvider(p)}
+                          className={`flex-1 px-2 py-1 rounded border text-xs font-medium transition-colors ${
+                            customProvider === p ? 'border-violet-400 bg-violet-50 text-violet-700' : 'border-gray-200 text-gray-500 hover:border-gray-300'
+                          }`}>
+                          {p === 'openrouter' ? 'OpenRouter' : 'Gemini'}
+                        </button>
+                      ))}
+                    </div>
+
+                    {customProvider === 'openrouter' && (
+                      <div className="space-y-1">
+                        <div className="flex gap-1">
+                          <select
+                            value={customModel}
+                            onChange={e => setCustomModel(e.target.value)}
+                            disabled={loadingModels || orModels.length === 0}
+                            className="flex-1 px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:border-violet-400 bg-white disabled:opacity-60"
+                          >
+                            {loadingModels && <option>Loading models…</option>}
+                            {!loadingModels && orModels.length === 0 && !modelsError && <option>No free models found</option>}
+                            {orModels.map(m => (
+                              <option key={m.id} value={m.id}>{m.name}</option>
+                            ))}
+                          </select>
+                          <button onClick={fetchOrModels} disabled={loadingModels}
+                            title="Refresh model list"
+                            className="px-2 py-1 border border-gray-200 rounded text-xs text-gray-400 hover:text-gray-600 hover:border-gray-300 disabled:opacity-50 transition-colors">
+                            {loadingModels ? <Spinner /> : '↻'}
+                          </button>
+                        </div>
+                        {modelsError && <p className="text-xs text-red-500">{modelsError}</p>}
+                      </div>
+                    )}
+
+                    {customProvider === 'gemini' && (
+                      <p className="text-xs text-gray-400">Uses the Gemini model configured on the server.</p>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Generate / Regenerate button */}

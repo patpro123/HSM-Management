@@ -1,9 +1,31 @@
 const express = require('express');
+const https = require('https');
 const router = express.Router();
 const pool = require('../db');
 const { authenticateJWT } = require('../auth/jwtMiddleware');
 const { authorizeRole } = require('../auth/rbacMiddleware');
 const { callLLM } = require('../llm/client');
+
+const getJson = (urlString, headers = {}) => new Promise((resolve, reject) => {
+  const url = new URL(urlString);
+  const req = https.request(
+    { method: 'GET', hostname: url.hostname, port: 443, path: url.pathname + (url.search || ''), headers },
+    (res) => {
+      let data = '';
+      res.on('data', c => { data += c; });
+      res.on('end', () => {
+        if (res.statusCode >= 400) {
+          const err = new Error(`HTTP ${res.statusCode}`);
+          err.statusCode = res.statusCode;
+          return reject(err);
+        }
+        try { resolve(JSON.parse(data)); } catch (e) { reject(new Error('Invalid JSON')); }
+      });
+    }
+  );
+  req.on('error', reject);
+  req.end();
+});
 
 const adminOnly = [authenticateJWT, authorizeRole(['admin'])];
 
@@ -340,6 +362,49 @@ router.delete('/brand-assets/:id', ...adminOnly, async (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
+// LLM MODEL DISCOVERY
+// ---------------------------------------------------------------------------
+
+// GET /api/marketing/llm-models?provider=openrouter|gemini
+// Returns available models for the given provider (free tier for OpenRouter)
+router.get('/llm-models', ...adminOnly, async (req, res) => {
+  const { provider = 'openrouter' } = req.query;
+
+  if (provider === 'openrouter') {
+    if (!process.env.OPENROUTER_API_KEY) {
+      return res.status(503).json({ error: 'OPENROUTER_API_KEY not configured on server' });
+    }
+    try {
+      const data = await getJson('https://openrouter.ai/api/v1/models', {
+        Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
+        'HTTP-Referer': 'https://hsm.school',
+        'X-Title': 'HSM Management',
+      });
+      const freeModels = (data.data || [])
+        .filter(m => m.id.includes(':free') || (m.pricing?.prompt === '0' && m.pricing?.completion === '0'))
+        .map(m => ({ id: m.id, name: m.name || m.id }))
+        .sort((a, b) => a.name.localeCompare(b.name));
+      res.json({ models: freeModels, provider: 'openrouter' });
+    } catch (err) {
+      console.error('[GET /api/marketing/llm-models]', err.message);
+      res.status(500).json({ error: 'Failed to fetch OpenRouter models' });
+    }
+  } else if (provider === 'gemini') {
+    res.json({
+      models: [
+        { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash' },
+        { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash' },
+        { id: 'gemini-1.5-flash', name: 'Gemini 1.5 Flash' },
+        { id: 'gemini-1.5-pro', name: 'Gemini 1.5 Pro' },
+      ],
+      provider: 'gemini',
+    });
+  } else {
+    res.status(400).json({ error: 'provider must be openrouter or gemini' });
+  }
+});
+
+// ---------------------------------------------------------------------------
 // AI COPYWRITER
 // ---------------------------------------------------------------------------
 
@@ -585,7 +650,7 @@ router.post('/ai-whatsapp-promo', ...adminOnly, async (req, res) => {
     return res.status(503).json({ error: 'No AI provider configured. Set OPENROUTER_API_KEY or GEMINI_API_KEY.' });
   }
 
-  const { event_name, event_date, event_time, venue, instruments, registration_link, special_info, max_words } = req.body;
+  const { event_name, event_date, event_time, venue, instruments, registration_link, special_info, max_words, llm_provider, llm_model } = req.body;
   const wordLimit = Math.max(50, Math.min(500, parseInt(max_words, 10) || 150));
 
   try {
@@ -643,9 +708,10 @@ Return ONLY the WhatsApp message text. No quotes, no explanation.`;
 
     const result = await callLLM({
       messages: [{ role: 'user', content: prompt }],
-      provider: 'openrouter',
-      fallbackChain: ['gemini'],
+      provider: llm_provider || 'openrouter',
+      fallbackChain: llm_provider ? [] : ['gemini'],
       jsonMode: false,
+      modelOverride: llm_model || undefined,
     });
 
     const messageText = (result.content || '').trim();
