@@ -161,6 +161,35 @@ async function notifyEnrollmentWelcome(studentId, studentName, instrument) {
   }
 }
 
+async function notifyMakeupMaterial(studentId, studentName, instrument, sessionDate, materialTitle) {
+  if (!isEnabled()) return;
+  try {
+    const phone = await getOptedInPhone(studentId);
+    if (!phone) return;
+
+    const dateStr = sessionDate
+      ? new Date(sessionDate + 'T00:00:00').toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
+      : 'your missed class';
+
+    const result = await sendTemplate(phone, 'makeup_material_assigned', [
+      {
+        type: 'body',
+        parameters: [
+          { type: 'text', text: studentName },
+          { type: 'text', text: instrument },
+          { type: 'text', text: dateStr },
+          { type: 'text', text: materialTitle },
+        ],
+      },
+    ]);
+
+    const waId = result?.messages?.[0]?.id;
+    await logMessage('outbound', phone, 'makeup_material_assigned', null, waId, studentId);
+  } catch (err) {
+    console.error('WhatsApp makeup material notify error:', err.message);
+  }
+}
+
 module.exports = {
   isEnabled,
   normalizePhone,
@@ -170,4 +199,5 @@ module.exports = {
   notifyClassesLow,
   notifyPaymentReceived,
   notifyEnrollmentWelcome,
+  notifyMakeupMaterial,
 };

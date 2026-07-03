@@ -26,6 +26,15 @@ interface Submission {
   theory_answer_storage_id: string | null;
 }
 
+interface MakeupAttachment {
+  id: string;
+  file_storage_id: string | null;
+  label: string | null;
+  public_url: string | null;
+  file_name: string | null;
+  mime_type: string | null;
+}
+
 interface Assignment {
   id: string;
   student_id: string;
@@ -51,6 +60,10 @@ interface Assignment {
   habit_target_latest_voice_storage_id: string | null;
   theory_prompt_text: string | null;
   theory_prompt_storage_id: string | null;
+  is_makeup: boolean;
+  session_date: string | null;
+  batch_id: string | null;
+  attachments: MakeupAttachment[];
 }
 
 interface AudioInstruction {
@@ -770,13 +783,53 @@ const HomeworkTab: React.FC<HomeworkTabProps> = ({ studentId, selfMode }) => {
           {assignments.map((a) => {
             const isExpanded = expandedId === a.id;
             const isReviewOpen = reviewExpandedId === a.id;
-            const canSubmit = selfMode && (a.status === 'pending' || a.status === 'returned');
+            const canSubmit = selfMode && !a.is_makeup && (a.status === 'pending' || a.status === 'returned');
 
             return (
-              <div key={a.id} className="border border-gray-200 rounded-xl bg-white overflow-hidden shadow-sm">
+              <div key={a.id} className={`border rounded-xl bg-white overflow-hidden shadow-sm ${a.is_makeup ? 'border-amber-200' : 'border-gray-200'}`}>
 
                 {/* ── Card header ── */}
                 <div className="p-4">
+                  {/* Makeup material card */}
+                  {a.is_makeup && (
+                    <div>
+                      <div className="flex flex-wrap items-center gap-2 mb-2">
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-xs font-semibold">
+                          Makeup Material
+                        </span>
+                        {a.session_date && (
+                          <span className="text-xs text-gray-400">
+                            {new Date(a.session_date + 'T00:00:00').toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                          </span>
+                        )}
+                      </div>
+                      <p className="font-semibold text-sm text-gray-800 mb-1">{a.title}</p>
+                      {a.instructions && (
+                        <p className="text-xs text-gray-500 leading-relaxed mb-3">{a.instructions}</p>
+                      )}
+                      {Array.isArray(a.attachments) && a.attachments.length > 0 && (
+                        <div className="space-y-1.5">
+                          {a.attachments.map(att => (
+                            <a
+                              key={att.id}
+                              href={att.public_url || '#'}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex items-center gap-2 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2 text-sm text-amber-800 hover:bg-amber-100 transition-colors"
+                            >
+                              <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                              </svg>
+                              <span className="truncate">{att.label || att.file_name || 'Attachment'}</span>
+                            </a>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Regular homework card */}
+                  {!a.is_makeup && (
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex-1 min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
@@ -948,6 +1001,7 @@ const HomeworkTab: React.FC<HomeworkTabProps> = ({ studentId, selfMode }) => {
                       )}
                     </div>
                   </div>
+                  )}
 
                   {/* Submission metadata */}
                   {a.submission && (

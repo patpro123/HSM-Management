@@ -206,6 +206,46 @@ router.get('/homework/recent', async (req, res) => {
   }
 });
 
+// GET /api/homework/:id — single assignment detail (title, instructions, theory task, attachments)
+// Used to review exactly what was assigned, e.g. after assigning makeup material.
+router.get('/homework/:id', async (req, res) => {
+  const { id } = req.params;
+  try {
+    const result = await pool.query(
+      `SELECT
+         a.id, a.student_id, s.name AS student_name, a.title, a.instructions,
+         a.assigned_by, a.created_at, a.status,
+         a.theory_prompt_text, a.theory_prompt_storage_id,
+         a.is_makeup, a.batch_id, a.session_date,
+         i.name AS instrument_name,
+         COALESCE((
+           SELECT json_agg(json_build_object(
+             'id',              ha.id,
+             'file_storage_id', ha.file_storage_id,
+             'label',           ha.label,
+             'public_url',      fs.public_url,
+             'file_name',       fs.file_name,
+             'mime_type',       fs.mime_type
+           ) ORDER BY ha.created_at)
+           FROM homework_attachments ha
+           LEFT JOIN file_storage fs ON fs.id = ha.file_storage_id
+           WHERE ha.assignment_id = a.id
+         ), '[]'::json) AS attachments
+       FROM homework_assignments a
+       JOIN students s ON s.id = a.student_id
+       LEFT JOIN batches     b ON b.id = a.batch_id
+       LEFT JOIN instruments i ON i.id = b.instrument_id
+       WHERE a.id = $1`,
+      [id]
+    );
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Assignment not found' });
+    res.json({ assignment: result.rows[0] });
+  } catch (err) {
+    console.error('[GET /homework/:id]', err);
+    res.status(500).json({ error: 'Failed to fetch assignment' });
+  }
+});
+
 // GET /api/students/:studentId/homework — list assignments with submission info (no file_data)
 router.get('/students/:studentId/homework', async (req, res) => {
   const { studentId } = req.params;
@@ -242,6 +282,22 @@ router.get('/students/:studentId/homework', async (req, res) => {
          ) AS habit_target_latest_voice_storage_id,
          a.theory_prompt_text,
          a.theory_prompt_storage_id,
+         a.is_makeup,
+         a.batch_id,
+         a.session_date,
+         COALESCE((
+           SELECT json_agg(json_build_object(
+             'id',              ha.id,
+             'file_storage_id', ha.file_storage_id,
+             'label',           ha.label,
+             'public_url',      fs.public_url,
+             'file_name',       fs.file_name,
+             'mime_type',       fs.mime_type
+           ) ORDER BY ha.created_at)
+           FROM homework_attachments ha
+           LEFT JOIN file_storage fs ON fs.id = ha.file_storage_id
+           WHERE ha.assignment_id = a.id
+         ), '[]'::json) AS attachments,
          CASE WHEN s.id IS NOT NULL THEN json_build_object(
            'id',                       s.id,
            'file_name',                s.file_name,
@@ -257,7 +313,7 @@ router.get('/students/:studentId/homework', async (req, res) => {
        LEFT JOIN homework_submissions s ON s.assignment_id = a.id
        LEFT JOIN habits ht ON ht.id = a.habit_target_habit_id
        WHERE a.student_id = $1
-       ORDER BY a.created_at DESC`,
+       ORDER BY a.is_makeup ASC, a.created_at DESC`,
       [studentId]
     );
     res.json({ assignments: result.rows });
@@ -784,6 +840,141 @@ router.delete('/homework/audio-instructions/:id', async (req, res) => {
   } catch (err) {
     console.error('Error deleting audio instruction:', err);
     res.status(500).json({ error: 'Failed to delete audio instruction' });
+  }
+});
+
+// POST /api/homework/assign-makeup — assign makeup material (multi-file) to an absent student
+router.post('/homework/assign-makeup', resolveUser, async (req, res) => {
+  if (!req.user) return res.status(401).json({ error: 'Authentication required' });
+
+  const {
+    student_id, batch_id, session_date, title, instructions, files,
+    theory_prompt_text, theory_prompt_file,
+  } = req.body;
+  if (!student_id || !title?.trim()) {
+    return res.status(400).json({ error: 'student_id and title are required' });
+  }
+
+  const driveService = require('../services/driveService');
+  const wa           = require('../services/whatsappService');
+
+  // Upload theory sheet, if provided — mirrors /homework/assign and /homework/assign-bulk.
+  let theoryPromptStorageId = null;
+  let theoryUploadFailed = false;
+  if (theory_prompt_file) {
+    const useDrive = process.env.DRIVE_ENABLED === 'true' && Boolean(process.env.DRIVE_FOLDER_HOMEWORK_AUDIO);
+    if (useDrive) {
+      try {
+        const base64Part = theory_prompt_file.includes(',') ? theory_prompt_file.split(',')[1] : theory_prompt_file;
+        const buffer = Buffer.from(base64Part, 'base64');
+        const { fileStorageId } = await driveService.upload({
+          buffer,
+          fileName: `theory_prompt_makeup_${Date.now()}.pdf`,
+          mimeType: 'application/pdf',
+          category: 'student_document',
+          entityType: 'theory_prompt',
+        });
+        theoryPromptStorageId = fileStorageId;
+      } catch (err) {
+        console.error('[assign-makeup] theory sheet upload failed:', err.message);
+        theoryUploadFailed = true;
+      }
+    }
+  }
+
+  const client = await pool.connect();
+
+  try {
+    await client.query('BEGIN');
+
+    const assignRes = await client.query(`
+      INSERT INTO homework_assignments
+        (student_id, batch_id, session_date, title, instructions,
+         theory_prompt_text, theory_prompt_storage_id,
+         is_makeup, assigned_by, assigned_by_user_id, status)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, TRUE, $8, $9, 'pending')
+      RETURNING id
+    `, [
+      student_id,
+      batch_id     || null,
+      session_date || null,
+      title.trim(),
+      instructions?.trim() || null,
+      theory_prompt_text?.trim() || null,
+      theoryPromptStorageId,
+      req.user.roles?.includes('teacher') ? 'teacher' : 'admin',
+      req.user.id || null,
+    ]);
+    const assignmentId = assignRes.rows[0].id;
+
+    let attachedCount = 0;
+    const failedFiles = [];
+    if (Array.isArray(files) && files.length > 0) {
+      for (const f of files) {
+        if (!f.data) continue;
+        const base64Part = f.data.includes(',') ? f.data.split(',')[1] : f.data;
+        let storageId = null;
+        try {
+          const buffer = Buffer.from(base64Part, 'base64');
+          const { fileStorageId } = await driveService.upload({
+            buffer,
+            fileName:   f.name || `makeup_${Date.now()}`,
+            mimeType:   f.mimeType || 'application/octet-stream',
+            category:   'student_document',
+            entityType: 'homework_assignment',
+            entityId:   assignmentId,
+          });
+          storageId = fileStorageId;
+          attachedCount++;
+        } catch (uploadErr) {
+          console.error('[assign-makeup] upload failed:', uploadErr.message);
+          failedFiles.push(f.name || 'attachment');
+        }
+        await client.query(
+          'INSERT INTO homework_attachments (assignment_id, file_storage_id, label) VALUES ($1, $2, $3)',
+          [assignmentId, storageId, f.name || null]
+        );
+      }
+    }
+
+    await client.query('COMMIT');
+
+    res.json({
+      success: true,
+      assignment_id: assignmentId,
+      attached: attachedCount,
+      failed_files: failedFiles,
+      theory_upload_failed: theoryUploadFailed,
+    });
+
+    // Fire-and-forget WhatsApp notification — sent after the response so a WA
+    // failure (bad template, API outage, etc.) never affects the assignment result.
+    if (wa.isEnabled()) {
+      pool.query(
+        `SELECT s.id, s.name, i.name AS instrument
+         FROM students s
+         LEFT JOIN enrollment_batches eb
+               ON eb.enrollment_id = (SELECT id FROM enrollments WHERE student_id = s.id LIMIT 1)
+              AND eb.batch_id = $2
+         LEFT JOIN batches    b ON b.id = eb.batch_id
+         LEFT JOIN instruments i ON i.id = b.instrument_id
+         WHERE s.id = $1`,
+        [student_id, batch_id || '00000000-0000-0000-0000-000000000000']
+      ).then(({ rows }) => {
+        if (!rows[0]) return;
+        wa.notifyMakeupMaterial(
+          rows[0].id, rows[0].name,
+          rows[0].instrument || 'Music',
+          session_date, title.trim()
+        ).catch(() => {});
+      }).catch(() => {});
+    }
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('[POST /homework/assign-makeup]', err);
+    res.status(500).json({ error: 'Failed to assign makeup material' });
+  } finally {
+    client.release();
   }
 });
 

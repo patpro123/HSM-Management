@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { apiGet, apiPost, apiPut, apiDelete } from '../api';
 import { getCurrentUser } from '../auth';
 import StudentMultiSelect, { PickerStudent } from './StudentMultiSelect';
+import AdminAbsencesTab from './AdminAbsencesTab';
 
 interface BulkHomeworkPanelProps {
   mode: 'teacher' | 'admin';
@@ -24,8 +25,8 @@ export default function BulkHomeworkPanel({ mode, teacherId }: BulkHomeworkPanel
   const [students, setStudents] = useState<PickerStudent[]>([]);
   const [loadingStudents, setLoadingStudents] = useState(true);
 
-  // Sub-panel: 'homework' | 'audio' | 'habit'
-  const [subPanel, setSubPanel] = useState<'homework' | 'audio' | 'habit'>('homework');
+  // Sub-panel: 'homework' | 'audio' | 'habit' | 'absences' ('absences' is admin-only)
+  const [subPanel, setSubPanel] = useState<'homework' | 'audio' | 'habit' | 'absences'>('homework');
 
   // Selected recipients
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -490,18 +491,33 @@ export default function BulkHomeworkPanel({ mode, teacherId }: BulkHomeworkPanel
         >
           Assign Habit
         </button>
+        {mode === 'admin' && (
+          <button
+            onClick={() => setSubPanel('absences')}
+            className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${
+              subPanel === 'absences' ? 'bg-white text-orange-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            Absences
+          </button>
+        )}
       </div>
 
-      {/* Student multi-select (shared) */}
-      <div>
-        <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Select Recipients</p>
-        <StudentMultiSelect
-          students={students}
-          value={selectedIds}
-          onChange={setSelectedIds}
-          loading={loadingStudents}
-        />
-      </div>
+      {/* ── Absences tab (admin-only, no shared recipient picker) ── */}
+      {subPanel === 'absences' ? (
+        <AdminAbsencesTab />
+      ) : (
+        <>
+          {/* Student multi-select (shared) */}
+          <div>
+            <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Select Recipients</p>
+            <StudentMultiSelect
+              students={students}
+              value={selectedIds}
+              onChange={setSelectedIds}
+              loading={loadingStudents}
+            />
+          </div>
 
       {/* ── Assign Homework form ── */}
       {subPanel === 'homework' && (
@@ -1065,7 +1081,10 @@ export default function BulkHomeworkPanel({ mode, teacherId }: BulkHomeworkPanel
             </div>
           )}
         </div>
-      )}      {/* ── Recent Assignments ── */}
+      )}
+        </>
+      )}
+      {/* ── Recent Assignments ── */}
       <div>
         <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">Recent Assignments</p>
         {loadingRecent ? (

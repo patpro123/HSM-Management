@@ -114,6 +114,92 @@ router.post('/attendance', async (req, res) => {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
+// GET /api/teachers/my-absences?date=YYYY-MM-DD
+// Returns students absent (or not yet marked) from the authenticated teacher's batches on a date.
+router.get('/my-absences', async (req, res) => {
+  if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
+
+  const date = req.query.date || new Date().toISOString().slice(0, 10);
+
+  try {
+    const tuRes = await pool.query(
+      `SELECT teacher_id FROM teacher_users WHERE user_id = $1 AND is_active = true LIMIT 1`,
+      [req.user.id]
+    );
+    let teacherId = tuRes.rows[0]?.teacher_id;
+
+    if (!teacherId && process.env.DISABLE_AUTH === 'true') {
+      const fallback = await pool.query('SELECT id FROM teachers ORDER BY name LIMIT 1');
+      teacherId = fallback.rows[0]?.id;
+    }
+
+    if (!teacherId) return res.json({ date, batches: [] });
+
+    const dow = new Date(date + 'T00:00:00').getDay();
+
+    const batchesRes = await pool.query(`
+      SELECT b.id, b.recurrence, i.name AS instrument_name
+      FROM batches b
+      JOIN instruments i ON i.id = b.instrument_id
+      WHERE b.teacher_id = $1 AND b.is_makeup = FALSE
+    `, [teacherId]);
+
+    const scheduled = batchesRes.rows.filter(b => batchScheduledOnDay(b.recurrence, dow));
+    if (scheduled.length === 0) return res.json({ date, batches: [] });
+
+    const batchIds = scheduled.map(b => b.id);
+
+    const studentsRes = await pool.query(`
+      SELECT DISTINCT ON (s.id, b.id)
+        s.id   AS student_id,
+        s.name,
+        b.id   AS batch_id,
+        i.name AS instrument_name,
+        COALESCE(ar.status::text, 'not_marked') AS attendance_status,
+        COALESCE((
+          SELECT json_agg(json_build_object('id', ha.id, 'title', ha.title, 'created_at', ha.created_at) ORDER BY ha.created_at DESC)
+          FROM homework_assignments ha
+          WHERE ha.student_id = s.id AND ha.batch_id = b.id AND ha.session_date = $1 AND ha.is_makeup = TRUE
+        ), '[]'::json) AS makeup_assignments
+      FROM enrollment_batches eb
+      JOIN enrollments  e  ON e.id  = eb.enrollment_id AND e.status = 'active'
+      JOIN students     s  ON s.id  = e.student_id
+      JOIN batches      b  ON b.id  = eb.batch_id
+      JOIN instruments  i  ON i.id  = b.instrument_id
+      LEFT JOIN attendance_records ar
+             ON ar.student_id   = s.id
+            AND ar.batch_id     = b.id
+            AND ar.session_date = $1
+            AND ar.is_extra     = FALSE
+      WHERE eb.batch_id = ANY($2)
+      ORDER BY s.id, b.id, ar.session_date DESC NULLS LAST
+    `, [date, batchIds]);
+
+    const batchMap = {};
+    for (const b of scheduled) {
+      batchMap[b.id] = { batch_id: b.id, instrument_name: b.instrument_name, students: [] };
+    }
+    for (const row of studentsRes.rows) {
+      if (batchMap[row.batch_id]) {
+        batchMap[row.batch_id].students.push({
+          student_id:        row.student_id,
+          name:              row.name,
+          attendance_status: row.attendance_status,
+          makeup_assignments: row.makeup_assignments,
+        });
+      }
+    }
+
+    const batches = Object.values(batchMap).filter(b => b.students.length > 0);
+    res.json({ date, batches });
+  } catch (err) {
+    console.error('[GET /teachers/my-absences]', err);
+    res.status(500).json({ error: 'Failed to fetch absent students' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 // GET /api/teachers/me/360 — MUST be before /:id/360 to avoid 'me' being treated as an ID
 router.get('/me/360', async (req, res) => {
   if (!req.user) return res.status(401).json({ error: 'Unauthorized' });

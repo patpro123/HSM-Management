@@ -5,6 +5,8 @@ import PhoneLink from './PhoneLink';
 import TeacherStudentList from './TeacherStudentList';
 import BulkHomeworkPanel from './BulkHomeworkPanel';
 import TeacherPTMTab from './TeacherPTMTab';
+import MakeupMaterialModal, { MakeupMaterialTarget } from './MakeupMaterialModal';
+import ViewAssignedMaterialModal from './ViewAssignedMaterialModal';
 
 interface Teacher360ViewProps {
   teacherId?: string;
@@ -14,6 +16,19 @@ interface Teacher360ViewProps {
 }
 
 type TabType = 'profile' | 'attendance' | 'payout' | 'students' | 'homework' | 'ptm';
+
+interface AbsenceStudent {
+  student_id: string;
+  name: string;
+  attendance_status: string;
+  makeup_assignments: { id: string; title: string; created_at: string }[];
+}
+
+interface AbsenceBatch {
+  batch_id: string;
+  instrument_name: string;
+  students: AbsenceStudent[];
+}
 
 const PAYOUT_TYPE_LABELS: Record<string, string> = {
   fixed: 'Fixed Monthly Salary',
@@ -33,6 +48,15 @@ const Teacher360View: React.FC<Teacher360ViewProps> = ({
   const [resolvedId, setResolvedId] = useState<string | null>(teacherId || null);
   const [students, setStudents] = useState<any[]>([]);
   const [studentsLoading, setStudentsLoading] = useState(false);
+
+  // Absence panel state
+  const [absenceDate, setAbsenceDate] = useState(new Date().toISOString().slice(0, 10));
+  const [absenceBatches, setAbsenceBatches] = useState<AbsenceBatch[]>([]);
+  const [absenceLoading, setAbsenceLoading] = useState(false);
+
+  // Makeup modal state
+  const [makeupTarget, setMakeupTarget] = useState<MakeupMaterialTarget | null>(null);
+  const [viewAssignmentIds, setViewAssignmentIds] = useState<string[] | null>(null);
 
   useEffect(() => {
     const load = async () => {
@@ -73,6 +97,19 @@ const Teacher360View: React.FC<Teacher360ViewProps> = ({
       .catch(() => setStudents([]))
       .finally(() => setStudentsLoading(false));
   }, [activeTab, resolvedId]);
+
+  const refreshAbsences = () => {
+    setAbsenceLoading(true);
+    apiGet(`/api/teachers/my-absences?date=${absenceDate}`)
+      .then((res: any) => setAbsenceBatches(res.batches || []))
+      .catch(() => setAbsenceBatches([]))
+      .finally(() => setAbsenceLoading(false));
+  };
+
+  useEffect(() => {
+    if (activeTab !== 'attendance') return;
+    refreshAbsences();
+  }, [activeTab, absenceDate]);
 
   const attendanceRate = data
     ? data.attendance.summary.current_month_expected > 0
@@ -363,7 +400,86 @@ const Teacher360View: React.FC<Teacher360ViewProps> = ({
                     </div>
                   )}
                 </div>
+
+                {/* ── Absent Students Panel ── */}
+                <div className="border-t border-gray-100 pt-5">
+                  <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+                    <h3 className="font-semibold text-lg text-gray-800">Student Absences</h3>
+                    <input
+                      type="date"
+                      value={absenceDate}
+                      onChange={e => setAbsenceDate(e.target.value)}
+                      className="text-sm border border-gray-300 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-orange-400"
+                    />
+                  </div>
+
+                  {absenceLoading ? (
+                    <p className="text-sm text-gray-400 italic">Loading…</p>
+                  ) : absenceBatches.length === 0 ? (
+                    <p className="text-sm text-gray-400 italic">No batches scheduled or no students marked on this date.</p>
+                  ) : (
+                    <div className="space-y-4">
+                      {absenceBatches.map(batch => (
+                        <div key={batch.batch_id}>
+                          <p className="text-xs font-bold text-orange-600 uppercase tracking-wider mb-2">{batch.instrument_name}</p>
+                          <div className="divide-y divide-gray-100 rounded-lg border border-gray-200 bg-white overflow-hidden">
+                            {batch.students.map(st => (
+                              <div key={st.student_id} className="flex items-center justify-between px-4 py-2.5 gap-3">
+                                <span className="text-sm font-medium text-gray-800">{st.name}</span>
+                                <div className="flex items-center gap-2 flex-shrink-0">
+                                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                                    st.attendance_status === 'present'
+                                      ? 'bg-green-100 text-green-700'
+                                      : st.attendance_status === 'absent'
+                                        ? 'bg-red-100 text-red-700'
+                                        : 'bg-gray-100 text-gray-500'
+                                  }`}>
+                                    {st.attendance_status === 'not_marked' ? 'Not marked' : st.attendance_status}
+                                  </span>
+                                  {st.makeup_assignments.length > 0 && (
+                                    <button
+                                      onClick={() => setViewAssignmentIds(st.makeup_assignments.map(a => a.id))}
+                                      className="text-xs px-2.5 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg font-medium hover:bg-emerald-100 transition-colors"
+                                    >
+                                      ✓ View Assigned{st.makeup_assignments.length > 1 ? ` (${st.makeup_assignments.length})` : ''}
+                                    </button>
+                                  )}
+                                  {st.attendance_status !== 'present' && (
+                                    <button
+                                      onClick={() => setMakeupTarget({ student_id: st.student_id, name: st.name, batch_id: batch.batch_id, instrument_name: batch.instrument_name })}
+                                      className="text-xs px-2.5 py-1 bg-orange-50 text-orange-700 border border-orange-200 rounded-lg font-medium hover:bg-orange-100 transition-colors"
+                                    >
+                                      {st.makeup_assignments.length > 0 ? 'Assign More' : 'Assign Material'}
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
+            )}
+
+            {/* ── MAKEUP MATERIAL MODAL ── */}
+            {makeupTarget && (
+              <MakeupMaterialModal
+                key={`${makeupTarget.student_id}-${makeupTarget.batch_id}`}
+                target={makeupTarget}
+                sessionDate={absenceDate}
+                onClose={() => setMakeupTarget(null)}
+                onAssigned={() => { setMakeupTarget(null); refreshAbsences(); }}
+              />
+            )}
+
+            {viewAssignmentIds && (
+              <ViewAssignedMaterialModal
+                assignmentIds={viewAssignmentIds}
+                onClose={() => setViewAssignmentIds(null)}
+              />
             )}
 
             {/* ── PAYOUT TAB ── */}

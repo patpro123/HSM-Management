@@ -504,7 +504,19 @@ CREATE TABLE IF NOT EXISTS homework_assignments (
   due_date     DATE,
   assigned_by  TEXT        NOT NULL DEFAULT 'teacher',
   created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  status       TEXT        NOT NULL DEFAULT 'pending'  -- pending | submitted | reviewed
+  status       TEXT        NOT NULL DEFAULT 'pending',  -- pending | submitted | reviewed
+  batch_id     UUID        REFERENCES batches(id),
+  session_date DATE,
+  is_makeup    BOOLEAN     NOT NULL DEFAULT FALSE
+);
+
+-- Multi-file attachments for makeup material assignments
+CREATE TABLE IF NOT EXISTS homework_attachments (
+  id              UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  assignment_id   UUID        NOT NULL REFERENCES homework_assignments(id) ON DELETE CASCADE,
+  file_storage_id UUID        REFERENCES file_storage(id),
+  label           TEXT,
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 -- Student's audio submission for a homework assignment
@@ -528,7 +540,9 @@ CREATE INDEX IF NOT EXISTS idx_attendance_batch_date ON attendance_records (batc
 CREATE INDEX IF NOT EXISTS idx_payments_student ON payments (student_id);
 CREATE INDEX IF NOT EXISTS idx_evaluations_student ON student_evaluations(student_id);
 CREATE INDEX IF NOT EXISTS idx_homework_assignments_student ON homework_assignments(student_id);
+CREATE INDEX IF NOT EXISTS idx_homework_assignments_is_makeup ON homework_assignments(is_makeup) WHERE is_makeup = TRUE;
 CREATE INDEX IF NOT EXISTS idx_homework_submissions_assignment ON homework_submissions(assignment_id);
+CREATE INDEX IF NOT EXISTS idx_homework_attachments_assignment ON homework_attachments(assignment_id);
 
 
 -- Landing page configuration (persists across deploys, managed via admin UI)

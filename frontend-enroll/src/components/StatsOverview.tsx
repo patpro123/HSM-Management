@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   Cell, PieChart, Pie, Legend, LineChart, Line,
@@ -14,6 +14,28 @@ interface DashboardStats {
   current_month_expenses: number;
   monthly_student_trend: { label: string; count: number }[];
   monthly_inactive_trend: { label: string; count: number }[];
+}
+
+interface AttendanceReportStudent {
+  student_id: string;
+  name: string;
+  present_count: number;
+  absent_count: number;
+  total_sessions: number;
+  absent_pct: number;
+  flagged: boolean;
+}
+
+interface AttendanceReport {
+  period: 'daily' | 'weekly' | 'monthly';
+  start_date: string;
+  end_date: string;
+  students: AttendanceReportStudent[];
+  summary: {
+    total_present: number;
+    total_absent: number;
+    total_students: number;
+  };
 }
 
 interface StatsProps {
@@ -93,6 +115,32 @@ const StatsOverview: React.FC<StatsProps> = ({ students, prospectsCount, payment
   const [chartInstrument, setChartInstrument] = useState('all');
   const [inactiveTrend, setInactiveTrend] = useState<{ label: string; count: number }[]>([]);
   const [trendLoading, setTrendLoading] = useState(false);
+
+  // Attendance report section
+  const [attnFilterType, setAttnFilterType] = useState<'instrument' | 'teacher'>('instrument');
+  const [attnFilterId, setAttnFilterId] = useState('');
+  const [attnPeriod, setAttnPeriod] = useState<'daily' | 'weekly' | 'monthly'>('weekly');
+  const [attnReport, setAttnReport] = useState<AttendanceReport | null>(null);
+  const [attnLoading, setAttnLoading] = useState(false);
+  const [reportInstruments, setReportInstruments] = useState<{ id: string; name: string }[]>([]);
+  const [reportTeachers, setReportTeachers] = useState<{ id: string; name: string }[]>([]);
+
+  useEffect(() => {
+    apiGet('/api/instruments').then((d: any) => setReportInstruments(d?.instruments || [])).catch(() => {});
+    apiGet('/api/teachers').then((d: any) => setReportTeachers(d?.teachers || [])).catch(() => {});
+  }, []);
+
+  const fetchAttnReport = useCallback(() => {
+    if (!attnFilterId) { setAttnReport(null); return; }
+    setAttnLoading(true);
+    const qs = new URLSearchParams({ filterType: attnFilterType, filterId: attnFilterId, period: attnPeriod });
+    apiGet(`/api/attendance/report?${qs}`)
+      .then((d: any) => setAttnReport(d))
+      .catch(() => setAttnReport(null))
+      .finally(() => setAttnLoading(false));
+  }, [attnFilterType, attnFilterId, attnPeriod]);
+
+  useEffect(() => { fetchAttnReport(); }, [fetchAttnReport]);
 
   // Sync from initial load and re-fetch when filters change
   useEffect(() => {
@@ -437,6 +485,140 @@ const StatsOverview: React.FC<StatsProps> = ({ students, prospectsCount, payment
             value={`₹${(dashboardStats?.current_month_expenses ?? 0).toLocaleString()}`}
             color="bg-orange-500"
           />
+        </div>
+      </section>
+
+      {/* ── ATTENDANCE SECTION ─────────────────────────────────── */}
+      <section>
+        <SectionHeader title="Attendance Report" />
+
+        <div className="bg-slate-50 p-5 rounded-xl border border-slate-100 space-y-4">
+          {/* Filter row */}
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex rounded-lg overflow-hidden border border-slate-300 text-sm">
+              {(['instrument', 'teacher'] as const).map(type => (
+                <button
+                  key={type}
+                  onClick={() => { setAttnFilterType(type); setAttnFilterId(''); }}
+                  className={`px-3 py-1.5 font-medium capitalize transition-colors ${
+                    attnFilterType === type
+                      ? 'bg-indigo-600 text-white'
+                      : 'bg-white text-slate-600 hover:bg-slate-50'
+                  }`}
+                >
+                  {type}
+                </button>
+              ))}
+            </div>
+            <select
+              value={attnFilterId}
+              onChange={e => setAttnFilterId(e.target.value)}
+              className="text-sm border border-slate-300 rounded-lg px-3 py-1.5 bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-400"
+            >
+              <option value="">— Select {attnFilterType} —</option>
+              {(attnFilterType === 'instrument' ? reportInstruments : reportTeachers).map(o => (
+                <option key={o.id} value={o.id}>{o.name}</option>
+              ))}
+            </select>
+            <div className="flex rounded-lg overflow-hidden border border-slate-300 text-sm">
+              {(['daily', 'weekly', 'monthly'] as const).map(p => (
+                <button
+                  key={p}
+                  onClick={() => setAttnPeriod(p)}
+                  className={`px-3 py-1.5 font-medium capitalize transition-colors ${
+                    attnPeriod === p
+                      ? 'bg-indigo-600 text-white'
+                      : 'bg-white text-slate-600 hover:bg-slate-50'
+                  }`}
+                >
+                  {p}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Report table */}
+          {!attnFilterId ? (
+            <p className="text-sm text-slate-400 italic">Select an instrument or teacher to view attendance.</p>
+          ) : attnLoading ? (
+            <p className="text-sm text-slate-400 italic">Loading…</p>
+          ) : !attnReport || attnReport.students.length === 0 ? (
+            <p className="text-sm text-slate-400 italic">No attendance data for this period.</p>
+          ) : (
+            <div>
+              <div className="flex flex-wrap gap-3 mb-4">
+                <div className="flex-1 min-w-[120px] bg-emerald-50 border border-emerald-100 rounded-lg px-4 py-3">
+                  <p className="text-xs font-semibold text-emerald-700 uppercase tracking-wide">Present</p>
+                  <p className="text-2xl font-bold text-emerald-700">{attnReport.summary.total_present}</p>
+                </div>
+                <div className="flex-1 min-w-[120px] bg-rose-50 border border-rose-100 rounded-lg px-4 py-3">
+                  <p className="text-xs font-semibold text-rose-700 uppercase tracking-wide">Absent</p>
+                  <p className="text-2xl font-bold text-rose-700">{attnReport.summary.total_absent}</p>
+                </div>
+                <div className="flex-1 min-w-[120px] bg-slate-100 border border-slate-200 rounded-lg px-4 py-3">
+                  <p className="text-xs font-semibold text-slate-600 uppercase tracking-wide">Attendance Rate</p>
+                  <p className="text-2xl font-bold text-slate-700">
+                    {attnReport.summary.total_present + attnReport.summary.total_absent > 0
+                      ? Math.round((attnReport.summary.total_present / (attnReport.summary.total_present + attnReport.summary.total_absent)) * 100)
+                      : 0}%
+                  </p>
+                </div>
+              </div>
+              <p className="text-xs text-slate-400 mb-3">
+                {attnPeriod === 'daily'
+                  ? attnReport.start_date
+                  : `${attnReport.start_date} → ${attnReport.end_date}`}
+                {' · '}
+                {attnReport.students.length} student{attnReport.students.length !== 1 ? 's' : ''}
+                {attnReport.students.filter(s => s.flagged).length > 0 && (
+                  <span className="ml-1 text-rose-500 font-medium">
+                    · {attnReport.students.filter(s => s.flagged).length} flagged (&gt;30% absent)
+                  </span>
+                )}
+              </p>
+              <div className="overflow-x-auto rounded-lg shadow ring-1 ring-black ring-opacity-5">
+                <table className="min-w-full divide-y divide-slate-200 text-sm">
+                  <thead className="bg-slate-100">
+                    <tr>
+                      <th className="py-2.5 pl-4 pr-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">Student</th>
+                      <th className="px-3 py-2.5 text-center text-xs font-semibold text-slate-500 uppercase tracking-wide">Present</th>
+                      <th className="px-3 py-2.5 text-center text-xs font-semibold text-slate-500 uppercase tracking-wide">Absent</th>
+                      {attnPeriod !== 'daily' && (
+                        <>
+                          <th className="px-3 py-2.5 text-center text-xs font-semibold text-slate-500 uppercase tracking-wide">Total</th>
+                          <th className="px-3 py-2.5 text-center text-xs font-semibold text-slate-500 uppercase tracking-wide">Absent %</th>
+                        </>
+                      )}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 bg-white">
+                    {attnReport.students.map(s => (
+                      <tr key={s.student_id} className={s.flagged ? 'bg-rose-50' : ''}>
+                        <td className="py-2.5 pl-4 pr-3 font-medium text-slate-800">
+                          {s.flagged && (
+                            <span className="mr-1.5 text-rose-500 text-xs font-bold" title="Absence rate > 30%">⚠</span>
+                          )}
+                          {s.name}
+                        </td>
+                        <td className="px-3 py-2.5 text-center text-emerald-700 font-medium">{s.present_count}</td>
+                        <td className={`px-3 py-2.5 text-center font-medium ${s.absent_count > 0 ? 'text-rose-600' : 'text-slate-400'}`}>
+                          {s.absent_count}
+                        </td>
+                        {attnPeriod !== 'daily' && (
+                          <>
+                            <td className="px-3 py-2.5 text-center text-slate-500">{s.total_sessions}</td>
+                            <td className={`px-3 py-2.5 text-center font-semibold ${s.flagged ? 'text-rose-600' : 'text-slate-600'}`}>
+                              {s.absent_pct}%
+                            </td>
+                          </>
+                        )}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
         </div>
       </section>
 
