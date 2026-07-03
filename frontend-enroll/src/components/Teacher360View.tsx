@@ -5,7 +5,7 @@ import PhoneLink from './PhoneLink';
 import TeacherStudentList from './TeacherStudentList';
 import BulkHomeworkPanel from './BulkHomeworkPanel';
 import TeacherPTMTab from './TeacherPTMTab';
-import MakeupMaterialModal, { MakeupMaterialTarget } from './MakeupMaterialModal';
+import MakeupAssignPanel, { MakeupMaterialTarget } from './MakeupAssignPanel';
 import ViewAssignedMaterialModal from './ViewAssignedMaterialModal';
 
 interface Teacher360ViewProps {
@@ -54,9 +54,17 @@ const Teacher360View: React.FC<Teacher360ViewProps> = ({
   const [absenceBatches, setAbsenceBatches] = useState<AbsenceBatch[]>([]);
   const [absenceLoading, setAbsenceLoading] = useState(false);
 
-  // Makeup modal state
-  const [makeupTarget, setMakeupTarget] = useState<MakeupMaterialTarget | null>(null);
+  // Makeup assignment state
   const [viewAssignmentIds, setViewAssignmentIds] = useState<string[] | null>(null);
+  const [selectedAbsenceKeys, setSelectedAbsenceKeys] = useState<Set<string>>(new Set());
+
+  const toggleAbsenceSelection = (key: string) => {
+    setSelectedAbsenceKeys(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  };
 
   useEffect(() => {
     const load = async () => {
@@ -110,6 +118,15 @@ const Teacher360View: React.FC<Teacher360ViewProps> = ({
     if (activeTab !== 'attendance') return;
     refreshAbsences();
   }, [activeTab, absenceDate]);
+
+  const selectedAbsenceTargets: MakeupMaterialTarget[] = [];
+  for (const batch of absenceBatches) {
+    for (const st of batch.students) {
+      if (selectedAbsenceKeys.has(`${st.student_id}::${batch.batch_id}`)) {
+        selectedAbsenceTargets.push({ student_id: st.student_id, name: st.name, batch_id: batch.batch_id, instrument_name: batch.instrument_name });
+      }
+    }
+  }
 
   const attendanceRate = data
     ? data.attendance.summary.current_month_expected > 0
@@ -408,7 +425,7 @@ const Teacher360View: React.FC<Teacher360ViewProps> = ({
                     <input
                       type="date"
                       value={absenceDate}
-                      onChange={e => setAbsenceDate(e.target.value)}
+                      onChange={e => { setAbsenceDate(e.target.value); setSelectedAbsenceKeys(new Set()); }}
                       className="text-sm border border-gray-300 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-orange-400"
                     />
                   </div>
@@ -423,9 +440,22 @@ const Teacher360View: React.FC<Teacher360ViewProps> = ({
                         <div key={batch.batch_id}>
                           <p className="text-xs font-bold text-orange-600 uppercase tracking-wider mb-2">{batch.instrument_name}</p>
                           <div className="divide-y divide-gray-100 rounded-lg border border-gray-200 bg-white overflow-hidden">
-                            {batch.students.map(st => (
+                            {batch.students.map(st => {
+                              const key = `${st.student_id}::${batch.batch_id}`;
+                              const eligible = st.attendance_status !== 'present';
+                              return (
                               <div key={st.student_id} className="flex items-center justify-between px-4 py-2.5 gap-3">
-                                <span className="text-sm font-medium text-gray-800">{st.name}</span>
+                                <div className="flex items-center gap-2.5 min-w-0">
+                                  {eligible && (
+                                    <input
+                                      type="checkbox"
+                                      checked={selectedAbsenceKeys.has(key)}
+                                      onChange={() => toggleAbsenceSelection(key)}
+                                      className="rounded border-gray-300 text-orange-600 focus:ring-orange-500 flex-shrink-0"
+                                    />
+                                  )}
+                                  <span className="text-sm font-medium text-gray-800 truncate">{st.name}</span>
+                                </div>
                                 <div className="flex items-center gap-2 flex-shrink-0">
                                   <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
                                     st.attendance_status === 'present'
@@ -444,35 +474,27 @@ const Teacher360View: React.FC<Teacher360ViewProps> = ({
                                       ✓ View Assigned{st.makeup_assignments.length > 1 ? ` (${st.makeup_assignments.length})` : ''}
                                     </button>
                                   )}
-                                  {st.attendance_status !== 'present' && (
-                                    <button
-                                      onClick={() => setMakeupTarget({ student_id: st.student_id, name: st.name, batch_id: batch.batch_id, instrument_name: batch.instrument_name })}
-                                      className="text-xs px-2.5 py-1 bg-orange-50 text-orange-700 border border-orange-200 rounded-lg font-medium hover:bg-orange-100 transition-colors"
-                                    >
-                                      {st.makeup_assignments.length > 0 ? 'Assign More' : 'Assign Material'}
-                                    </button>
-                                  )}
                                 </div>
                               </div>
-                            ))}
+                              );
+                            })}
                           </div>
                         </div>
                       ))}
                     </div>
                   )}
+
+                  {absenceBatches.length > 0 && (
+                    <div className="mt-5">
+                      <MakeupAssignPanel
+                        targets={selectedAbsenceTargets}
+                        sessionDate={absenceDate}
+                        onAssigned={() => { setSelectedAbsenceKeys(new Set()); refreshAbsences(); }}
+                      />
+                    </div>
+                  )}
                 </div>
               </div>
-            )}
-
-            {/* ── MAKEUP MATERIAL MODAL ── */}
-            {makeupTarget && (
-              <MakeupMaterialModal
-                key={`${makeupTarget.student_id}-${makeupTarget.batch_id}`}
-                target={makeupTarget}
-                sessionDate={absenceDate}
-                onClose={() => setMakeupTarget(null)}
-                onAssigned={() => { setMakeupTarget(null); refreshAbsences(); }}
-              />
             )}
 
             {viewAssignmentIds && (

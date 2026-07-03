@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { apiGet } from '../api';
-import MakeupMaterialModal, { MakeupMaterialTarget } from './MakeupMaterialModal';
+import MakeupAssignPanel, { MakeupMaterialTarget } from './MakeupAssignPanel';
 import ViewAssignedMaterialModal from './ViewAssignedMaterialModal';
 
 interface AbsenceStudent {
@@ -35,8 +35,8 @@ export default function AdminAbsencesTab() {
   const [teachers, setTeachers] = useState<AbsenceTeacher[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [makeupTarget, setMakeupTarget] = useState<MakeupMaterialTarget | null>(null);
   const [viewAssignmentIds, setViewAssignmentIds] = useState<string[] | null>(null);
+  const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
 
   const fetchAbsences = () => {
     setLoading(true);
@@ -49,10 +49,29 @@ export default function AdminAbsencesTab() {
 
   useEffect(fetchAbsences, [date]);
 
+  const toggleSelection = (key: string) => {
+    setSelectedKeys(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  };
+
   const totalStudents = teachers.reduce(
     (sum, t) => sum + t.batches.reduce((s, b) => s + b.students.length, 0),
     0
   );
+
+  const selectedTargets: MakeupMaterialTarget[] = [];
+  for (const teacher of teachers) {
+    for (const batch of teacher.batches) {
+      for (const st of batch.students) {
+        if (selectedKeys.has(`${st.student_id}::${batch.batch_id}`)) {
+          selectedTargets.push({ student_id: st.student_id, name: st.name, batch_id: batch.batch_id, instrument_name: batch.instrument_name });
+        }
+      }
+    }
+  }
 
   return (
     <div className="space-y-5">
@@ -64,7 +83,7 @@ export default function AdminAbsencesTab() {
         <input
           type="date"
           value={date}
-          onChange={e => setDate(e.target.value)}
+          onChange={e => { setDate(e.target.value); setSelectedKeys(new Set()); }}
           className="text-sm border border-gray-300 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-orange-400"
         />
       </div>
@@ -90,9 +109,19 @@ export default function AdminAbsencesTab() {
                   <div key={batch.batch_id}>
                     <p className="text-xs font-bold text-orange-600 uppercase tracking-wider mb-2">{batch.instrument_name}</p>
                     <div className="divide-y divide-gray-100 rounded-lg border border-gray-200 bg-white overflow-hidden">
-                      {batch.students.map(st => (
+                      {batch.students.map(st => {
+                        const key = `${st.student_id}::${batch.batch_id}`;
+                        return (
                         <div key={st.student_id} className="flex items-center justify-between px-4 py-2.5 gap-3">
-                          <span className="text-sm font-medium text-gray-800">{st.name}</span>
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <input
+                              type="checkbox"
+                              checked={selectedKeys.has(key)}
+                              onChange={() => toggleSelection(key)}
+                              className="rounded border-gray-300 text-orange-600 focus:ring-orange-500 flex-shrink-0"
+                            />
+                            <span className="text-sm font-medium text-gray-800 truncate">{st.name}</span>
+                          </div>
                           <div className="flex items-center gap-2 flex-shrink-0">
                             <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
                               st.attendance_status === 'absent'
@@ -109,32 +138,23 @@ export default function AdminAbsencesTab() {
                                 ✓ View Assigned{st.makeup_assignments.length > 1 ? ` (${st.makeup_assignments.length})` : ''}
                               </button>
                             )}
-                            <button
-                              onClick={() => setMakeupTarget({ student_id: st.student_id, name: st.name, batch_id: batch.batch_id, instrument_name: batch.instrument_name })}
-                              className="text-xs px-2.5 py-1 bg-orange-50 text-orange-700 border border-orange-200 rounded-lg font-medium hover:bg-orange-100 transition-colors"
-                            >
-                              {st.makeup_assignments.length > 0 ? 'Assign More' : 'Assign Material'}
-                            </button>
                           </div>
                         </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
                 ))}
               </div>
             </div>
           ))}
-        </div>
-      )}
 
-      {makeupTarget && (
-        <MakeupMaterialModal
-          key={`${makeupTarget.student_id}-${makeupTarget.batch_id}`}
-          target={makeupTarget}
-          sessionDate={date}
-          onClose={() => setMakeupTarget(null)}
-          onAssigned={() => { setMakeupTarget(null); fetchAbsences(); }}
-        />
+          <MakeupAssignPanel
+            targets={selectedTargets}
+            sessionDate={date}
+            onAssigned={() => { setSelectedKeys(new Set()); fetchAbsences(); }}
+          />
+        </div>
       )}
 
       {viewAssignmentIds && (
