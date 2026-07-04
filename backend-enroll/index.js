@@ -356,4 +356,6 @@ app.listen(PORT, '0.0.0.0', () => {
   registerPayoutScheduler()
   const { registerFileCleanupScheduler } = require('./scheduler/fileCleanupScheduler')
   registerFileCleanupScheduler()
+  const { registerDriveHealthScheduler } = require('./scheduler/driveHealthScheduler')
+  registerDriveHealthScheduler()
 })

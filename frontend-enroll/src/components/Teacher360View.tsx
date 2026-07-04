@@ -57,11 +57,20 @@ const Teacher360View: React.FC<Teacher360ViewProps> = ({
   // Makeup assignment state
   const [viewAssignmentIds, setViewAssignmentIds] = useState<string[] | null>(null);
   const [selectedAbsenceKeys, setSelectedAbsenceKeys] = useState<Set<string>>(new Set());
+  const [expandedAbsenceBatches, setExpandedAbsenceBatches] = useState<Set<string>>(new Set());
 
   const toggleAbsenceSelection = (key: string) => {
     setSelectedAbsenceKeys(prev => {
       const next = new Set(prev);
       if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  };
+
+  const toggleAbsenceBatch = (batchId: string) => {
+    setExpandedAbsenceBatches(prev => {
+      const next = new Set(prev);
+      if (next.has(batchId)) next.delete(batchId); else next.add(batchId);
       return next;
     });
   };
@@ -436,9 +445,28 @@ const Teacher360View: React.FC<Teacher360ViewProps> = ({
                     <p className="text-sm text-gray-400 italic">No batches scheduled or no students marked on this date.</p>
                   ) : (
                     <div className="space-y-4">
-                      {absenceBatches.map(batch => (
+                      {absenceBatches.map(batch => {
+                        const batchSelectedCount = batch.students.filter(st =>
+                          selectedAbsenceKeys.has(`${st.student_id}::${batch.batch_id}`)
+                        ).length;
+                        const expanded = expandedAbsenceBatches.has(batch.batch_id);
+                        return (
                         <div key={batch.batch_id}>
-                          <p className="text-xs font-bold text-orange-600 uppercase tracking-wider mb-2">{batch.instrument_name}</p>
+                          <button
+                            type="button"
+                            onClick={() => toggleAbsenceBatch(batch.batch_id)}
+                            className="w-full flex items-center gap-2 mb-2 text-left"
+                          >
+                            <span className={`text-orange-400 transition-transform ${expanded ? 'rotate-90' : ''}`}>▸</span>
+                            <p className="text-xs font-bold text-orange-600 uppercase tracking-wider">
+                              {batch.instrument_name}
+                              <span className="ml-1 font-normal text-gray-400 normal-case">({batch.students.length})</span>
+                            </p>
+                            {batchSelectedCount > 0 && (
+                              <span className="text-xs text-orange-600 font-medium">· {batchSelectedCount} selected</span>
+                            )}
+                          </button>
+                          {expanded && (
                           <div className="divide-y divide-gray-100 rounded-lg border border-gray-200 bg-white overflow-hidden">
                             {batch.students.map(st => {
                               const key = `${st.student_id}::${batch.batch_id}`;
@@ -479,8 +507,10 @@ const Teacher360View: React.FC<Teacher360ViewProps> = ({
                               );
                             })}
                           </div>
+                          )}
                         </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
 
@@ -501,6 +531,7 @@ const Teacher360View: React.FC<Teacher360ViewProps> = ({
               <ViewAssignedMaterialModal
                 assignmentIds={viewAssignmentIds}
                 onClose={() => setViewAssignmentIds(null)}
+                onDeleted={refreshAbsences}
               />
             )}
 

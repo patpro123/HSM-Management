@@ -24,6 +24,7 @@ const NotificationsPanel: React.FC<NotificationsPanelProps> = ({ onNavigation })
     const [unreadCount, setUnreadCount] = useState(0);
     const [isOpen, setIsOpen] = useState(false);
     const [selectedProspect, setSelectedProspect] = useState<any>(null);
+    const [criticalAlert, setCriticalAlert] = useState<{ type: string; title: string; message: string } | null>(null);
     const dropdownRef = useRef<HTMLDivElement>(null);
     const hasAutoOpened = useRef(false);
 
@@ -70,6 +71,13 @@ const NotificationsPanel: React.FC<NotificationsPanelProps> = ({ onNavigation })
                     return;
                 }
                 console.log('[notifications] SSE push received:', data.type);
+
+                // System-health alerts get a persistent banner, not just a dropdown badge —
+                // these need attention even if the admin never opens the bell dropdown.
+                if (data.type === 'DRIVE_HEALTH_FAILED' || data.type === 'DRIVE_HEALTH_RECOVERED') {
+                    setCriticalAlert({ type: data.type, title: data.title, message: data.message });
+                }
+
                 // Re-fetch from DB so we have real IDs for mark-as-read
                 fetchNotifications();
             } catch (err) {
@@ -87,6 +95,15 @@ const NotificationsPanel: React.FC<NotificationsPanelProps> = ({ onNavigation })
             eventSource.close();
         };
     }, []);
+
+    useEffect(() => {
+        // Recovery banner is reassuring, not actionable — clear it on its own.
+        // The failure banner stays until an admin dismisses it.
+        if (criticalAlert?.type === 'DRIVE_HEALTH_RECOVERED') {
+            const timer = setTimeout(() => setCriticalAlert(null), 8000);
+            return () => clearTimeout(timer);
+        }
+    }, [criticalAlert]);
 
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
@@ -163,6 +180,25 @@ const NotificationsPanel: React.FC<NotificationsPanelProps> = ({ onNavigation })
 
     return (
         <div className="relative inline-block text-left" ref={dropdownRef}>
+            {criticalAlert && (
+                <div
+                    className={`fixed top-0 inset-x-0 z-[200] px-4 py-3 flex items-center justify-between gap-4 shadow-lg text-white ${
+                        criticalAlert.type === 'DRIVE_HEALTH_FAILED' ? 'bg-red-600' : 'bg-emerald-600'
+                    }`}
+                >
+                    <div className="text-sm">
+                        <span className="font-bold">{criticalAlert.title}</span>
+                        <span className="ml-2 opacity-90">{criticalAlert.message}</span>
+                    </div>
+                    <button
+                        onClick={() => setCriticalAlert(null)}
+                        className="flex-shrink-0 text-white/80 hover:text-white font-bold text-lg leading-none"
+                        aria-label="Dismiss"
+                    >
+                        &times;
+                    </button>
+                </div>
+            )}
             <button
                 onClick={() => setIsOpen(!isOpen)}
                 className="relative p-2 text-slate-300 hover:text-white transition-colors focus:outline-none"

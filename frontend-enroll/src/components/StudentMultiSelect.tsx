@@ -16,6 +16,7 @@ interface StudentMultiSelectProps {
 
 export default function StudentMultiSelect({ students, value, onChange, loading }: StudentMultiSelectProps) {
   const [search, setSearch] = useState('');
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
@@ -31,6 +32,16 @@ export default function StudentMultiSelect({ students, value, onChange, loading 
     }
     return Object.entries(map).sort(([a], [b]) => a.localeCompare(b));
   }, [filtered]);
+
+  const isSearching = search.trim().length > 0;
+
+  const toggleGroup = (instrument: string) => {
+    setExpandedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(instrument)) next.delete(instrument); else next.add(instrument);
+      return next;
+    });
+  };
 
   const toggleOne = (id: string) => {
     onChange(value.includes(id) ? value.filter((v) => v !== id) : [...value, id]);
@@ -76,15 +87,25 @@ export default function StudentMultiSelect({ students, value, onChange, loading 
           groups.map(([instrument, gStudents]) => {
             const groupIds = gStudents.map((s) => s.id);
             const allSelected = groupIds.every((id) => value.includes(id));
+            const selectedCount = groupIds.filter((id) => value.includes(id)).length;
+            const expanded = isSearching || expandedGroups.has(instrument);
 
             return (
               <div key={instrument}>
                 {/* Group header */}
                 <div className="flex items-center justify-between px-3 py-1.5 bg-gray-50 sticky top-0">
-                  <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                  <button
+                    type="button"
+                    onClick={() => toggleGroup(instrument)}
+                    className="flex items-center gap-1.5 text-xs font-semibold text-gray-500 uppercase tracking-wide"
+                  >
+                    <span className={`transition-transform ${expanded ? 'rotate-90' : ''}`}>▸</span>
                     {instrument}
-                    <span className="ml-1 font-normal text-gray-400">({gStudents.length})</span>
-                  </span>
+                    <span className="font-normal text-gray-400">({gStudents.length})</span>
+                    {selectedCount > 0 && (
+                      <span className="font-normal text-indigo-500 normal-case">· {selectedCount} selected</span>
+                    )}
+                  </button>
                   <button
                     type="button"
                     onClick={() => allSelected ? clearGroup(groupIds) : selectAllGroup(groupIds)}
@@ -94,7 +115,7 @@ export default function StudentMultiSelect({ students, value, onChange, loading 
                   </button>
                 </div>
                 {/* Students in group */}
-                {gStudents.map((s) => (
+                {expanded && gStudents.map((s) => (
                   <label key={s.id} className="flex items-center gap-3 px-3 py-2 hover:bg-indigo-50 cursor-pointer">
                     <input
                       type="checkbox"

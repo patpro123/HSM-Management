@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { apiGet, apiPost, apiPut, apiDelete } from '../api';
+import { getCurrentUser } from '../auth';
 import HomeworkAssignForm from './HomeworkAssignForm';
 
 interface HistoryEntry {
@@ -42,6 +43,7 @@ interface Assignment {
   instructions: string | null;
   due_date: string | null;
   assigned_by: string;
+  assigned_by_user_id: string | null;
   created_at: string;
   status: 'pending' | 'submitted' | 'returned' | 'closed';
   total_marks: number | null;
@@ -190,6 +192,9 @@ const SubmissionHistory: React.FC<{
 const HomeworkTab: React.FC<HomeworkTabProps> = ({ studentId, selfMode }) => {
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [loading, setLoading] = useState(true);
+  const currentUser = getCurrentUser();
+  const isAdmin = currentUser?.roles?.includes('admin') ?? false;
+  const canDelete = (a: Assignment) => isAdmin || (!!currentUser?.id && currentUser.id === a.assigned_by_user_id);
 
   // Theory task fields (student submit form)
   const [theoryAnswerText, setTheoryAnswerText] = useState('');
@@ -451,14 +456,15 @@ const HomeworkTab: React.FC<HomeworkTabProps> = ({ studentId, selfMode }) => {
   };
 
   const handleDelete = async (assignmentId: string) => {
-    if (!confirm('Delete this homework assignment?')) return;
+    if (!confirm('Delete this assignment? Any attached files will also be permanently removed from Drive.')) return;
     try {
       await apiDelete(`/api/homework/${assignmentId}`);
       if (expandedId === assignmentId) { setExpandedId(null); resetSubmitForm(); }
       if (reviewExpandedId === assignmentId) setReviewExpandedId(null);
       await fetchAssignments();
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to delete homework', err);
+      alert(err?.message || 'Failed to delete assignment');
     }
   };
 
@@ -990,8 +996,8 @@ const HomeworkTab: React.FC<HomeworkTabProps> = ({ studentId, selfMode }) => {
                           {isExpanded ? 'Cancel' : a.status === 'returned' ? 'Resubmit' : 'Submit Work'}
                         </button>
                       )}
-                      {/* Teacher/admin: delete */}
-                      {!selfMode && (
+                      {/* Admin, or the teacher who assigned this item, can delete it */}
+                      {!selfMode && canDelete(a) && (
                         <button onClick={() => handleDelete(a.id)}
                           className="p-1 text-gray-300 hover:text-red-500 transition-colors" title="Delete assignment">
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

@@ -37,6 +37,7 @@ export default function AdminAbsencesTab() {
   const [error, setError] = useState<string | null>(null);
   const [viewAssignmentIds, setViewAssignmentIds] = useState<string[] | null>(null);
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
+  const [expandedTeachers, setExpandedTeachers] = useState<Set<string>>(new Set());
 
   const fetchAbsences = () => {
     setLoading(true);
@@ -53,6 +54,14 @@ export default function AdminAbsencesTab() {
     setSelectedKeys(prev => {
       const next = new Set(prev);
       if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  };
+
+  const toggleTeacher = (teacherId: string) => {
+    setExpandedTeachers(prev => {
+      const next = new Set(prev);
+      if (next.has(teacherId)) next.delete(teacherId); else next.add(teacherId);
       return next;
     });
   };
@@ -99,11 +108,32 @@ export default function AdminAbsencesTab() {
           <p className="text-xs text-gray-400">
             {totalStudents} student{totalStudents !== 1 ? 's' : ''} across {teachers.length} teacher{teachers.length !== 1 ? 's' : ''}
           </p>
-          {teachers.map(teacher => (
+          {teachers.map(teacher => {
+            const teacherStudentCount = teacher.batches.reduce((s, b) => s + b.students.length, 0);
+            const teacherSelectedCount = teacher.batches.reduce(
+              (s, b) => s + b.students.filter(st => selectedKeys.has(`${st.student_id}::${b.batch_id}`)).length,
+              0
+            );
+            const expanded = expandedTeachers.has(teacher.teacher_id);
+            return (
             <div key={teacher.teacher_id} className="border border-gray-200 rounded-xl overflow-hidden">
-              <div className="bg-gray-50 px-4 py-2.5 border-b border-gray-200">
-                <p className="font-semibold text-sm text-gray-800">{teacher.teacher_name}</p>
-              </div>
+              <button
+                type="button"
+                onClick={() => toggleTeacher(teacher.teacher_id)}
+                className="w-full flex items-center justify-between bg-gray-50 px-4 py-2.5 border-b border-gray-200 text-left"
+              >
+                <span className="flex items-center gap-2">
+                  <span className={`text-gray-400 transition-transform ${expanded ? 'rotate-90' : ''}`}>▸</span>
+                  <span className="font-semibold text-sm text-gray-800">{teacher.teacher_name}</span>
+                  <span className="text-xs text-gray-400 font-normal">
+                    ({teacherStudentCount} student{teacherStudentCount !== 1 ? 's' : ''})
+                  </span>
+                  {teacherSelectedCount > 0 && (
+                    <span className="text-xs text-orange-600 font-medium">· {teacherSelectedCount} selected</span>
+                  )}
+                </span>
+              </button>
+              {expanded && (
               <div className="p-4 space-y-4">
                 {teacher.batches.map(batch => (
                   <div key={batch.batch_id}>
@@ -146,8 +176,10 @@ export default function AdminAbsencesTab() {
                   </div>
                 ))}
               </div>
+              )}
             </div>
-          ))}
+            );
+          })}
 
           <MakeupAssignPanel
             targets={selectedTargets}
@@ -161,6 +193,7 @@ export default function AdminAbsencesTab() {
         <ViewAssignedMaterialModal
           assignmentIds={viewAssignmentIds}
           onClose={() => setViewAssignmentIds(null)}
+          onDeleted={fetchAbsences}
         />
       )}
     </div>

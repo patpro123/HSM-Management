@@ -273,4 +273,38 @@ function validCategories() {
   return Object.keys(CATEGORY_CONFIG);
 }
 
-module.exports = { upload, setEntityId, deleteFile, cleanupExpired, validCategories, getDriveClient, buildDriveFileName };
+/**
+ * Verifies Drive auth is valid and every configured category folder is
+ * actually reachable — catches both a dead/revoked refresh token (auth-level
+ * failure, same error for every category) and a stale/wrong folder ID for one
+ * specific category (which auth alone won't reveal).
+ *
+ * @returns {Promise<{ healthy: boolean, errors: { category: string, message: string }[] }>}
+ */
+async function checkHealth() {
+  const drive = getDriveClient();
+  const errors = [];
+
+  for (const category of Object.keys(CATEGORY_CONFIG)) {
+    const folderId = CATEGORY_CONFIG[category].folderId();
+    if (!folderId) {
+      errors.push({ category, message: 'Folder not configured' });
+      continue;
+    }
+    try {
+      await drive.files.get({ fileId: folderId, fields: 'id', supportsAllDrives: true });
+    } catch (err) {
+      errors.push({ category, message: err.message });
+      // An auth-level failure (e.g. invalid_grant) will fail identically for
+      // every remaining folder — no need to keep hammering the API.
+      if (err.message?.includes('invalid_grant')) break;
+    }
+  }
+
+  return { healthy: errors.length === 0, errors };
+}
+
+module.exports = {
+  upload, setEntityId, deleteFile, cleanupExpired, validCategories,
+  getDriveClient, buildDriveFileName, checkHealth,
+};

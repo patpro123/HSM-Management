@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { apiGet } from '../api';
+import { apiGet, apiDelete } from '../api';
+import { getCurrentUser } from '../auth';
 
 interface AssignedAttachment {
   id: string;
@@ -16,6 +17,7 @@ interface AssignedMaterial {
   title: string;
   instructions: string | null;
   assigned_by: string;
+  assigned_by_user_id: string | null;
   created_at: string;
   status: string;
   theory_prompt_text: string | null;
@@ -28,9 +30,14 @@ interface AssignedMaterial {
 interface ViewAssignedMaterialModalProps {
   assignmentIds: string[];
   onClose: () => void;
+  onDeleted?: () => void;
 }
 
-function AssignmentCard({ assignment }: { assignment: AssignedMaterial }) {
+function AssignmentCard({ assignment, canDelete, onDelete }: {
+  assignment: AssignedMaterial;
+  canDelete: boolean;
+  onDelete: (id: string) => void;
+}) {
   return (
   <div className="border border-gray-200 rounded-xl p-4 space-y-3">
     <div>
@@ -99,17 +106,29 @@ function AssignmentCard({ assignment }: { assignment: AssignedMaterial }) {
       )}
     </div>
 
-    <p className="text-xs text-gray-400 pt-2 border-t border-gray-100">
-      Assigned by {assignment.assigned_by} on {new Date(assignment.created_at).toLocaleString('en-IN')}
-    </p>
+    <div className="flex items-center justify-between pt-2 border-t border-gray-100">
+      <p className="text-xs text-gray-400">
+        Assigned by {assignment.assigned_by} on {new Date(assignment.created_at).toLocaleString('en-IN')}
+      </p>
+      {canDelete && (
+        <button
+          onClick={() => onDelete(assignment.id)}
+          className="text-xs text-red-500 hover:text-red-700 font-medium flex-shrink-0 ml-2"
+        >
+          Delete
+        </button>
+      )}
+    </div>
   </div>
   );
 }
 
-export default function ViewAssignedMaterialModal({ assignmentIds, onClose }: ViewAssignedMaterialModalProps) {
+export default function ViewAssignedMaterialModal({ assignmentIds, onClose, onDeleted }: ViewAssignedMaterialModalProps) {
   const [assignments, setAssignments] = useState<AssignedMaterial[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const currentUser = getCurrentUser();
+  const isAdmin = currentUser?.roles?.includes('admin') ?? false;
 
   useEffect(() => {
     setLoading(true);
@@ -119,6 +138,19 @@ export default function ViewAssignedMaterialModal({ assignmentIds, onClose }: Vi
       .catch((err: any) => setError(err.message || 'Failed to load assignments'))
       .finally(() => setLoading(false));
   }, [assignmentIds]);
+
+  const handleDelete = async (id: string) => {
+    if (!confirm('Delete this assigned material? Any attached files will also be permanently removed from Drive.')) return;
+    try {
+      await apiDelete(`/api/homework/${id}`);
+      const remaining = assignments.filter(a => a.id !== id);
+      setAssignments(remaining);
+      onDeleted?.();
+      if (remaining.length === 0) onClose();
+    } catch (err: any) {
+      alert(err?.message || 'Failed to delete assignment');
+    }
+  };
 
   const header = assignments[0];
 
@@ -152,7 +184,14 @@ export default function ViewAssignedMaterialModal({ assignmentIds, onClose }: Vi
             <p className="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">{error}</p>
           ) : (
             <div className="space-y-3">
-              {assignments.map(a => <AssignmentCard key={a.id} assignment={a} />)}
+              {assignments.map(a => (
+                <AssignmentCard
+                  key={a.id}
+                  assignment={a}
+                  canDelete={isAdmin || (!!currentUser?.id && currentUser.id === a.assigned_by_user_id)}
+                  onDelete={handleDelete}
+                />
+              ))}
             </div>
           )}
 

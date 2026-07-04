@@ -4,6 +4,7 @@ const express = require('express');
 const jwt     = require('jsonwebtoken');
 const router  = express.Router();
 const pool    = require('../db');
+const { authenticateJWT } = require('../auth/jwtMiddleware');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'default-secret-key-change-in-prod';
 
@@ -65,6 +66,7 @@ router.post('/homework/assign', async (req, res) => {
         theoryPromptStorageId = fileStorageId;
       } catch (err) {
         console.error('Theory sheet upload failed:', err.message);
+        return res.status(502).json({ error: 'Failed to upload theory sheet. Please try again.' });
       }
     }
   }
@@ -130,6 +132,7 @@ router.post('/homework/assign-bulk', async (req, res) => {
         theoryPromptStorageId = fileStorageId;
       } catch (err) {
         console.error('[assign-bulk] theory sheet upload failed:', err.message);
+        return res.status(502).json({ error: 'Failed to upload theory sheet. Please try again.' });
       }
     }
   }
@@ -214,7 +217,7 @@ router.get('/homework/:id', async (req, res) => {
     const result = await pool.query(
       `SELECT
          a.id, a.student_id, s.name AS student_name, a.title, a.instructions,
-         a.assigned_by, a.created_at, a.status,
+         a.assigned_by, a.assigned_by_user_id, a.created_at, a.status,
          a.theory_prompt_text, a.theory_prompt_storage_id,
          a.is_makeup, a.batch_id, a.session_date,
          i.name AS instrument_name,
@@ -253,7 +256,7 @@ router.get('/students/:studentId/homework', async (req, res) => {
     const result = await pool.query(
       `SELECT
          a.id, a.student_id, a.title, a.instructions, a.due_date,
-         a.assigned_by, a.created_at, a.status,
+         a.assigned_by, a.assigned_by_user_id, a.created_at, a.status,
          a.total_marks, a.marks_breakdown,
          a.teacher_comment, a.marks_awarded, a.marks_awarded_breakdown,
          a.submission_history,
@@ -666,17 +669,90 @@ router.put('/homework/:id/review', async (req, res) => {
   }
 });
 
-// DELETE /api/homework/:id — delete assignment (cascade-deletes submission)
-router.delete('/homework/:id', async (req, res) => {
+// DELETE /api/homework/:id — admin, or the teacher who assigned it, deletes an
+// assignment (cascade-deletes its submission/attachments rows) and best-effort
+// removes every associated file from Google Drive so nothing is left orphaned.
+router.delete('/homework/:id', authenticateJWT, async (req, res) => {
   const { id } = req.params;
   try {
-    const result = await pool.query(
-      'DELETE FROM homework_assignments WHERE id = $1 RETURNING id', [id]
+    const assignment = await pool.query(
+      'SELECT id, assigned_by_user_id, theory_prompt_storage_id FROM homework_assignments WHERE id = $1',
+      [id]
     );
-    if (result.rows.length === 0) {
+    if (assignment.rows.length === 0) {
       return res.status(404).json({ error: 'Assignment not found' });
     }
-    res.json({ message: 'Deleted' });
+
+    const isAdmin = req.user.roles?.includes('admin');
+    const isOwner = req.user.id && req.user.id === assignment.rows[0].assigned_by_user_id;
+    if (!isAdmin && !isOwner) {
+      return res.status(403).json({ error: 'Only an admin or the assigning teacher can delete this assignment' });
+    }
+
+    // Gather every file_storage row this assignment (directly or via its attachments/
+    // submission) references, so the Drive files get cleaned up before the DB rows
+    // disappear via cascade — file_storage has no FK-driven cascade of its own.
+    const storageIds = new Set();
+    if (assignment.rows[0].theory_prompt_storage_id) {
+      storageIds.add(assignment.rows[0].theory_prompt_storage_id);
+    }
+    const attachments = await pool.query(
+      'SELECT file_storage_id FROM homework_attachments WHERE assignment_id = $1 AND file_storage_id IS NOT NULL',
+      [id]
+    );
+    attachments.rows.forEach(r => storageIds.add(r.file_storage_id));
+    const submission = await pool.query(
+      'SELECT file_storage_id, theory_answer_storage_id FROM homework_submissions WHERE assignment_id = $1',
+      [id]
+    );
+    submission.rows.forEach(r => {
+      if (r.file_storage_id) storageIds.add(r.file_storage_id);
+      if (r.theory_answer_storage_id) storageIds.add(r.theory_answer_storage_id);
+    });
+
+    // Look up drive_file_id now (while the file_storage rows still exist), but don't
+    // touch file_storage yet — homework_attachments.file_storage_id has no cascade,
+    // so file_storage rows can only be deleted after the assignment (and the
+    // attachments/submission rows that reference them) are gone.
+    let files = [];
+    if (storageIds.size > 0) {
+      const result = await pool.query(
+        'SELECT id, drive_file_id FROM file_storage WHERE id = ANY($1::uuid[])',
+        [[...storageIds]]
+      );
+      files = result.rows;
+    }
+
+    // DB cleanup is one atomic unit — either the assignment and every file_storage
+    // row it owned disappear together, or nothing changes on failure.
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query('DELETE FROM homework_assignments WHERE id = $1', [id]);
+      if (storageIds.size > 0) {
+        await client.query('DELETE FROM file_storage WHERE id = ANY($1::uuid[])', [[...storageIds]]);
+      }
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+
+    // Drive cleanup happens only after the DB commit succeeds, and is best-effort —
+    // deleteFile() already treats "already gone" (404) as success, so this is safe
+    // to retry if a previous attempt got partway through.
+    const driveService = require('../services/driveService');
+    for (const file of files) {
+      try {
+        if (file.drive_file_id) await driveService.deleteFile(file.drive_file_id);
+      } catch (err) {
+        console.error(`[DELETE /homework/:id] Drive delete failed for ${file.drive_file_id}:`, err.message);
+      }
+    }
+
+    res.json({ message: 'Deleted', files_removed: files.length });
   } catch (err) {
     console.error('Error deleting homework:', err);
     res.status(500).json({ error: 'Failed to delete homework' });
@@ -866,7 +942,6 @@ router.post('/homework/assign-makeup-bulk', resolveUser, async (req, res) => {
 
   // Upload theory sheet once, if provided — mirrors /homework/assign and /homework/assign-bulk.
   let theoryPromptStorageId = null;
-  let theoryUploadFailed = false;
   if (theory_prompt_file) {
     const useDrive = process.env.DRIVE_ENABLED === 'true' && Boolean(process.env.DRIVE_FOLDER_HOMEWORK_AUDIO);
     if (useDrive) {
@@ -883,7 +958,7 @@ router.post('/homework/assign-makeup-bulk', resolveUser, async (req, res) => {
         theoryPromptStorageId = fileStorageId;
       } catch (err) {
         console.error('[assign-makeup-bulk] theory sheet upload failed:', err.message);
-        theoryUploadFailed = true;
+        return res.status(502).json({ error: 'Failed to upload theory sheet. Please try again.' });
       }
     }
   }
@@ -909,8 +984,14 @@ router.post('/homework/assign-makeup-bulk', resolveUser, async (req, res) => {
       } catch (uploadErr) {
         console.error('[assign-makeup-bulk] upload failed:', uploadErr.message);
         failedFiles.push(f.name || 'attachment');
-        uploadedAttachments.push({ storageId: null, name: f.name || null });
       }
+    }
+    // If every file failed to upload, don't silently assign material with nothing attached.
+    if (uploadedAttachments.length === 0) {
+      return res.status(502).json({
+        error: 'Failed to upload attachment(s). Please try again.',
+        failed_files: failedFiles,
+      });
     }
   }
 
@@ -956,9 +1037,8 @@ router.post('/homework/assign-makeup-bulk', resolveUser, async (req, res) => {
       success: true,
       assignments: created,
       assigned_count: created.length,
-      attached: uploadedAttachments.filter(a => a.storageId).length,
+      attached: uploadedAttachments.length,
       failed_files: failedFiles,
-      theory_upload_failed: theoryUploadFailed,
     });
 
     // Fire-and-forget WhatsApp notifications — sent after the response so a WA
