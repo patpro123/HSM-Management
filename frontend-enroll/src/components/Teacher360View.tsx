@@ -116,8 +116,9 @@ const Teacher360View: React.FC<Teacher360ViewProps> = ({
   }, [activeTab, resolvedId]);
 
   const refreshAbsences = () => {
+    if (!resolvedId) return;
     setAbsenceLoading(true);
-    apiGet(`/api/teachers/my-absences?date=${absenceDate}`)
+    apiGet(`/api/teachers/${resolvedId}/absences?date=${absenceDate}`)
       .then((res: any) => setAbsenceBatches(res.batches || []))
       .catch(() => setAbsenceBatches([]))
       .finally(() => setAbsenceLoading(false));
@@ -126,7 +127,7 @@ const Teacher360View: React.FC<Teacher360ViewProps> = ({
   useEffect(() => {
     if (activeTab !== 'attendance') return;
     refreshAbsences();
-  }, [activeTab, absenceDate]);
+  }, [activeTab, absenceDate, resolvedId]);
 
   const selectedAbsenceTargets: MakeupMaterialTarget[] = [];
   for (const batch of absenceBatches) {
