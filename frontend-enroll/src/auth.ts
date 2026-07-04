@@ -60,7 +60,7 @@ export const decodeToken = (token: string): User | null => {
   try {
     const payload = JSON.parse(atob(token.split('.')[1]));
     return {
-      id: payload.userId,
+      id: payload.id,
       email: payload.email,
       name: payload.name || payload.email,
       roles: payload.roles || []

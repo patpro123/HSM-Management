@@ -267,6 +267,7 @@ app.use('/api', require('./routes/habits'));
 app.use('/api', require('./routes/xp'));
 app.use('/api', require('./routes/landing'));
 app.use('/api/marketing', require('./routes/marketing'));
+app.use('/api/materials', require('./routes/materials'));
 
 // GET /api/packages — list all packages, optionally filtered by instrument_id and location
 app.get('/api/packages', async (req, res) => {

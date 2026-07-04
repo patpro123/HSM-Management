@@ -86,6 +86,29 @@ function buildDriveFileName({ studentName, instrument, originalName, date }) {
   return `${parts.join('_')}.${ext}`;
 }
 
+/**
+ * Builds a human-readable Drive filename for a library material — sorts and reads
+ * naturally in the Drive folder by instrument rather than by uploader.
+ *
+ * @param {object} opts
+ * @param {string}      opts.instrument   - e.g. "Guitar"
+ * @param {string}      opts.title        - e.g. "Major Scale Backing Track"
+ * @param {string}      opts.originalName - original file name (for extension)
+ * @param {Date}        [opts.date]       - defaults to now
+ * @returns {string}  e.g. "Guitar_Major_Scale_Backing_Track_2026-07-04.mp3"
+ */
+function buildMaterialFileName({ instrument, title, originalName, date }) {
+  const d       = date || new Date();
+  const dateStr = d.toISOString().slice(0, 10);
+  const ext     = (originalName || 'file').split('.').pop().toLowerCase() || 'bin';
+  const parts   = [
+    instrument ? _safePart(instrument) : null,
+    _safePart(title),
+    dateStr,
+  ].filter(Boolean);
+  return `${parts.join('_')}.${ext}`;
+}
+
 // ── Category configuration ────────────────────────────────────────────────────
 
 const CATEGORY_CONFIG = {
@@ -108,6 +131,10 @@ const CATEGORY_CONFIG = {
   marketing: {
     folderId:      () => process.env.DRIVE_FOLDER_MARKETING,
     retentionDays: () => parseInt(process.env.DRIVE_RETENTION_MARKETING         ?? '0',   10), // permanent
+  },
+  teaching_material: {
+    folderId:      () => process.env.DRIVE_FOLDER_TEACHING_MATERIALS,
+    retentionDays: () => parseInt(process.env.DRIVE_RETENTION_TEACHING_MATERIALS ?? '0',  10), // permanent — shared library asset
   },
 };
 
@@ -261,6 +288,26 @@ async function setEntityId(fileStorageId, entityId) {
 }
 
 /**
+ * Streams a Drive file's raw bytes for server-side proxying — used when the caller
+ * needs to render the file inline (e.g. <img>/<audio>/<video> src) rather than force
+ * a download. Drive's own public download URL sends Content-Disposition: attachment,
+ * which browsers refuse to render inline, so callers who need inline preview must
+ * pipe the response through their own endpoint using this stream instead.
+ *
+ * @param {string} driveFileId
+ * @returns {Promise<{ stream: import('stream').Readable, mimeType: string }>}
+ */
+async function getFileStream(driveFileId) {
+  const drive = getDriveClient();
+  const meta = await drive.files.get({ fileId: driveFileId, fields: 'mimeType', supportsAllDrives: true });
+  const res = await drive.files.get(
+    { fileId: driveFileId, alt: 'media', supportsAllDrives: true },
+    { responseType: 'stream' }
+  );
+  return { stream: res.data, mimeType: meta.data.mimeType };
+}
+
+/**
  * Deletes a file from Google Drive. 404 is treated as non-fatal (already gone).
  *
  * @param {string} driveFileId
@@ -357,5 +404,5 @@ async function checkHealth() {
 
 module.exports = {
   upload, setEntityId, deleteFile, cleanupExpired, validCategories,
-  getDriveClient, buildDriveFileName, checkHealth,
+  getDriveClient, buildDriveFileName, buildMaterialFileName, checkHealth, getFileStream,
 };

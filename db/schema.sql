@@ -510,13 +510,37 @@ CREATE TABLE IF NOT EXISTS homework_assignments (
   is_makeup    BOOLEAN     NOT NULL DEFAULT FALSE
 );
 
+-- Shared teaching material library (added via migration 057) — teachers/admins
+-- pre-record or upload material tagged by instrument, reused across many
+-- homework/makeup assignments instead of re-uploading per student.
+CREATE TABLE IF NOT EXISTS teaching_materials (
+  id                  UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  title               TEXT        NOT NULL,
+  description         TEXT,
+  instrument_id       UUID        NOT NULL REFERENCES instruments(id) ON DELETE RESTRICT,
+  material_type       TEXT        NOT NULL CHECK (material_type IN ('audio', 'video', 'image', 'document')),
+  file_storage_id     UUID        NOT NULL REFERENCES file_storage(id) ON DELETE RESTRICT,
+  created_by_user_id  UUID        REFERENCES users(id) ON DELETE SET NULL,
+  is_active           BOOLEAN     NOT NULL DEFAULT TRUE,
+  created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_teaching_materials_instrument
+  ON teaching_materials (instrument_id) WHERE is_active;
+CREATE INDEX IF NOT EXISTS idx_teaching_materials_type
+  ON teaching_materials (material_type);
+CREATE INDEX IF NOT EXISTS idx_teaching_materials_title
+  ON teaching_materials (LOWER(title));
+
 -- Multi-file attachments for makeup material assignments
 CREATE TABLE IF NOT EXISTS homework_attachments (
-  id              UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-  assignment_id   UUID        NOT NULL REFERENCES homework_assignments(id) ON DELETE CASCADE,
-  file_storage_id UUID        REFERENCES file_storage(id),
-  label           TEXT,
-  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  id                  UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  assignment_id       UUID        NOT NULL REFERENCES homework_assignments(id) ON DELETE CASCADE,
+  file_storage_id     UUID        REFERENCES file_storage(id),
+  label               TEXT,
+  created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  source_material_id  UUID        REFERENCES teaching_materials(id) ON DELETE SET NULL
 );
 
 -- Student's audio submission for a homework assignment

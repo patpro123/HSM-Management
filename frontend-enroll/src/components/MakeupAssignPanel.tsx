@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { apiPost } from '../api';
+import MaterialPicker, { PickedMaterial } from './MaterialPicker';
 
 const fmtSeconds = (s: number) =>
   `${Math.floor(s / 60).toString().padStart(2, '0')}:${(s % 60).toString().padStart(2, '0')}`;
@@ -11,11 +12,11 @@ export interface MakeupMaterialTarget {
   instrument_name: string;
 }
 
-interface MakeupFile {
-  file: File;
-  data: string;
-  mimeType: string;
-}
+// Either a freshly recorded/uploaded file (carries its own base64 data) or a
+// reference to an existing library item (carries only its id — no re-upload).
+type MakeupFile =
+  | { kind: 'upload'; name: string; mimeType: string; data: string }
+  | { kind: 'library'; name: string; mimeType: string; materialId: string };
 
 interface MakeupAssignPanelProps {
   targets: MakeupMaterialTarget[];
@@ -57,6 +58,8 @@ export default function MakeupAssignPanel({ targets, sessionDate, onAssigned }: 
   const chunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  const [pickerOpen, setPickerOpen] = useState(false);
+
   const resetForm = () => {
     setTitle(''); setInstructions('');
     setFiles([]); setError(null); setUploadWarning(null);
@@ -70,10 +73,17 @@ export default function MakeupAssignPanel({ targets, sessionDate, onAssigned }: 
   const handleFilePick = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const picked = Array.from(e.target.files || []);
     const newFiles: MakeupFile[] = await Promise.all(
-      picked.map(async f => ({ file: f, data: await readFileAsBase64(f), mimeType: f.type }))
+      picked.map(async f => ({ kind: 'upload' as const, name: f.name, mimeType: f.type, data: await readFileAsBase64(f) }))
     );
     setFiles(prev => [...prev, ...newFiles]);
     if (fileRef.current) fileRef.current.value = '';
+  };
+
+  const handleLibraryPick = (picked: PickedMaterial[]) => {
+    setFiles(prev => [
+      ...prev,
+      ...picked.map(p => ({ kind: 'library' as const, name: p.name, mimeType: p.mimeType, materialId: p.materialId })),
+    ]);
   };
 
   const startRecording = async () => {
@@ -89,7 +99,7 @@ export default function MakeupAssignPanel({ targets, sessionDate, onAssigned }: 
         const blob = new Blob(chunksRef.current, { type: mimeType });
         const file = new File([blob], `recording_${Date.now()}.webm`, { type: mimeType });
         const data = await readFileAsBase64(file);
-        const entry: MakeupFile = { file, data, mimeType };
+        const entry: MakeupFile = { kind: 'upload', name: file.name, mimeType, data };
         setFiles(prev => [...prev, entry]);
         setRecordedFileRef(entry);
         setRecordedUrl(URL.createObjectURL(blob));
@@ -149,7 +159,9 @@ export default function MakeupAssignPanel({ targets, sessionDate, onAssigned }: 
         instructions: instructions.trim() || null,
         theory_prompt_text: theoryText.trim() || null,
         theory_prompt_file: theoryFile || null,
-        files: files.map(f => ({ name: f.file.name, mimeType: f.mimeType, data: f.data })),
+        files: files.map(f => f.kind === 'library'
+          ? { material_id: f.materialId, name: f.name, mimeType: f.mimeType }
+          : { name: f.name, mimeType: f.mimeType, data: f.data }),
       });
 
       const failedFiles: string[] = res?.failed_files || [];
@@ -235,7 +247,10 @@ export default function MakeupAssignPanel({ targets, sessionDate, onAssigned }: 
           <div className="space-y-1 mb-2">
             {files.map((f, i) => (
               <div key={i} className="flex items-center justify-between bg-white rounded-lg px-3 py-2 text-sm">
-                <span className="text-gray-700 truncate flex-1">{f.file.name}</span>
+                <span className="text-gray-700 truncate flex-1">
+                  {f.kind === 'library' && <span className="text-orange-500 mr-1" title="From library">📚</span>}
+                  {f.name}
+                </span>
                 <button
                   onClick={() => setFiles(prev => prev.filter((_, idx) => idx !== i))}
                   className="ml-2 text-gray-400 hover:text-red-500 flex-shrink-0"
@@ -265,6 +280,13 @@ export default function MakeupAssignPanel({ targets, sessionDate, onAssigned }: 
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
             </svg>
             Add files (mp3, mp4, image, pdf)
+          </button>
+
+          <button
+            onClick={() => setPickerOpen(true)}
+            className="flex items-center gap-2 text-sm text-orange-600 border border-orange-200 rounded-lg px-3 py-2 bg-white hover:bg-orange-50 transition-colors"
+          >
+            📚 Choose from Library
           </button>
 
           {recordState === 'idle' && (
@@ -320,6 +342,14 @@ export default function MakeupAssignPanel({ targets, sessionDate, onAssigned }: 
           ? 'Assigning…'
           : `Assign to ${targets.length} Student${targets.length !== 1 ? 's' : ''}`}
       </button>
+
+      {pickerOpen && (
+        <MaterialPicker
+          defaultInstrumentName={targets[0]?.instrument_name}
+          onPick={handleLibraryPick}
+          onClose={() => setPickerOpen(false)}
+        />
+      )}
     </div>
   );
 }

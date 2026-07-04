@@ -21,6 +21,23 @@ export interface Instrument {
   is_deprecated?: boolean;
 }
 
+export type MaterialType = 'audio' | 'video' | 'image' | 'document';
+
+export interface TeachingMaterial {
+  id: string;
+  title: string;
+  description: string | null;
+  material_type: MaterialType;
+  instrument_id: string;
+  instrument_name: string;
+  public_url: string;
+  file_name: string;
+  mime_type: string;
+  created_by_user_id: string | null;
+  created_by_name: string | null;
+  created_at: string;
+}
+
 export interface Batch {
   id: number | string;
   instrument_id: number | string;

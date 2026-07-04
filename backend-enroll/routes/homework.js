@@ -965,10 +965,36 @@ router.post('/homework/assign-makeup-bulk', resolveUser, async (req, res) => {
 
   // Upload each attachment once — every target student's assignment gets its own
   // homework_attachments row pointing at the same shared file_storage_id.
+  // Each entry is either a fresh upload ({ data, name, mimeType }) or a reference to
+  // an existing library item ({ material_id }) — the latter skips upload entirely and
+  // reuses that item's file_storage_id, so picking from the library never re-uploads.
   const uploadedAttachments = [];
   const failedFiles = [];
   if (Array.isArray(files) && files.length > 0) {
     for (const f of files) {
+      if (f.material_id) {
+        try {
+          const materialRes = await pool.query(
+            'SELECT id, title, file_storage_id FROM teaching_materials WHERE id = $1 AND is_active = TRUE',
+            [f.material_id]
+          );
+          if (materialRes.rows.length === 0) {
+            failedFiles.push(f.name || 'library item');
+            continue;
+          }
+          const material = materialRes.rows[0];
+          uploadedAttachments.push({
+            storageId:        material.file_storage_id,
+            name:             material.title,
+            sourceMaterialId: material.id,
+          });
+        } catch (lookupErr) {
+          console.error('[assign-makeup-bulk] material lookup failed:', lookupErr.message);
+          failedFiles.push(f.name || 'library item');
+        }
+        continue;
+      }
+
       if (!f.data) continue;
       const base64Part = f.data.includes(',') ? f.data.split(',')[1] : f.data;
       try {
@@ -980,13 +1006,13 @@ router.post('/homework/assign-makeup-bulk', resolveUser, async (req, res) => {
           category:   'student_document',
           entityType: 'homework_assignment',
         });
-        uploadedAttachments.push({ storageId: fileStorageId, name: f.name || null });
+        uploadedAttachments.push({ storageId: fileStorageId, name: f.name || null, sourceMaterialId: null });
       } catch (uploadErr) {
         console.error('[assign-makeup-bulk] upload failed:', uploadErr.message);
         failedFiles.push(f.name || 'attachment');
       }
     }
-    // If every file failed to upload, don't silently assign material with nothing attached.
+    // If every file failed to upload/resolve, don't silently assign material with nothing attached.
     if (uploadedAttachments.length === 0) {
       return res.status(502).json({
         error: 'Failed to upload attachment(s). Please try again.',
@@ -1025,8 +1051,9 @@ router.post('/homework/assign-makeup-bulk', resolveUser, async (req, res) => {
 
       for (const att of uploadedAttachments) {
         await client.query(
-          'INSERT INTO homework_attachments (assignment_id, file_storage_id, label) VALUES ($1, $2, $3)',
-          [assignmentId, att.storageId, att.name]
+          `INSERT INTO homework_attachments (assignment_id, file_storage_id, label, source_material_id)
+           VALUES ($1, $2, $3, $4)`,
+          [assignmentId, att.storageId, att.name, att.sourceMaterialId || null]
         );
       }
     }

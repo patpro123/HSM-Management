@@ -1,6 +1,6 @@
 // API utilities with authentication
 import { API_BASE_URL } from './config';
-import { authenticatedFetch } from './auth';
+import { authenticatedFetch, getToken } from './auth';
 
 /**
  * Wrapper around authenticatedFetch for API calls
@@ -60,6 +60,26 @@ export const apiPut = (endpoint: string, data: any): Promise<any> => {
     method: 'PUT',
     body: JSON.stringify(data),
   });
+};
+
+/**
+ * Search the shared teaching material library — used by both the Material Library
+ * tab and the in-assignment library picker, so the query-building lives in one place.
+ */
+export const searchMaterials = (opts: { instrumentId: string; type?: string; q?: string }): Promise<any> => {
+  const params = new URLSearchParams({ instrument_id: opts.instrumentId });
+  if (opts.type) params.set('type', opts.type);
+  if (opts.q?.trim()) params.set('q', opts.q.trim());
+  return apiGet(`/api/materials?${params.toString()}`);
+};
+
+/**
+ * Inline-preview URL for a saved library material — <img>/<audio>/<video> src
+ * attributes can't send an Authorization header, so the token travels as a query
+ * param instead (same pattern as the notifications SSE stream).
+ */
+export const materialFileUrl = (materialId: string): string => {
+  return `${API_BASE_URL}/api/materials/${materialId}/file?token=${getToken() || ''}`;
 };
 
 /**

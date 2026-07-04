@@ -12,6 +12,7 @@ Today, "material" (audio/video/image/PDF) is only ever created *at the moment of
 1. A **Material Library** where teachers record/upload material (audio, video, image, PDF) upfront, tagged with a proper name and an **instrument**, independent of any specific student.
 2. When assigning homework/classwork to a student (or group), the teacher can **upload new**, **record new**, or **search the library** and attach an existing item — no re-upload.
 3. The library is **shared**: searchable by instrument (and title) by **all teachers and admins**, not siloed per-teacher.
+4. **No duplication**: before recording/uploading something new, a teacher can see everything already in the library for that instrument — across *all* artefact types (audio, video, image, PDF together, not filtered to one type by default) — so they don't recreate material that already exists.
 
 ## Assumptions (flag if wrong — no response received on these two, proceeding with the recommended defaults)
 
@@ -70,7 +71,7 @@ Registered in `index.js` as `app.use('/api/materials', require('./routes/materia
 | Method | Path | Purpose |
 |---|---|---|
 | POST | `/api/materials` | Create a material. Body: `{ title, description?, instrument_id, material_type, file_data (base64), file_name, mime_type }`. Uploads to Drive (`teaching_material` category), inserts `file_storage` + `teaching_materials` rows. |
-| GET | `/api/materials?instrument_id=&type=&q=&limit=` | List/search — filters combine with AND. Returns `public_url`, `title`, `instrument_name`, `material_type`, `created_by` name, `created_at`. |
+| GET | `/api/materials?instrument_id=&type=&q=&limit=` | List/search — `instrument_id` alone returns every artefact type for that instrument (audio+video+image+document together); `type` is an optional further refinement, not required. Filters combine with AND. Returns `public_url`, `title`, `instrument_name`, `material_type`, `created_by` name, `created_at`. |
 | GET | `/api/materials/:id` | Single item detail (for preview). |
 | DELETE | `/api/materials/:id` | Admin or the creating teacher only. Deletes the Drive file (best-effort, same pattern as `DELETE /homework/:id`) + `file_storage` + `teaching_materials` rows. Blocked (409) if any `homework_attachments` still reference it via `source_material_id` — or allow with a warning that existing assignments keep their file (file_storage row would need to survive); simplest correct behavior: **soft-delete** (`is_active = false`) instead of hard delete, so past assignments are unaffected and it just disappears from search.
 
@@ -90,9 +91,14 @@ This mirrors the existing "upload once, attach the same `file_storage_id` to eve
 - `apiGet('/materials', {...})`, `apiPost('/materials', ...)`, `apiDelete('/materials/:id')`.
 
 ### New component: `MaterialLibrary.tsx`
-New top-level tab (`materials`), role-gated to `admin`/`teacher`, sidebar entry in `App.tsx`.
-- **Create panel**: Title (required text), Instrument (required dropdown from `/api/instruments`), Description (optional), and a record-or-upload widget reusing the existing pattern from `MakeupAssignPanel.tsx` (`MediaRecorder` for audio, `<input type=file accept="video/*,image/*,application/pdf,audio/*">` for everything else). Submits to `POST /api/materials`.
-- **Browse/search panel**: instrument filter dropdown, text search box (debounced, hits `GET /api/materials?q=`), type filter chips (Audio/Video/Image/PDF). Grid/list of cards showing title, instrument badge, type icon, uploader, date, inline preview (`<audio>`/`<video>`/`<img>`/PDF link), and a delete button (owner or admin only).
+New top-level tab (`materials`), role-gated to `admin`/`teacher`, sidebar entry in `App.tsx`. Create and search are **one flow**, not two separate panels, so the duplicate-check is unavoidable rather than opt-in:
+
+1. **Pick Instrument first** (required dropdown from `/api/instruments`) — the single field that gates everything else below.
+2. **"Already in the library for &lt;Instrument&gt;"** — as soon as an instrument is selected, immediately fetch and show `GET /api/materials?instrument_id=` (every type together — audio/video/image/PDF mixed in one list, sorted by newest), with inline preview per card and a text box to further narrow by title. This list is front-and-center, above the create form, so the teacher sees what already exists before deciding to create something new.
+3. **Create new** (below the existing-material list, de-emphasized but not hidden): Title (required), Description (optional), and a record-or-upload widget reusing the existing pattern from `MakeupAssignPanel.tsx` (`MediaRecorder` for audio, `<input type=file accept="video/*,image/*,application/pdf,audio/*">` for everything else).
+   **Preview-before-save**: once a file is recorded or picked, render it inline (`<audio>`/`<video>` player, `<img>`, or a PDF link/embed) with a "Discard & redo" option — mirrors the existing recorded-audio playback pattern in `MakeupAssignPanel.tsx`. The material is only uploaded to Drive and inserted into `teaching_materials` when the teacher confirms "Save to Library" after previewing, so a bad take or wrong file never reaches the shared library.
+
+Delete (owner or admin only) is available on any card in the existing-material list.
 
 ### New reusable component: `MaterialPicker.tsx`
 A modal (or inline expandable panel) that wraps the browse/search UI above in "pick" mode — takes an optional `defaultInstrumentId` (pre-filled from the batch's instrument when opened from an assignment flow), lets the teacher multi-select materials, and returns `{ material_id, name, mimeType }[]` to the caller.
