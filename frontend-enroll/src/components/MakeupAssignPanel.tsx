@@ -49,8 +49,10 @@ export default function MakeupAssignPanel({ targets, sessionDate, onAssigned }: 
   const [theoryFileName, setTheoryFileName] = useState('');
   const theoryFileRef = useRef<HTMLInputElement | null>(null);
 
-  const [recording, setRecording] = useState(false);
+  const [recordState, setRecordState] = useState<'idle' | 'recording' | 'recorded'>('idle');
   const [recordSeconds, setRecordSeconds] = useState(0);
+  const [recordedUrl, setRecordedUrl] = useState<string | null>(null);
+  const [recordedFileRef, setRecordedFileRef] = useState<MakeupFile | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -59,6 +61,8 @@ export default function MakeupAssignPanel({ targets, sessionDate, onAssigned }: 
     setTitle(''); setInstructions('');
     setFiles([]); setError(null); setUploadWarning(null);
     setTheoryOpen(false); setTheoryText(''); setTheoryFile(null); setTheoryFileName('');
+    if (recordedUrl) URL.revokeObjectURL(recordedUrl);
+    setRecordedUrl(null); setRecordedFileRef(null); setRecordState('idle'); setRecordSeconds(0);
     if (fileRef.current) fileRef.current.value = '';
     if (theoryFileRef.current) theoryFileRef.current.value = '';
   };
@@ -85,11 +89,15 @@ export default function MakeupAssignPanel({ targets, sessionDate, onAssigned }: 
         const blob = new Blob(chunksRef.current, { type: mimeType });
         const file = new File([blob], `recording_${Date.now()}.webm`, { type: mimeType });
         const data = await readFileAsBase64(file);
-        setFiles(prev => [...prev, { file, data, mimeType }]);
+        const entry: MakeupFile = { file, data, mimeType };
+        setFiles(prev => [...prev, entry]);
+        setRecordedFileRef(entry);
+        setRecordedUrl(URL.createObjectURL(blob));
+        setRecordState('recorded');
         stream.getTracks().forEach(t => t.stop());
       };
       recorder.start(100);
-      setRecording(true);
+      setRecordState('recording');
       setRecordSeconds(0);
       timerRef.current = setInterval(() => setRecordSeconds(s => s + 1), 1000);
     } catch {
@@ -99,8 +107,16 @@ export default function MakeupAssignPanel({ targets, sessionDate, onAssigned }: 
 
   const stopRecording = () => {
     mediaRecorderRef.current?.stop();
-    setRecording(false);
     if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+  };
+
+  const discardRecording = () => {
+    if (recordedUrl) URL.revokeObjectURL(recordedUrl);
+    if (recordedFileRef) setFiles(prev => prev.filter(f => f !== recordedFileRef));
+    setRecordedUrl(null);
+    setRecordedFileRef(null);
+    setRecordState('idle');
+    setRecordSeconds(0);
   };
 
   // Stop any in-progress recording / release the mic on unmount.
@@ -108,7 +124,9 @@ export default function MakeupAssignPanel({ targets, sessionDate, onAssigned }: 
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
       if (mediaRecorderRef.current?.state === 'recording') mediaRecorderRef.current.stop();
+      if (recordedUrl) URL.revokeObjectURL(recordedUrl);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleTheoryFilePick = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -249,24 +267,39 @@ export default function MakeupAssignPanel({ targets, sessionDate, onAssigned }: 
             Add files (mp3, mp4, image, pdf)
           </button>
 
-          {!recording ? (
+          {recordState === 'idle' && (
             <button
               onClick={startRecording}
-              className="flex items-center gap-2 text-sm text-red-600 border border-red-200 rounded-lg px-3 py-2 bg-white hover:bg-red-50 transition-colors"
+              className="flex items-center gap-2 px-5 py-2.5 bg-red-500 text-white text-sm font-semibold rounded-full hover:bg-red-600 active:scale-95 transition-all shadow-sm"
             >
-              <span className="w-2 h-2 rounded-full bg-red-500" />
-              Record Audio
+              <span className="w-2.5 h-2.5 rounded-full bg-white" />
+              Start Recording
             </button>
-          ) : (
-            <div className="flex items-center gap-3">
+          )}
+          {recordState === 'recording' && (
+            <div className="flex items-center gap-4">
               <button
                 onClick={stopRecording}
-                className="flex items-center gap-2 text-sm text-white bg-gray-800 rounded-lg px-3 py-2 hover:bg-gray-900 transition-colors"
+                className="flex items-center gap-2 px-5 py-2.5 bg-gray-800 text-white text-sm font-semibold rounded-full hover:bg-gray-900 active:scale-95 transition-all shadow-sm"
               >
-                <span className="w-2 h-2 rounded-sm bg-white" />
+                <span className="w-2.5 h-2.5 rounded-sm bg-white" />
                 Stop
               </button>
-              <span className="text-sm font-mono font-bold text-red-500 animate-pulse">{fmtSeconds(recordSeconds)}</span>
+              <span className="text-base font-mono font-bold text-red-500 animate-pulse">{fmtSeconds(recordSeconds)}</span>
+              <span className="flex gap-0.5 items-end h-5">
+                {[3, 5, 4, 6, 3, 5, 4].map((h, i) => (
+                  <span key={i} className="w-1 bg-red-400 rounded-full animate-bounce"
+                    style={{ height: `${h * 3}px`, animationDelay: `${i * 80}ms` }} />
+                ))}
+              </span>
+            </div>
+          )}
+          {recordState === 'recorded' && recordedUrl && (
+            <div className="flex flex-wrap items-center gap-3">
+              <audio src={recordedUrl} controls className="h-10" style={{ minWidth: 220 }} />
+              <button onClick={discardRecording} className="text-xs text-gray-400 hover:text-red-500 underline">
+                Discard &amp; re-record
+              </button>
             </div>
           )}
         </div>
