@@ -2,6 +2,8 @@
 
 const { google } = require('googleapis');
 const { Readable } = require('stream');
+const { spawn } = require('child_process');
+const { path: ffmpegPath } = require('@ffmpeg-installer/ffmpeg');
 const pool = require('../db');
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
@@ -130,6 +132,43 @@ function getCategoryConfig(category) {
   return { folderId, retentionDays: cfg.retentionDays() };
 }
 
+// ── Audio transcoding ──────────────────────────────────────────────────────────
+// Browsers' MediaRecorder API can only record to webm/opus — that format doesn't
+// play back reliably in some mobile audio players. Transcode to MP3 before the
+// file is persisted to Drive so every stored recording is broadly playable.
+
+/**
+ * Converts a webm audio buffer to MP3 using ffmpeg via stdin/stdout pipes (no temp files).
+ *
+ * @param {Buffer} buffer - webm audio data
+ * @returns {Promise<Buffer>} MP3-encoded audio data
+ */
+function convertWebmToMp3(buffer) {
+  return new Promise((resolve, reject) => {
+    const ffmpeg = spawn(ffmpegPath, [
+      '-i', 'pipe:0',
+      '-f', 'mp3',
+      '-codec:a', 'libmp3lame',
+      '-b:a', '128k',
+      'pipe:1',
+    ]);
+
+    const outChunks = [];
+    let stderr = '';
+
+    ffmpeg.stdout.on('data', chunk => outChunks.push(chunk));
+    ffmpeg.stderr.on('data', chunk => { stderr += chunk; });
+    ffmpeg.on('error', reject);
+    ffmpeg.on('close', code => {
+      if (code === 0) resolve(Buffer.concat(outChunks));
+      else reject(new Error(`ffmpeg exited with code ${code}: ${stderr.slice(-500)}`));
+    });
+
+    ffmpeg.stdin.on('error', () => { /* ignore EPIPE if ffmpeg exits early */ });
+    ffmpeg.stdin.end(buffer);
+  });
+}
+
 // ── Core operations ───────────────────────────────────────────────────────────
 
 /**
@@ -148,6 +187,18 @@ function getCategoryConfig(category) {
 async function upload({ buffer, fileName, mimeType, category, entityType, entityId }) {
   const { folderId, retentionDays } = getCategoryConfig(category);
   const drive = getDriveClient();
+
+  // Recorded audio comes in as webm from the browser — transcode to MP3 so it
+  // plays reliably on mobile. Falls back to the original webm if ffmpeg fails.
+  if (mimeType?.startsWith('audio/webm')) {
+    try {
+      buffer = await convertWebmToMp3(buffer);
+      fileName = fileName.replace(/\.\w+$/, '.mp3');
+      mimeType = 'audio/mpeg';
+    } catch (err) {
+      console.error('[driveService] webm→mp3 conversion failed, uploading original webm:', err.message);
+    }
+  }
 
   // 1. Upload file to Drive folder
   const uploadRes = await drive.files.create({

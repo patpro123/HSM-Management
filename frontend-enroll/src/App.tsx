@@ -384,7 +384,7 @@ const App: React.FC = () => {
           {isAdmin && impersonating ? (
             <div className="bg-white rounded-xl p-8 shadow-sm border border-slate-100">
               {impersonating.type === 'teacher' ? (
-                <Teacher360View teacherId={impersonating.id} isModal={false} />
+                <Teacher360View teacherId={impersonating.id} isModal={false} hideTeacherAttendance />
               ) : (
                 <Student360View studentId={impersonating.id} />
               )}
@@ -470,7 +470,7 @@ const App: React.FC = () => {
           ) : isTeacherOnly ? (
             <div className="bg-white rounded-xl p-8 shadow-sm border border-slate-100">
               {activeTab === 'teacher-profile' && (
-                <Teacher360View selfView isModal={false} />
+                <Teacher360View selfView isModal={false} hideTeacherAttendance />
               )}
               {activeTab === 'attendance' && (
                 <AttendanceDashboard

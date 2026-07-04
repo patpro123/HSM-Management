@@ -13,6 +13,7 @@ interface Teacher360ViewProps {
   selfView?: boolean;   // if true, resolves own teacher_id via /api/teachers/me/360
   onClose?: () => void;
   isModal?: boolean;
+  hideTeacherAttendance?: boolean;   // if true, hides the teacher's own conducted-sessions stats in the Attendance tab
 }
 
 type TabType = 'profile' | 'attendance' | 'payout' | 'students' | 'homework' | 'ptm';
@@ -39,7 +40,8 @@ const Teacher360View: React.FC<Teacher360ViewProps> = ({
   teacherId,
   selfView = false,
   onClose,
-  isModal = false
+  isModal = false,
+  hideTeacherAttendance = false
 }) => {
   const [activeTab, setActiveTab] = useState<TabType>('profile');
   const [data, setData] = useState<Teacher360Data | null>(null);
@@ -372,6 +374,8 @@ const Teacher360View: React.FC<Teacher360ViewProps> = ({
             {/* ── ATTENDANCE TAB ── */}
             {activeTab === 'attendance' && (
               <div className="space-y-6">
+                {!hideTeacherAttendance && (
+                <>
                 {/* Summary cards */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
@@ -427,9 +431,11 @@ const Teacher360View: React.FC<Teacher360ViewProps> = ({
                     </div>
                   )}
                 </div>
+                </>
+                )}
 
                 {/* ── Absent Students Panel ── */}
-                <div className="border-t border-gray-100 pt-5">
+                <div className={hideTeacherAttendance ? '' : 'border-t border-gray-100 pt-5'}>
                   <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
                     <h3 className="font-semibold text-lg text-gray-800">Student Absences</h3>
                     <input
