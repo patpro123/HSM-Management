@@ -103,7 +103,7 @@ const App: React.FC = () => {
       if (isAdminRole && (activeTab === 'student-profile' || activeTab === 'teacher-profile')) {
         setActiveTab('stats');
       }
-      if (isTeacherRole && activeTab !== 'teacher-profile' && activeTab !== 'attendance' && activeTab !== 'materials') {
+      if (isTeacherRole && activeTab !== 'teacher-profile') {
         setActiveTab('teacher-profile');
       }
       if (!isAdminRole && !isTeacherRole && activeTab !== 'student-profile') {
@@ -273,8 +273,6 @@ const App: React.FC = () => {
     : isTeacherOnly
       ? [
         { key: 'teacher-profile', label: 'My Profile', icon: 'M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z' },
-        { key: 'attendance', label: 'Attendance', icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4' },
-        { key: 'materials', label: 'Material Library', icon: 'M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10' },
       ]
       : [
         { key: 'student-profile', label: 'My Profile', icon: 'M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z' },
@@ -286,8 +284,9 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen flex flex-col md:flex-row bg-slate-50">
-      {/* Sidebar Navigation — desktop only */}
-      <nav className="hidden md:flex fixed md:relative w-64 h-full bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900 text-white p-6 flex-shrink-0 flex-col z-50">
+      {/* Sidebar Navigation — desktop only, hidden for teachers (single-tab consolidated view) */}
+      {!isTeacherOnly && (
+        <nav className="hidden md:flex fixed md:relative w-64 h-full bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900 text-white p-6 flex-shrink-0 flex-col z-50">
           <div className="flex flex-col items-center gap-4 mb-8 text-center">
             <div className="w-full bg-white rounded-xl overflow-hidden p-3 flex items-center justify-center shadow-lg">
               <img
@@ -332,8 +331,9 @@ const App: React.FC = () => {
             </div>
           </div>
         </nav>
+      )}
 
-      <main className="flex-1 overflow-y-auto max-h-screen md:ml-0 flex flex-col bg-slate-50 pb-16 md:pb-0">
+      <main className={`flex-1 overflow-y-auto max-h-screen md:ml-0 flex flex-col bg-slate-50 ${isTeacherOnly ? '' : 'pb-16 md:pb-0'}`}>
 
         {/* Top Header */}
         <header className="bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between sticky top-0 z-30 shadow-sm">
@@ -364,6 +364,16 @@ const App: React.FC = () => {
               <span className="text-sm font-bold text-slate-700">{user?.name || user?.email}</span>
               <span className="text-xs text-slate-500 capitalize">{user?.roles[0]}</span>
             </div>
+            {isTeacherOnly && isAuthenticated() && (
+              <button
+                onClick={handleLogout}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-100 border border-slate-200 transition-colors"
+                title="Logout"
+              >
+                <span>🚪</span>
+                <span className="hidden sm:inline">Logout</span>
+              </button>
+            )}
           </div>
         </header>
 
@@ -480,18 +490,7 @@ const App: React.FC = () => {
             </div>
           ) : isTeacherOnly ? (
             <div className="bg-white rounded-xl p-8 shadow-sm border border-slate-100">
-              {activeTab === 'teacher-profile' && (
-                <Teacher360View selfView isModal={false} hideTeacherAttendance />
-              )}
-              {activeTab === 'attendance' && (
-                <AttendanceDashboard
-                  batches={batches}
-                  onRefresh={fetchData}
-                />
-              )}
-              {activeTab === 'materials' && (
-                <MaterialLibrary instruments={instruments} />
-              )}
+              <Teacher360View selfView isModal={false} hideTeacherAttendance />
             </div>
           ) : (
             <div className="bg-white rounded-xl p-8 shadow-sm border border-slate-100">
@@ -516,7 +515,8 @@ const App: React.FC = () => {
         />
       )}
 
-      {/* Bottom Tab Bar — mobile only */}
+      {/* Bottom Tab Bar — mobile only. Teachers navigate via Teacher360View's own tab bar instead. */}
+      {!isTeacherOnly && (
       <nav
         className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 z-50 flex items-stretch"
         style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
@@ -545,9 +545,10 @@ const App: React.FC = () => {
           </button>
         )}
       </nav>
+      )}
 
       {/* More Sheet — mobile only */}
-      {moreMenuOpen && (
+      {!isTeacherOnly && moreMenuOpen && (
         <>
           <div
             className="md:hidden fixed inset-0 bg-black bg-opacity-40 z-50"
