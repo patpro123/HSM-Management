@@ -8,6 +8,28 @@ const { authenticateJWT } = require('../auth/jwtMiddleware');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'default-secret-key-change-in-prod';
 
+// Theory sheets are accepted as image/* or application/pdf from the browser file
+// picker (see HomeworkAssignForm's accept="image/*,application/pdf"), but the file
+// always arrives as a data: URL — read the real MIME type from its prefix instead
+// of assuming PDF, or a photographed sheet gets stored/served with the wrong
+// Content-Type and fails to open.
+const DATA_URL_EXT_BY_MIME = {
+  'application/pdf': 'pdf',
+  'image/jpeg':       'jpg',
+  'image/png':        'png',
+  'image/webp':       'webp',
+  'image/gif':        'gif',
+  'image/heic':       'heic',
+};
+
+function parseDataUrlFile(dataUrl) {
+  const match = /^data:([^;]+);base64,(.*)$/s.exec(dataUrl);
+  const mimeType = match ? match[1] : 'application/pdf';
+  const base64Part = match ? match[2] : (dataUrl.includes(',') ? dataUrl.split(',')[1] : dataUrl);
+  const ext = DATA_URL_EXT_BY_MIME[mimeType] || 'pdf';
+  return { buffer: Buffer.from(base64Part, 'base64'), mimeType, ext };
+}
+
 // Lenient auth — sets req.user if a valid JWT is present, but always calls next().
 // Used on streaming endpoints so <audio src="..."> works without custom headers.
 function resolveUser(req, res, next) {
@@ -54,12 +76,11 @@ router.post('/homework/assign', async (req, res) => {
     if (useDrive) {
       try {
         const driveService = require('../services/driveService');
-        const base64Part = theory_prompt_file.includes(',') ? theory_prompt_file.split(',')[1] : theory_prompt_file;
-        const buffer = Buffer.from(base64Part, 'base64');
+        const { buffer, mimeType, ext } = parseDataUrlFile(theory_prompt_file);
         const { fileStorageId } = await driveService.upload({
           buffer,
-          fileName: `theory_prompt_${Date.now()}.pdf`,
-          mimeType: 'application/pdf',
+          fileName: `theory_prompt_${Date.now()}.${ext}`,
+          mimeType,
           category: 'student_document',
           entityType: 'theory_prompt',
         });
@@ -120,12 +141,11 @@ router.post('/homework/assign-bulk', async (req, res) => {
     if (useDrive) {
       try {
         const driveService = require('../services/driveService');
-        const base64Part = theory_prompt_file.includes(',') ? theory_prompt_file.split(',')[1] : theory_prompt_file;
-        const buffer = Buffer.from(base64Part, 'base64');
+        const { buffer, mimeType, ext } = parseDataUrlFile(theory_prompt_file);
         const { fileStorageId } = await driveService.upload({
           buffer,
-          fileName: `theory_prompt_bulk_${Date.now()}.pdf`,
-          mimeType: 'application/pdf',
+          fileName: `theory_prompt_bulk_${Date.now()}.${ext}`,
+          mimeType,
           category: 'student_document',
           entityType: 'theory_prompt',
         });
@@ -402,12 +422,11 @@ router.post('/homework/:id/submit', async (req, res) => {
     if (useDriveTheory) {
       try {
         const driveService = require('../services/driveService');
-        const base64Part = theory_answer_file.includes(',') ? theory_answer_file.split(',')[1] : theory_answer_file;
-        const buffer = Buffer.from(base64Part, 'base64');
+        const { buffer, mimeType, ext } = parseDataUrlFile(theory_answer_file);
         const { fileStorageId } = await driveService.upload({
           buffer,
-          fileName: `theory_answer_${id}_${Date.now()}.pdf`,
-          mimeType: 'application/pdf',
+          fileName: `theory_answer_${id}_${Date.now()}.${ext}`,
+          mimeType,
           category: 'student_document',
           entityType: 'theory_answer',
           entityId: id,
@@ -946,12 +965,11 @@ router.post('/homework/assign-makeup-bulk', resolveUser, async (req, res) => {
     const useDrive = process.env.DRIVE_ENABLED === 'true' && Boolean(process.env.DRIVE_FOLDER_HOMEWORK_AUDIO);
     if (useDrive) {
       try {
-        const base64Part = theory_prompt_file.includes(',') ? theory_prompt_file.split(',')[1] : theory_prompt_file;
-        const buffer = Buffer.from(base64Part, 'base64');
+        const { buffer, mimeType, ext } = parseDataUrlFile(theory_prompt_file);
         const { fileStorageId } = await driveService.upload({
           buffer,
-          fileName: `theory_prompt_makeup_${Date.now()}.pdf`,
-          mimeType: 'application/pdf',
+          fileName: `theory_prompt_makeup_${Date.now()}.${ext}`,
+          mimeType,
           category: 'student_document',
           entityType: 'theory_prompt',
         });

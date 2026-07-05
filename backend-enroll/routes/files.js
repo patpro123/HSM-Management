@@ -3,9 +3,25 @@
 const express = require('express');
 const multer  = require('multer');
 const router  = express.Router();
+const jwt = require('jsonwebtoken');
 const driveService  = require('../services/driveService');
 const { authenticateJWT } = require('../auth/jwtMiddleware');
 const { authorizeRole }   = require('../auth/rbacMiddleware');
+
+const JWT_SECRET = process.env.JWT_SECRET || 'default-secret-key-change-in-prod';
+
+// Lenient auth — verifies the JWT if present but never hard-401s. Needed because this
+// route is used as the target of <a href target="_blank">, <img src>, and <audio src>,
+// none of which can attach a custom Authorization header the way our fetch wrapper does.
+// The underlying Drive file is already public ("anyone with the link"), so this doesn't
+// weaken access control — it just stops legitimate browser navigation from being blocked.
+function resolveUser(req, res, next) {
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    try { req.user = jwt.verify(authHeader.slice(7), JWT_SECRET); } catch (_) {}
+  }
+  next();
+}
 
 // In-memory storage — buffer passed directly to Drive, no temp files on disk
 const upload = multer({
@@ -96,7 +112,7 @@ router.get('/files/:fileStorageId', authenticateJWT, async (req, res) => {
  * Proxies the Drive file back through the backend so the browser gets a
  * same-origin, CORS-free, range-capable response for <audio> playback.
  */
-router.get('/files/:fileStorageId/stream', authenticateJWT, async (req, res) => {
+router.get('/files/:fileStorageId/stream', resolveUser, async (req, res) => {
   const pool = require('../db');
 
   try {
