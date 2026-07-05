@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { apiGet, apiDelete } from '../api';
 import { getCurrentUser } from '../auth';
+import { API_BASE_URL } from '../config';
 
 interface AssignedAttachment {
   id: string;
@@ -60,7 +61,7 @@ function AssignmentCard({ assignment, canDelete, onDelete }: {
         )}
         {assignment.theory_prompt_storage_id && (
           <a
-            href={`/api/files/${assignment.theory_prompt_storage_id}/stream`}
+            href={`${API_BASE_URL}/api/files/${assignment.theory_prompt_storage_id}/stream`}
             target="_blank"
             rel="noreferrer"
             className="inline-flex items-center gap-1 text-xs text-orange-600 hover:text-orange-800 font-medium mt-1"

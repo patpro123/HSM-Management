@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { apiGet, apiPost, apiPut, apiDelete } from '../api';
+import { API_BASE_URL } from '../config';
 import XPBadge from './XPBadge';
 
 interface Habit {
@@ -467,7 +468,7 @@ const HabitTrackerTab: React.FC<HabitTrackerTabProps> = ({ studentId, selfMode }
                         </p>
                         {theoryPrompt.question.sheet_storage_id && (
                             <a
-                                href={`/api/files/${theoryPrompt.question.sheet_storage_id}/stream`}
+                                href={`${API_BASE_URL}/api/files/${theoryPrompt.question.sheet_storage_id}/stream`}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="inline-flex items-center gap-1 text-xs text-sky-600 hover:text-sky-800"
@@ -828,7 +829,7 @@ const HabitTrackerTab: React.FC<HabitTrackerTabProps> = ({ studentId, selfMode }
                                         <audio
                                             controls
                                             autoPlay
-                                            src={`/api/habits/logs/${meta.logId}/voice-note`}
+                                            src={`${API_BASE_URL}/api/habits/logs/${meta.logId}/voice-note`}
                                             className="h-10 w-full"
                                             onEnded={() => setPlayingVoiceNoteKey(null)}
                                         />

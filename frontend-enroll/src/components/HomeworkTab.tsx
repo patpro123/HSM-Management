@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { apiGet, apiPost, apiPut, apiDelete } from '../api';
 import { getCurrentUser } from '../auth';
+import { API_BASE_URL } from '../config';
 import HomeworkAssignForm from './HomeworkAssignForm';
 
 interface HistoryEntry {
@@ -123,7 +124,7 @@ const SubmissionHistory: React.FC<{
             const isClosed    = entry.type === 'closed';
             const dotColor    = isSubmitted ? 'bg-blue-400' : isReturned ? 'bg-orange-400' : 'bg-green-500';
             const isPlaying   = playingAssignId === assignId &&
-                                playingSubUrl === `/api/files/${entry.file_storage_id}/stream`;
+                                playingSubUrl === `${API_BASE_URL}/api/files/${entry.file_storage_id}/stream`;
             return (
               <div key={i} className="relative flex gap-2.5 items-start">
                 {/* dot */}
@@ -582,11 +583,11 @@ const HomeworkTab: React.FC<HomeworkTabProps> = ({ studentId, selfMode }) => {
 
   // ── Submission playback ────────────────────────────────────────────────────
   const handlePlayEntry = (entry: HistoryEntry, assignId: string) => {
-    if (playingAssignId === assignId && playingSubUrl === `/api/files/${entry.file_storage_id}/stream`) {
+    if (playingAssignId === assignId && playingSubUrl === `${API_BASE_URL}/api/files/${entry.file_storage_id}/stream`) {
       setPlayingAssignId(null); setPlayingSubUrl(null); return;
     }
     if (entry.file_storage_id) {
-      setPlayingSubUrl(`/api/files/${entry.file_storage_id}/stream`);
+      setPlayingSubUrl(`${API_BASE_URL}/api/files/${entry.file_storage_id}/stream`);
       setPlayingAssignId(assignId);
     }
   };
@@ -596,7 +597,7 @@ const HomeworkTab: React.FC<HomeworkTabProps> = ({ studentId, selfMode }) => {
 
     // Fast path: Drive file — stream via backend proxy (avoids CORS/redirect issues)
     if (assignment.submission?.file_storage_id) {
-      setPlayingSubUrl(`/api/files/${assignment.submission.file_storage_id}/stream`);
+      setPlayingSubUrl(`${API_BASE_URL}/api/files/${assignment.submission.file_storage_id}/stream`);
       setPlayingAssignId(assignment.id);
       return;
     }
@@ -655,7 +656,7 @@ const HomeworkTab: React.FC<HomeworkTabProps> = ({ studentId, selfMode }) => {
                   <audio
                     controls
                     autoPlay
-                    src={`/api/homework/audio-instructions/${inst.id}/stream`}
+                    src={`${API_BASE_URL}/api/homework/audio-instructions/${inst.id}/stream`}
                     className="mt-2 h-9 w-full"
                     onEnded={() => setPlayingInstId(null)}
                   />
@@ -893,7 +894,7 @@ const HomeworkTab: React.FC<HomeworkTabProps> = ({ studentId, selfMode }) => {
                               <audio
                                 controls
                                 autoPlay
-                                src={`/api/files/${a.habit_target_latest_voice_storage_id}/stream`}
+                                src={`${API_BASE_URL}/api/files/${a.habit_target_latest_voice_storage_id}/stream`}
                                 className="h-10 w-full"
                                 onEnded={() => setPlayingVoiceNote(null)}
                               />
@@ -911,7 +912,7 @@ const HomeworkTab: React.FC<HomeworkTabProps> = ({ studentId, selfMode }) => {
                           )}
                           {a.theory_prompt_storage_id && (
                             <a
-                              href={`/api/files/${a.theory_prompt_storage_id}/stream`}
+                              href={`${API_BASE_URL}/api/files/${a.theory_prompt_storage_id}/stream`}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="inline-flex items-center gap-1 text-xs text-sky-600 hover:text-sky-800"
@@ -934,7 +935,7 @@ const HomeworkTab: React.FC<HomeworkTabProps> = ({ studentId, selfMode }) => {
                           )}
                           {a.submission.theory_answer_storage_id && (
                             <a
-                              href={`/api/files/${a.submission.theory_answer_storage_id}/stream`}
+                              href={`${API_BASE_URL}/api/files/${a.submission.theory_answer_storage_id}/stream`}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="inline-flex items-center gap-1 text-xs text-sky-600 hover:text-sky-800"
@@ -1200,7 +1201,7 @@ const HomeworkTab: React.FC<HomeworkTabProps> = ({ studentId, selfMode }) => {
                         )}
                         {a.theory_prompt_storage_id && (
                           <a
-                            href={`/api/files/${a.theory_prompt_storage_id}/stream`}
+                            href={`${API_BASE_URL}/api/files/${a.theory_prompt_storage_id}/stream`}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="inline-flex items-center gap-1 text-xs text-sky-600 hover:text-sky-800"
