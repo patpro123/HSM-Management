@@ -41,23 +41,18 @@ function resolveUser(req, res, next) {
   next();
 }
 
-// ── Notification helper ───────────────────────────────────────────────────────
-async function pushNotification({ type, title, message, action_link, metadata, user_id }) {
-  try {
-    await pool.query(
-      `INSERT INTO notifications (type, title, message, action_link, metadata, user_id)
-       VALUES ($1, $2, $3, $4, $5::jsonb, $6)`,
-      [type, title, message, action_link || null,
-       JSON.stringify(metadata || {}), user_id || null]
-    );
-    const notificationsRouter = require('./notifications');
-    notificationsRouter.emitNotification?.({
-      type, title, message, action_link, metadata, user_id,
-      created_at: new Date().toISOString(),
-    });
-  } catch (err) {
-    console.error('[homework] notification failed:', err.message);
-  }
+// Student's name + every linked account (self-login + all guardians) eligible for notifications.
+async function getStudentRecipients(studentId) {
+  const { rows } = await pool.query(
+    `SELECT s.name AS student_name,
+            COALESCE(array_agg(sg.user_id) FILTER (WHERE sg.user_id IS NOT NULL), '{}') AS recipient_user_ids
+     FROM students s
+     LEFT JOIN student_guardians sg ON sg.student_id = s.id AND sg.is_active = true
+     WHERE s.id = $1
+     GROUP BY s.id`,
+    [studentId]
+  );
+  return rows[0] || null;
 }
 
 // POST /api/homework/assign — teacher/admin assigns homework to a student
@@ -117,7 +112,24 @@ router.post('/homework/assign', async (req, res) => {
         theoryPromptStorageId,
       ]
     );
-    res.status(201).json({ assignment: result.rows[0] });
+    const assignment = result.rows[0];
+    res.status(201).json({ assignment });
+
+    // Notification (fire-and-forget)
+    getStudentRecipients(assignment.student_id).then(recipients => {
+      if (!recipients || recipients.recipient_user_ids.length === 0) {
+        console.warn(`[homework] assignment ${assignment.id} has no linked student/guardian accounts — notification skipped`);
+        return;
+      }
+      const { notifyUsers } = require('../utils/notifyRecipients');
+      notifyUsers(recipients.recipient_user_ids, {
+        type:        'HOMEWORK_ASSIGNED',
+        title:       'New Homework Assigned',
+        message:     `New homework "${assignment.title}" has been assigned to ${recipients.student_name}`,
+        action_link: '/student-profile',
+        metadata:    { assignment_id: assignment.id, student_id: assignment.student_id, student_name: recipients.student_name, title: assignment.title },
+      }).catch(() => {});
+    }).catch(() => {});
   } catch (err) {
     console.error('Error assigning homework:', err);
     res.status(500).json({ error: 'Failed to assign homework' });
@@ -185,6 +197,31 @@ router.post('/homework/assign-bulk', async (req, res) => {
     }
     await client.query('COMMIT');
     res.status(201).json({ created: assignment_ids.length, assignment_ids });
+
+    // Notifications (fire-and-forget)
+    (async () => {
+      const { notifyUsers } = require('../utils/notifyRecipients');
+      for (let i = 0; i < student_ids.length; i++) {
+        const studentId = student_ids[i];
+        const assignmentId = assignment_ids[i];
+        try {
+          const recipients = await getStudentRecipients(studentId);
+          if (!recipients || recipients.recipient_user_ids.length === 0) {
+            console.warn(`[homework] assignment ${assignmentId} has no linked student/guardian accounts — notification skipped`);
+            continue;
+          }
+          await notifyUsers(recipients.recipient_user_ids, {
+            type:        'HOMEWORK_ASSIGNED',
+            title:       'New Homework Assigned',
+            message:     `New homework "${title.trim()}" has been assigned to ${recipients.student_name}`,
+            action_link: '/student-profile',
+            metadata:    { assignment_id: assignmentId, student_id: studentId, student_name: recipients.student_name, title: title.trim() },
+          });
+        } catch (err) {
+          console.error('[assign-bulk] notification failed:', err.message);
+        }
+      }
+    })();
   } catch (err) {
     await client.query('ROLLBACK');
     console.error('Error bulk-assigning homework:', err);
@@ -556,14 +593,23 @@ router.post('/homework/:id/submit', async (req, res) => {
         } catch (_) {}
       }
 
-      pushNotification({
+      const { notifyUsers, notifyAdmins } = require('../utils/notifyRecipients');
+      const submittedNotification = {
         type:        'HOMEWORK_SUBMITTED',
         title:       'Homework Submitted',
         message:     `${student_name} submitted "${title}"`,
         action_link: '/students',
-        metadata:    { assignment_id: id, student_name, title },
-        user_id:     assigned_by_user_id || null,
-      });
+        metadata:    { assignment_id: id, student_id, student_name, title },
+      };
+      if (assigned_by_user_id) {
+        notifyUsers([assigned_by_user_id], submittedNotification).catch(() => {});
+      } else {
+        console.warn(`[homework] assignment ${id} has no assigned_by_user_id — notifying admins instead`);
+        notifyAdmins(submittedNotification).catch(() => {});
+      }
+
+      // This submission is the "acted upon" response to being assigned (or returned) — clear it.
+      require('./notifications').deleteByAssignment(id, ['HOMEWORK_ASSIGNED', 'HOMEWORK_RETURNED']);
     }).catch(() => {});
 
   } catch (err) {
@@ -640,20 +686,19 @@ router.put('/homework/:id/review', async (req, res) => {
     // XP (on close only) + notification (fire-and-forget)
     pool.query(
       `SELECT s.id AS student_id, s.name AS student_name, a.title, a.total_marks,
-              sg.user_id AS student_user_id
+              COALESCE(
+                array_agg(sg.user_id) FILTER (WHERE sg.user_id IS NOT NULL),
+                '{}'
+              ) AS recipient_user_ids
        FROM homework_assignments a
        JOIN students s ON s.id = a.student_id
-       LEFT JOIN LATERAL (
-         SELECT user_id FROM student_guardians
-         WHERE student_id = s.id AND is_active = true
-         ORDER BY is_primary DESC NULLS LAST
-         LIMIT 1
-       ) sg ON true
+       LEFT JOIN student_guardians sg ON sg.student_id = s.id AND sg.is_active = true
        WHERE a.id = $1
+       GROUP BY s.id, s.name, a.title, a.total_marks
        LIMIT 1`, [id]
     ).then(({ rows }) => {
       if (!rows.length) return;
-      const { student_id, student_name, title, total_marks, student_user_id } = rows[0];
+      const { student_id, student_name, title, total_marks, recipient_user_ids } = rows[0];
 
       // Grade XP on close
       if (action === 'close' && marks_awarded != null && total_marks) {
@@ -669,17 +714,24 @@ router.put('/homework/:id/review', async (req, res) => {
         }
       }
 
+      // This review is the "acted upon" response to the student's submission — clear it.
+      require('./notifications').deleteByAssignment(id, ['HOMEWORK_SUBMITTED']);
+
       const isReturn = action === 'return';
-      pushNotification({
+      if (recipient_user_ids.length === 0) {
+        console.warn(`[homework] assignment ${id} has no linked student/guardian accounts — notification skipped`);
+        return;
+      }
+      const { notifyUsers } = require('../utils/notifyRecipients');
+      notifyUsers(recipient_user_ids, {
         type:        isReturn ? 'HOMEWORK_RETURNED' : 'HOMEWORK_GRADED',
         title:       isReturn ? 'Homework Returned' : 'Homework Graded',
         message:     isReturn
           ? `Your submission for "${title}" has been returned with feedback`
           : `Your submission for "${title}" has been graded`,
         action_link: '/student-profile',
-        metadata:    { assignment_id: id, student_name, title },
-        user_id:     student_user_id || null,
-      });
+        metadata:    { assignment_id: id, student_id, student_name, title },
+      }).catch(() => {});
     }).catch(() => {});
 
   } catch (err) {

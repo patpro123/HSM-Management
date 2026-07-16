@@ -50,7 +50,7 @@ const StudentHub: React.FC<StudentHubProps> = ({ students, batches, instruments,
           onEnrollProspectHandled={onEnrollProspectHandled}
         />
       ) : (
-        <TodaysClasses 
+        <TodaysClasses
           students={students}
           batches={batches}
         />

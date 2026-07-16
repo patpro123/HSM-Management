@@ -13,6 +13,11 @@ interface Student360ViewProps {
   isModal?: boolean;
   hidePayments?: boolean;
   selfMode?: boolean; // uses /me/360 — resolves student via student_guardians (JWT-based)
+  // Deep-link support: land directly on a tab (and, for 'homework', a specific assignment).
+  initialTab?: 'personal' | 'academic' | 'payment' | 'homework' | 'habits' | 'ptm';
+  initialHomeworkAssignmentId?: string | null;
+  initialHomeworkMode?: 'review' | 'view';
+  onInitialHomeworkHandled?: () => void;
 }
 
 interface Student360Data {
@@ -53,14 +58,21 @@ interface Document {
 }
 
 
-const Student360View: React.FC<Student360ViewProps> = ({ email, studentId, onClose, isModal = false, hidePayments = false, selfMode = false }) => {
-  const [activeTab, setActiveTab] = useState<'personal' | 'academic' | 'payment' | 'homework' | 'habits' | 'ptm'>('personal');
+const Student360View: React.FC<Student360ViewProps> = ({
+  email, studentId, onClose, isModal = false, hidePayments = false, selfMode = false,
+  initialTab, initialHomeworkAssignmentId, initialHomeworkMode, onInitialHomeworkHandled,
+}) => {
+  const [activeTab, setActiveTab] = useState<'personal' | 'academic' | 'payment' | 'homework' | 'habits' | 'ptm'>(initialTab || 'personal');
   const [data, setData] = useState<Student360Data | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [documents, setDocuments] = useState<Document[]>([]);
   const [uploadSuccess, setUploadSuccess] = useState<string | null>(null);
   const [totalXP, setTotalXP] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (initialTab) setActiveTab(initialTab);
+  }, [initialTab]);
 
 
   useEffect(() => {
@@ -395,6 +407,9 @@ const Student360View: React.FC<Student360ViewProps> = ({ email, studentId, onClo
               <HomeworkTab
                 studentId={data.personal.details.id}
                 selfMode={selfMode}
+                initialAssignmentId={initialHomeworkAssignmentId}
+                initialAssignmentMode={initialHomeworkMode}
+                onInitialAssignmentHandled={onInitialHomeworkHandled}
               />
             )}
 

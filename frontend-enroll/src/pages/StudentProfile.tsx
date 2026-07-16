@@ -9,7 +9,14 @@ interface LinkedStudent {
   relationship: string;
 }
 
-const StudentProfile: React.FC = () => {
+interface StudentProfileProps {
+  // Deep-link: land directly on a specific linked child's homework tab (from a notification click)
+  initialStudentId?: string | null;
+  initialHomeworkAssignmentId?: string | null;
+  onInitialHomeworkHandled?: () => void;
+}
+
+const StudentProfile: React.FC<StudentProfileProps> = ({ initialStudentId, initialHomeworkAssignmentId, onInitialHomeworkHandled }) => {
   const user = getCurrentUser();
   const [linkedStudents, setLinkedStudents] = useState<LinkedStudent[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -20,11 +27,23 @@ const StudentProfile: React.FC = () => {
         const linked: LinkedStudent[] = data.user?.linkedStudents || [];
         if (linked.length > 0) {
           setLinkedStudents(linked);
-          setSelectedId(linked[0].student_id);
+          // Only honor a deep-linked studentId if it's actually one of this account's linked
+          // children (i.e. this is a parent with multiple kids). Otherwise fall through to the
+          // default first child — never force the non-self view for an account with no linked
+          // children, since that account IS the student and needs selfMode to submit homework.
+          const matchesLinked = initialStudentId && linked.some(s => s.student_id === initialStudentId);
+          setSelectedId(matchesLinked ? initialStudentId! : linked[0].student_id);
         }
       })
       .catch(() => {});
   }, []);
+
+  // Re-sync if a later notification click targets a different linked child while already mounted.
+  useEffect(() => {
+    if (initialStudentId && linkedStudents.some(s => s.student_id === initialStudentId)) {
+      setSelectedId(initialStudentId);
+    }
+  }, [initialStudentId, linkedStudents]);
 
   if (!user) {
     return (
@@ -74,9 +93,23 @@ const StudentProfile: React.FC = () => {
 
       <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
         {selectedId ? (
-          <Student360View studentId={selectedId} hidePayments />
+          <Student360View
+            studentId={selectedId}
+            hidePayments
+            initialTab={initialHomeworkAssignmentId ? 'homework' : undefined}
+            initialHomeworkAssignmentId={initialHomeworkAssignmentId}
+            initialHomeworkMode="view"
+            onInitialHomeworkHandled={onInitialHomeworkHandled}
+          />
         ) : (
-          <Student360View selfMode hidePayments />
+          <Student360View
+            selfMode
+            hidePayments
+            initialTab={initialHomeworkAssignmentId ? 'homework' : undefined}
+            initialHomeworkAssignmentId={initialHomeworkAssignmentId}
+            initialHomeworkMode="view"
+            onInitialHomeworkHandled={onInitialHomeworkHandled}
+          />
         )}
       </main>
     </div>

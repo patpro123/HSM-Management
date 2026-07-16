@@ -101,14 +101,15 @@ router.get('/unread/count', resolveUser, async (req, res) => {
 });
 
 // PUT /api/notifications/:id/read - Mark single as read
-router.put('/:id/read', async (req, res) => {
+// Only the notification's own recipient (or anyone, for a true global/NULL row) can mark it read.
+router.put('/:id/read', resolveUser, async (req, res) => {
     try {
         const result = await pool.query(`
-            UPDATE notifications 
-            SET is_read = true, updated_at = CURRENT_TIMESTAMP 
-            WHERE id = $1::uuid 
+            UPDATE notifications
+            SET is_read = true, updated_at = CURRENT_TIMESTAMP
+            WHERE id = $1::uuid AND (user_id IS NULL OR user_id = $2::uuid)
             RETURNING *
-        `, [req.params.id]);
+        `, [req.params.id, req.user?.id || null]);
 
         if (result.rows.length === 0) {
             return res.status(404).json({ error: 'Notification not found' });
@@ -120,6 +121,41 @@ router.put('/:id/read', async (req, res) => {
         res.status(500).json({ error: 'Failed to mark notification as read' });
     }
 });
+
+// DELETE /api/notifications/:id - Permanently remove a notification
+// Only the notification's own recipient (or anyone, for a true global/NULL row) can delete it.
+router.delete('/:id', resolveUser, async (req, res) => {
+    try {
+        const result = await pool.query(`
+            DELETE FROM notifications
+            WHERE id = $1::uuid AND (user_id IS NULL OR user_id = $2::uuid)
+            RETURNING id
+        `, [req.params.id, req.user?.id || null]);
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'Notification not found' });
+        }
+
+        res.json({ success: true });
+    } catch (err) {
+        console.error('[DELETE /api/notifications/:id] Error:', err);
+        res.status(500).json({ error: 'Failed to delete notification' });
+    }
+});
+
+// Delete all notifications of given type(s) tied to a specific homework assignment.
+// Used to auto-clear a notification once the action it was about has actually been completed
+// (e.g. HOMEWORK_SUBMITTED clears when the teacher reviews it).
+router.deleteByAssignment = async (assignmentId, types) => {
+    try {
+        await pool.query(
+            `DELETE FROM notifications WHERE type = ANY($1::text[]) AND metadata->>'assignment_id' = $2`,
+            [types, assignmentId]
+        );
+    } catch (err) {
+        console.error('[deleteByAssignment] Error:', err.message);
+    }
+};
 
 // PUT /api/notifications/read-all - Mark all as read
 router.put('/read-all', resolveUser, async (req, res) => {

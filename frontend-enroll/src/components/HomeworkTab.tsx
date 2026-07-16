@@ -82,6 +82,11 @@ interface AudioInstruction {
 interface HomeworkTabProps {
   studentId: string;
   selfMode: boolean;
+  // Deep-link support: auto-open a specific assignment (e.g. from a notification click).
+  // 'review' expands the teacher review panel; 'view' expands the student submit/feedback panel.
+  initialAssignmentId?: string | null;
+  initialAssignmentMode?: 'review' | 'view';
+  onInitialAssignmentHandled?: () => void;
 }
 
 const fmt = (s: number) =>
@@ -190,8 +195,11 @@ const SubmissionHistory: React.FC<{
   );
 };
 
-const HomeworkTab: React.FC<HomeworkTabProps> = ({ studentId, selfMode }) => {
+const HomeworkTab: React.FC<HomeworkTabProps> = ({
+  studentId, selfMode, initialAssignmentId, initialAssignmentMode, onInitialAssignmentHandled,
+}) => {
   const [assignments, setAssignments] = useState<Assignment[]>([]);
+  const [highlightedId, setHighlightedId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const currentUser = getCurrentUser();
   const isAdmin = currentUser?.roles?.includes('admin') ?? false;
@@ -274,6 +282,28 @@ const HomeworkTab: React.FC<HomeworkTabProps> = ({ studentId, selfMode }) => {
   }, [studentId]);
 
   useEffect(() => { fetchAssignments(); }, [fetchAssignments]);
+
+  // Deep-link: once the target assignment has loaded, expand + scroll to it.
+  useEffect(() => {
+    if (!initialAssignmentId || assignments.length === 0) return;
+    const target = assignments.find(a => a.id === initialAssignmentId);
+    if (!target) { onInitialAssignmentHandled?.(); return; }
+
+    if (initialAssignmentMode === 'review') {
+      setReviewExpandedId(target.id);
+    } else {
+      setExpandedId(target.id);
+    }
+    setHighlightedId(target.id);
+    const scrollTimer = setTimeout(() => {
+      document.querySelector(`[data-assignment-id="${target.id}"]`)
+        ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 100);
+    const highlightTimer = setTimeout(() => setHighlightedId(null), 3000);
+    onInitialAssignmentHandled?.();
+    return () => { clearTimeout(scrollTimer); clearTimeout(highlightTimer); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [assignments, initialAssignmentId, initialAssignmentMode]);
 
   useEffect(() => {
     return () => {
@@ -791,9 +821,10 @@ const HomeworkTab: React.FC<HomeworkTabProps> = ({ studentId, selfMode }) => {
             const isExpanded = expandedId === a.id;
             const isReviewOpen = reviewExpandedId === a.id;
             const canSubmit = selfMode && !a.is_makeup && (a.status === 'pending' || a.status === 'returned');
+            const isHighlighted = highlightedId === a.id;
 
             return (
-              <div key={a.id} className={`border rounded-xl bg-white overflow-hidden shadow-sm ${a.is_makeup ? 'border-amber-200' : 'border-gray-200'}`}>
+              <div key={a.id} data-assignment-id={a.id} className={`border rounded-xl bg-white overflow-hidden shadow-sm transition-shadow ${isHighlighted ? 'ring-2 ring-orange-400 border-orange-300' : a.is_makeup ? 'border-amber-200' : 'border-gray-200'}`}>
 
                 {/* ── Card header ── */}
                 <div className="p-4">

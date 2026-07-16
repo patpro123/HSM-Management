@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { apiGet, apiPut } from '../api';
+import { apiGet, apiPut, apiDelete } from '../api';
 import { getToken } from '../auth';
 import { API_BASE_URL } from '../config';
 import ProspectViewerModal from './ProspectViewerModal';
@@ -15,11 +15,15 @@ interface Notification {
     created_at: string;
 }
 
+const HOMEWORK_NOTIFICATION_TYPES = ['HOMEWORK_ASSIGNED', 'HOMEWORK_SUBMITTED', 'HOMEWORK_RETURNED', 'HOMEWORK_GRADED'];
+
 interface NotificationsPanelProps {
     onNavigation?: (path: string, prospectId?: string) => void;
+    // HOMEWORK_SUBMITTED -> 'review' (teacher review panel); HOMEWORK_RETURNED/GRADED -> 'view' (student's own view)
+    onOpenHomework?: (studentId: string, assignmentId: string, mode: 'review' | 'view') => void;
 }
 
-const NotificationsPanel: React.FC<NotificationsPanelProps> = ({ onNavigation }) => {
+const NotificationsPanel: React.FC<NotificationsPanelProps> = ({ onNavigation, onOpenHomework }) => {
     const [notifications, setNotifications] = useState<Notification[]>([]);
     const [unreadCount, setUnreadCount] = useState(0);
     const [isOpen, setIsOpen] = useState(false);
@@ -137,14 +141,19 @@ const NotificationsPanel: React.FC<NotificationsPanelProps> = ({ onNavigation })
         }
     };
 
+    // Removes a notification from the panel immediately (optimistic) and deletes it server-side.
+    const dismissNotification = (notif: Notification) => {
+        setNotifications(prev => prev.filter(n => n.id !== notif.id));
+        if (!notif.is_read) setUnreadCount(prev => Math.max(0, prev - 1));
+        apiDelete(`/api/notifications/${notif.id}`).catch(() => {});
+    };
+
     const handleNotificationClick = async (notif: Notification) => {
-        if (!notif.is_read) {
-            await handleMarkAsRead(notif.id);
-        }
         setIsOpen(false);
 
         // If it's a prospect notification, open the rich Prospect Modal instead of just jumping tabs
         if (notif.type === 'NEW_PROSPECT' && notif.metadata) {
+            if (!notif.is_read) await handleMarkAsRead(notif.id);
             setSelectedProspect({
                 id: notif.metadata.prospect_id,
                 name: notif.title.replace('New Demo Sign-up', '').trim() || notif.message.split(' ')[0],
@@ -153,6 +162,26 @@ const NotificationsPanel: React.FC<NotificationsPanelProps> = ({ onNavigation })
                 metadata: notif.metadata
             });
             return;
+        }
+
+        if (HOMEWORK_NOTIFICATION_TYPES.includes(notif.type)) {
+            const { assignment_id, student_id } = notif.metadata || {};
+            if (assignment_id && student_id && onOpenHomework) {
+                onOpenHomework(student_id, assignment_id, notif.type === 'HOMEWORK_SUBMITTED' ? 'review' : 'view');
+            }
+            // HOMEWORK_GRADED is terminal — there's no further action the student can take,
+            // so opening it IS the completing action. The other two clear themselves
+            // server-side once the real follow-up action happens (review / resubmission).
+            if (notif.type === 'HOMEWORK_GRADED') {
+                dismissNotification(notif);
+            } else if (!notif.is_read) {
+                await handleMarkAsRead(notif.id);
+            }
+            return;
+        }
+
+        if (!notif.is_read) {
+            await handleMarkAsRead(notif.id);
         }
 
         // Standard notification handling via App.tsx callback

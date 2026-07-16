@@ -52,6 +52,13 @@ const App: React.FC = () => {
   const [bypassedUser, setBypassedUser] = useState<any>(null);
   const [authError, setAuthError] = useState<string | null>(null);
   const [pendingEnrollProspectId, setPendingEnrollProspectId] = useState<string | null>(null);
+  // Split in two: pendingHomeworkStudent controls which student/mode to open (and, for
+  // 'review', the modal's visibility) and stays set until the user closes it.
+  // pendingHomeworkAssignmentId is a one-shot deep-link target — cleared once HomeworkTab
+  // has expanded/highlighted it, so a later refetch (e.g. after the review is submitted)
+  // doesn't re-force the panel back open.
+  const [pendingHomeworkStudent, setPendingHomeworkStudent] = useState<{ studentId: string; mode: 'review' | 'view' } | null>(null);
+  const [pendingHomeworkAssignmentId, setPendingHomeworkAssignmentId] = useState<string | null>(null);
   const [devProfile, setDevProfile] = useState<'admin' | 'teacher' | 'student'>('admin');
   const [devOverride, setDevOverride] = useState<{ email: string; name: string } | null>(null);
   const [impersonating, setImpersonating] = useState<ImpersonateTarget | null>(null);
@@ -356,10 +363,17 @@ const App: React.FC = () => {
                 View as
               </button>
             )}
-            <NotificationsPanel onNavigation={(path, prospectId) => {
-              handleTabChange(path as any);
-              if (prospectId) setPendingEnrollProspectId(prospectId);
-            }} />
+            <NotificationsPanel
+              onNavigation={(path, prospectId) => {
+                handleTabChange(path as any);
+                if (prospectId) setPendingEnrollProspectId(prospectId);
+              }}
+              onOpenHomework={(studentId, assignmentId, mode) => {
+                if (mode === 'view') handleTabChange('student-profile');
+                setPendingHomeworkStudent({ studentId, mode });
+                setPendingHomeworkAssignmentId(assignmentId);
+              }}
+            />
             <div className="hidden md:flex flex-col text-right">
               <span className="text-sm font-bold text-slate-700">{user?.name || user?.email}</span>
               <span className="text-xs text-slate-500 capitalize">{user?.roles[0]}</span>
@@ -495,12 +509,30 @@ const App: React.FC = () => {
           ) : (
             <div className="bg-white rounded-xl p-8 shadow-sm border border-slate-100">
               {activeTab === 'student-profile' && (
-                <StudentProfile />
+                <StudentProfile
+                  initialStudentId={pendingHomeworkStudent?.mode === 'view' ? pendingHomeworkStudent.studentId : undefined}
+                  initialHomeworkAssignmentId={pendingHomeworkStudent?.mode === 'view' ? pendingHomeworkAssignmentId : undefined}
+                  onInitialHomeworkHandled={() => setPendingHomeworkAssignmentId(null)}
+                />
               )}
             </div>
           )}
         </div>
       </main>
+      {/* Homework notification deep-link — a global overlay so it works regardless of which
+          layout is active (admin's full dashboard vs. a teacher's dedicated Teacher360View,
+          which never mounts StudentManagement at all). */}
+      {pendingHomeworkStudent?.mode === 'review' && (
+        <Student360View
+          studentId={pendingHomeworkStudent.studentId}
+          onClose={() => { setPendingHomeworkStudent(null); setPendingHomeworkAssignmentId(null); }}
+          isModal={true}
+          initialTab="homework"
+          initialHomeworkAssignmentId={pendingHomeworkAssignmentId}
+          initialHomeworkMode="review"
+          onInitialHomeworkHandled={() => setPendingHomeworkAssignmentId(null)}
+        />
+      )}
       {bypassedUser && (
         <DevSwitcher
           currentProfile={devProfile}

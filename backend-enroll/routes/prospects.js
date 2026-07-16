@@ -279,7 +279,7 @@ router.post('/', async (req, res) => {
         const record = insertResult.rows[0];
         console.log(`[POST /api/prospects] ${studentType} created:`, record.id);
 
-        // Notify admins (only for prospects, not intentful users)
+        // Notify admins only (only for prospects, not intentful users)
         if (!isIntentful) {
             try {
                 const isDemoDay = demo_type === 'demo_day';
@@ -288,28 +288,14 @@ router.post('/', async (req, res) => {
                     ? `${name} recently booked a trial class for ${instrument || 'a program'} during Demo Day.`
                     : `${name} recently booked a trial class for ${instrument || 'a program'}.`;
 
-                await pool.query(`
-                    INSERT INTO notifications (type, title, message, metadata, action_link)
-                    VALUES ($1, $2, $3, $4::jsonb, $5)
-                `, [
-                    'NEW_PROSPECT',
-                    notifTitle,
-                    notifMsg,
-                    JSON.stringify({ prospect_id: record.id, phone, email, demo_type: demo_type || 'normal' }),
-                    '/students'
-                ]);
-
-                const notificationsRouter = require('./notifications');
-                if (notificationsRouter.emitNotification) {
-                    notificationsRouter.emitNotification({
-                        type: 'NEW_PROSPECT',
-                        title: notifTitle,
-                        message: notifMsg,
-                        metadata: { prospect_id: record.id, phone, email, demo_type: demo_type || 'normal' },
-                        action_link: '/students',
-                        created_at: new Date().toISOString()
-                    });
-                }
+                const { notifyAdmins } = require('../utils/notifyRecipients');
+                await notifyAdmins({
+                    type: 'NEW_PROSPECT',
+                    title: notifTitle,
+                    message: notifMsg,
+                    metadata: { prospect_id: record.id, phone, email, demo_type: demo_type || 'normal' },
+                    action_link: '/students',
+                });
             } catch (notifErr) {
                 console.error('[POST /api/prospects] Failed to create notification:', notifErr.message);
             }

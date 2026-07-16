@@ -1,32 +1,12 @@
 'use strict';
 
 const cron = require('node-cron');
-const pool = require('../db');
 const driveService = require('../services/driveService');
+const { notifyAdmins } = require('../utils/notifyRecipients');
 
 // In-memory — resets on deploy/restart, which just means one extra check
 // confirms current state. Avoids a DB round-trip on every tick.
 let lastKnownHealthy = true;
-
-async function notifyAdmins({ type, title, message }) {
-  const { rows: admins } = await pool.query(
-    `SELECT user_id FROM user_roles WHERE role = 'admin' AND revoked_at IS NULL`
-  );
-  const notificationsRouter = require('../routes/notifications');
-
-  for (const { user_id } of admins) {
-    const { rows } = await pool.query(
-      `INSERT INTO notifications (type, title, message, user_id)
-       VALUES ($1, $2, $3, $4)
-       RETURNING created_at`,
-      [type, title, message, user_id]
-    );
-    notificationsRouter.emitNotification?.({
-      type, title, message, user_id,
-      created_at: rows[0].created_at,
-    });
-  }
-}
 
 /**
  * Core job — separated from cron registration so it can be triggered manually.
