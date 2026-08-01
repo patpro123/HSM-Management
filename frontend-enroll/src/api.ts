@@ -88,3 +88,24 @@ export const materialFileUrl = (materialId: string): string => {
 export const apiDelete = (endpoint: string): Promise<any> => {
   return apiRequest(endpoint, { method: 'DELETE' });
 };
+
+/**
+ * Multipart file upload — bypasses apiRequest so the browser sets its own
+ * multipart/form-data Content-Type (with boundary); a manual JSON header here
+ * would break the upload.
+ */
+export const apiUpload = async (endpoint: string, formData: FormData): Promise<any> => {
+  const response = await authenticatedFetch(`${API_BASE_URL}${endpoint}`, {
+    method: 'POST',
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({
+      error: `HTTP ${response.status}: ${response.statusText}`,
+    }));
+    throw new Error(error.message || error.error || 'Upload failed');
+  }
+
+  return response.json();
+};

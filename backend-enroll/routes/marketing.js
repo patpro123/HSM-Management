@@ -291,7 +291,10 @@ router.get('/brand-assets', ...adminOnly, async (req, res) => {
       where += ` AND kind = $${params.length}`;
     }
     const { rows } = await pool.query(
-      `SELECT * FROM brand_assets ${where} ORDER BY kind, name`,
+      `SELECT ba.*, fs.file_name, fs.mime_type, fs.public_url
+       FROM brand_assets ba
+       LEFT JOIN file_storage fs ON fs.id = ba.file_id AND fs.deleted_at IS NULL
+       ${where} ORDER BY ba.kind, ba.name`,
       params
     );
     res.json({ assets: rows });

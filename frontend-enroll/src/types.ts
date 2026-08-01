@@ -317,4 +317,8 @@ export interface BrandAsset {
   is_active: boolean;
   metadata: Record<string, unknown> | null;
   created_at: string;
+  // Joined from file_storage for file-based assets (null for text assets)
+  file_name: string | null;
+  mime_type: string | null;
+  public_url: string | null;
 }
