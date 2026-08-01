@@ -1,6 +1,7 @@
 'use client';
 import React, { useRef, useEffect, useState, useCallback } from 'react';
-import { TEACHER_PROFILES } from '@/lib/teacherProfiles';
+import Image from 'next/image';
+import { TEACHER_PROFILES, TEACHERS_SECTION_EXCLUDED_KEYS } from '@/lib/teacherProfiles';
 
 interface Teacher {
   id?: number | string;
@@ -50,7 +51,7 @@ const TeachersSection: React.FC<TeachersSectionProps> = ({ teachers }) => {
       const key = (t.id ?? t.name).toString();
       if (seen.has(key)) return false;
       seen.add(key);
-      return true;
+      return !TEACHERS_SECTION_EXCLUDED_KEYS.has(t.name.split(' ')[0].toLowerCase());
     })
     .map(t => {
       const profileKey = t.name.split(' ')[0].toLowerCase();
@@ -61,6 +62,7 @@ const TeachersSection: React.FC<TeachersSectionProps> = ({ teachers }) => {
         specialty: t.specialty || profile?.specialty || 'Instructor',
         icon: profile?.icon || '🎵',
         quote: t.quote || profile?.quote || '',
+        photo: profile?.photo,
       };
     });
 
@@ -91,9 +93,19 @@ const TeachersSection: React.FC<TeachersSectionProps> = ({ teachers }) => {
           <div className="teachers-carousel teachers-carousel--desktop" ref={gridRef}>
             {enriched.map((teacher, idx) => (
               <div className="teacher-card pop-shadow" key={teacher.id || idx}>
-                <div className="teacher-icon-badge">{teacher.icon}</div>
                 <div className="teacher-photo-wrapper">
-                  <div className="teacher-photo-placeholder">{teacher.displayName.charAt(0)}</div>
+                  {teacher.photo ? (
+                    <Image
+                      src={teacher.photo}
+                      alt={teacher.displayName}
+                      fill
+                      sizes="140px"
+                      className="teacher-photo-img"
+                    />
+                  ) : (
+                    <div className="teacher-photo-placeholder">{teacher.displayName.charAt(0)}</div>
+                  )}
+                  <span className="teacher-icon-badge">{teacher.icon}</span>
                 </div>
                 <h3 className="teacher-name">{teacher.displayName}</h3>
                 <p className="teacher-specialty text-orange">{teacher.specialty}</p>
@@ -123,9 +135,19 @@ const TeachersSection: React.FC<TeachersSectionProps> = ({ teachers }) => {
                   className={`deck-card ${cardPosition(idx)}`}
                   onClick={cardPosition(idx) === 'deck-card--active' ? next : undefined}
                 >
-                  <div className="teacher-icon-badge">{teacher.icon}</div>
                   <div className="teacher-photo-wrapper">
-                    <div className="teacher-photo-placeholder">{teacher.displayName.charAt(0)}</div>
+                    {teacher.photo ? (
+                      <Image
+                        src={teacher.photo}
+                        alt={teacher.displayName}
+                        fill
+                        sizes="160px"
+                        className="teacher-photo-img"
+                      />
+                    ) : (
+                      <div className="teacher-photo-placeholder">{teacher.displayName.charAt(0)}</div>
+                    )}
+                    <span className="teacher-icon-badge">{teacher.icon}</span>
                   </div>
                   <h3 className="teacher-name">{teacher.displayName}</h3>
                   <p className="teacher-specialty text-orange">{teacher.specialty}</p>
