@@ -1,0 +1,589 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HSM Website Audit — Competitive Comparison &amp; Conversion Roadmap</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Work+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#101A33;
+    --ink-soft:#2A3550;
+    --slate:#5C6478;
+    --paper:#EFF1F3;
+    --card:#FFFFFF;
+    --rule:#D2D7DE;
+    --teal:#1F7A6D;
+    --pencil:#C0392B;
+    --amber:#B07A1E;
+    --max:1040px;
+    --f-display:"Instrument Serif", Georgia, serif;
+    --f-body:"Work Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    --f-mono:"JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  }
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  body{
+    margin:0; background:var(--paper); color:var(--ink);
+    font-family:var(--f-body); font-size:16px; line-height:1.62;
+    font-feature-settings:"tnum" 0;
+  }
+  .wrap{max-width:var(--max); margin:0 auto; padding:0 28px}
+
+  /* ---------- stave divider: the one flourish ---------- */
+  .stave{height:26px; margin:56px 0 40px; position:relative}
+  .stave::before{
+    content:""; position:absolute; inset:0;
+    background:repeating-linear-gradient(to bottom,
+      var(--rule) 0 1px, transparent 1px 6px);
+    opacity:.85;
+  }
+  .stave span{
+    position:absolute; left:0; top:50%; transform:translateY(-50%);
+    background:var(--paper); padding-right:14px;
+    font-family:var(--f-mono); font-size:11px; letter-spacing:.16em;
+    text-transform:uppercase; color:var(--slate);
+  }
+
+  /* ---------- masthead ---------- */
+  header{background:var(--ink); color:#fff; padding:64px 0 56px; position:relative; overflow:hidden}
+  header::after{
+    content:""; position:absolute; right:-60px; top:-40px; width:340px; height:340px;
+    background:repeating-linear-gradient(to bottom, rgba(255,255,255,.10) 0 1px, transparent 1px 9px);
+    transform:rotate(-8deg);
+  }
+  .eyebrow{
+    font-family:var(--f-mono); font-size:11px; letter-spacing:.2em;
+    text-transform:uppercase; color:#8FA2C4; margin:0 0 18px;
+  }
+  h1{
+    font-family:var(--f-display); font-weight:400; font-size:clamp(38px,6vw,66px);
+    line-height:1.04; margin:0 0 20px; letter-spacing:-.01em; max-width:19ch;
+  }
+  h1 em{font-style:italic; color:#E8C87D}
+  .sub{max-width:60ch; color:#C3CCDD; font-size:17px; margin:0 0 30px; position:relative; z-index:1}
+  .meta{
+    font-family:var(--f-mono); font-size:12px; color:#8FA2C4;
+    display:flex; flex-wrap:wrap; gap:8px 26px; position:relative; z-index:1;
+    border-top:1px solid rgba(255,255,255,.16); padding-top:18px;
+  }
+
+  main{padding:8px 0 90px}
+
+  h2{
+    font-family:var(--f-display); font-weight:400; font-size:clamp(28px,3.6vw,40px);
+    line-height:1.14; margin:0 0 14px; letter-spacing:-.01em;
+  }
+  h3{font-size:19px; font-weight:600; margin:34px 0 10px; letter-spacing:-.005em}
+  h4{font-size:15px; font-weight:600; margin:0 0 6px}
+  p{margin:0 0 16px; max-width:74ch}
+  .lede{font-size:18px; color:var(--ink-soft); max-width:70ch}
+  ul{margin:0 0 16px; padding-left:20px; max-width:74ch}
+  li{margin-bottom:7px}
+  strong{font-weight:600}
+  a{color:var(--teal)}
+
+  /* ---------- verdict panel ---------- */
+  .verdict{
+    background:var(--card); border:1px solid var(--rule); border-left:4px solid var(--amber);
+    padding:26px 28px; margin:26px 0 8px;
+  }
+  .verdict p:last-child{margin-bottom:0}
+
+  /* ---------- scorecard ---------- */
+  .tablewrap{overflow-x:auto; -webkit-overflow-scrolling:touch; margin:22px 0 10px}
+  table{border-collapse:collapse; width:100%; min-width:660px; background:var(--card); font-size:14.5px}
+  caption{
+    text-align:left; font-family:var(--f-mono); font-size:11px; letter-spacing:.14em;
+    text-transform:uppercase; color:var(--slate); padding-bottom:10px;
+  }
+  th,td{padding:11px 12px; text-align:left; border-bottom:1px solid var(--rule); vertical-align:top}
+  thead th{
+    font-family:var(--f-mono); font-size:11px; letter-spacing:.09em; text-transform:uppercase;
+    color:var(--slate); font-weight:600; border-bottom:1.5px solid var(--ink);
+    background:#F7F8FA; white-space:nowrap;
+  }
+  tbody th{font-weight:500; color:var(--ink)}
+  td.num{font-family:var(--f-mono); font-size:13.5px; text-align:center; width:76px}
+  th.num{text-align:center}
+  .hsmcol{background:#FBF6EC}
+  tfoot td, tfoot th{border-top:1.5px solid var(--ink); border-bottom:none; font-weight:600; background:#F7F8FA}
+  tbody tr:hover{background:#F9FAFB}
+  tbody tr:hover .hsmcol{background:#F7F1E4}
+
+  .grade{
+    display:inline-block; font-family:var(--f-mono); font-size:10.5px; font-weight:600;
+    letter-spacing:.08em; text-transform:uppercase; padding:3px 8px; border-radius:2px; white-space:nowrap;
+  }
+  .g-merit{background:#DCEEE9; color:#155E53}
+  .g-pass{background:#FBEDD4; color:#8A5C10}
+  .g-below{background:#F8DEDA; color:#8F2A20}
+
+  /* ---------- finding cards ---------- */
+  .findings{display:grid; gap:16px; margin:24px 0 8px}
+  .finding{
+    background:var(--card); border:1px solid var(--rule); padding:20px 22px;
+    display:grid; grid-template-columns:52px 1fr; gap:18px; align-items:start;
+  }
+  .mark{
+    font-family:var(--f-mono); font-size:11px; font-weight:600; letter-spacing:.05em;
+    text-align:center; padding:6px 0; border-radius:2px;
+  }
+  .m-crit{background:#F8DEDA; color:#8F2A20}
+  .m-high{background:#FBEDD4; color:#8A5C10}
+  .m-med{background:#E4E8EE; color:#41506B}
+  .finding p{margin:0 0 8px; font-size:15px}
+  .finding p:last-child{margin-bottom:0}
+  .fix{
+    font-size:14px; color:var(--ink-soft); border-top:1px dashed var(--rule);
+    padding-top:9px; margin-top:11px !important;
+  }
+  .fix b{font-family:var(--f-mono); font-size:10.5px; letter-spacing:.1em; text-transform:uppercase; color:var(--teal)}
+
+  /* ---------- wins ---------- */
+  .wins{display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:14px; margin:22px 0 8px}
+  .win{background:var(--card); border:1px solid var(--rule); border-top:3px solid var(--teal); padding:18px 20px}
+  .win p{font-size:14.5px; margin:0; color:var(--ink-soft)}
+
+  /* ---------- roadmap ---------- */
+  .horizon{
+    background:var(--card); border:1px solid var(--rule); padding:24px 26px; margin:18px 0;
+  }
+  .horizon-head{display:flex; flex-wrap:wrap; align-items:baseline; gap:14px; margin-bottom:6px}
+  .horizon-head h3{margin:0; font-size:21px}
+  .tempo{
+    font-family:var(--f-mono); font-size:11px; letter-spacing:.12em; text-transform:uppercase;
+    color:var(--slate);
+  }
+  .horizon ol{margin:14px 0 0; padding-left:0; list-style:none; counter-reset:step}
+  .horizon ol li{
+    counter-increment:step; padding:12px 0 12px 42px; border-top:1px solid var(--rule); position:relative;
+    max-width:none;
+  }
+  .horizon ol li::before{
+    content:counter(step,decimal-leading-zero); position:absolute; left:0; top:13px;
+    font-family:var(--f-mono); font-size:12px; color:var(--slate);
+  }
+  .impact{
+    display:inline-block; margin-left:8px; font-family:var(--f-mono); font-size:10px;
+    letter-spacing:.08em; text-transform:uppercase; color:var(--teal);
+  }
+
+  /* ---------- metrics ---------- */
+  .metrics{display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:14px; margin:22px 0}
+  .metric{background:var(--card); border:1px solid var(--rule); padding:18px 20px}
+  .metric .k{font-family:var(--f-mono); font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--slate); display:block; margin-bottom:8px}
+  .metric .v{font-family:var(--f-display); font-size:27px; line-height:1.1; display:block; margin-bottom:6px}
+  .metric p{font-size:13.5px; color:var(--slate); margin:0}
+
+  /* ---------- hero direction ---------- */
+  .demo{
+    background:var(--ink); color:#fff; padding:34px 30px; margin:24px 0 10px;
+    border:1px solid var(--ink);
+  }
+  .demo .eyebrow{color:#8FA2C4; margin-bottom:14px}
+  .demo h3{
+    font-family:var(--f-display); font-weight:400; font-size:clamp(26px,4.4vw,42px);
+    line-height:1.08; margin:0 0 8px; color:#fff; letter-spacing:-.01em;
+  }
+  .demo h3 em{font-style:italic; color:#E8C87D}
+  .demo .demo-sub{color:#C3CCDD; font-size:15.5px; max-width:52ch; margin:0 0 26px}
+  #week{
+    display:grid; grid-template-columns:repeat(24,1fr); gap:2px; margin-bottom:16px;
+  }
+  #week i{
+    display:block; aspect-ratio:1; background:rgba(255,255,255,.13); border-radius:1px;
+    animation:cellin .5s ease-out both;
+  }
+  #week i.lit{background:#E8C87D; animation:cellin .5s ease-out both, glow 2.4s ease-in-out 1.1s 2}
+  @keyframes cellin{from{opacity:0; transform:scale(.4)} to{opacity:1; transform:none}}
+  @keyframes glow{0%,100%{box-shadow:0 0 0 0 rgba(232,200,125,0)} 50%{box-shadow:0 0 0 5px rgba(232,200,125,.28)}}
+  .legend{
+    display:flex; flex-wrap:wrap; gap:10px 28px; font-family:var(--f-mono);
+    font-size:11px; letter-spacing:.06em; text-transform:uppercase; color:#8FA2C4;
+    border-top:1px solid rgba(255,255,255,.16); padding-top:16px;
+  }
+  .legend span{display:flex; align-items:center; gap:8px}
+  .legend b{width:10px; height:10px; display:inline-block; border-radius:1px}
+  .swatch-lit{background:#E8C87D}
+  .swatch-dim{background:rgba(255,255,255,.22)}
+  .opts{display:grid; grid-template-columns:repeat(auto-fit,minmax(250px,1fr)); gap:14px; margin:22px 0 8px}
+  .opt{background:var(--card); border:1px solid var(--rule); padding:20px 22px; position:relative}
+  .opt.pick{border-color:var(--amber); border-top:3px solid var(--amber)}
+  .opt .tag{
+    font-family:var(--f-mono); font-size:10px; letter-spacing:.12em; text-transform:uppercase;
+    color:var(--slate); display:block; margin-bottom:9px;
+  }
+  .opt.pick .tag{color:var(--amber)}
+  .opt p{font-size:14.5px; margin:0 0 10px; color:var(--ink-soft)}
+  .opt p:last-child{margin-bottom:0}
+  .opt .spec{font-family:var(--f-mono); font-size:11.5px; color:var(--slate); border-top:1px dashed var(--rule); padding-top:9px}
+
+  footer{border-top:1px solid var(--rule); padding:26px 0 60px; color:var(--slate); font-size:13px}
+
+  @media (max-width:640px){
+    .wrap{padding:0 20px}
+    header{padding:44px 0 40px}
+    .finding{grid-template-columns:1fr; gap:12px}
+    .mark{width:64px}
+  }
+  @media (prefers-reduced-motion:reduce){*{animation:none!important; transition:none!important}}
+  @media print{
+    body{background:#fff}
+    header{background:#fff; color:var(--ink); border-bottom:2px solid var(--ink)}
+    h1 em{color:var(--amber)} .sub{color:var(--ink-soft)} .meta{color:var(--slate)}
+    header::after{display:none}
+    .finding,.horizon,.win,.metric,.verdict{break-inside:avoid}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <p class="eyebrow">Competitive Audit · Prepared for HSM Founders</p>
+    <h1>The best story in the room, playing to <em>an empty hall.</em></h1>
+    <p class="sub">hsm.org.in benchmarked against three reference points: the closest local rival, the national franchise, and the D2C online player. HSM's positioning beats all three. Its ability to be found and to capture a lead does not.</p>
+    <div class="meta">
+      <span>28 July 2026</span>
+      <span>Sites reviewed: 4</span>
+      <span>Method: manual page audit, public pages only</span>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <div class="stave"><span>01 — Verdict</span></div>
+  <h2>What the comparison actually shows</h2>
+  <p class="lede">HSM has something none of the competitors have: a differentiated product with a real mechanism behind it. "We train you for all 167 hours" plus a working practice portal is a genuine category claim, and it is well written on the page. The problem is everything downstream of that claim.</p>
+
+  <div class="verdict">
+    <p><strong>The single biggest constraint is architecture, not copy.</strong> hsm.org.in is one page with anchor links. Every competitor with meaningful search traffic runs dedicated URLs per course and per intent. Furtados has a separate indexed page for guitar, piano, keyboard, drums, violin, saxophone, ukulele and both vocal streams. Artium runs one per course <em>and</em> per language and per age segment — Carnatic, Hindustani, Telugu film, Hindi film, devotional, "for kids" variants. A single page can rank for one query cluster. HSM is competing for "guitar classes in Hyderabad", "piano classes near Kismatpur", "drum classes for kids Hyderabad" and thirty more with the same one URL, which means it competes for none of them properly.</p>
+    <p><strong>The second constraint is proof.</strong> HSM claims 4.9★, 100% Trinity Merit/Distinction, and 200+ students, and shows one testimonial and zero photographs of a real person. Chords — half a kilometre away in Manikonda — shows founder photos, academy interiors, a film-industry inauguration, four named celebrity collaborators, a YouTube channel approaching 100k, and four testimonials. On raw credibility signals, HSM currently loses to a smaller, less differentiated school.</p>
+    <p><strong>The good news:</strong> both constraints are cheap to fix relative to their impact, and neither requires changing the product or the positioning. Section 05 sequences them.</p>
+  </div>
+
+  <div class="stave"><span>02 — Scorecard</span></div>
+  <h2>How the four sites grade out</h2>
+  <p>Scored 1–10 per dimension against what a Hyderabad parent researching music classes actually needs to see. Grades use the Trinity scale HSM already speaks in, which felt appropriate.</p>
+
+  <div class="tablewrap">
+    <table>
+      <caption>Scores are my assessment from a manual review of public pages, not measured analytics</caption>
+      <thead>
+        <tr>
+          <th scope="col">Dimension</th>
+          <th scope="col" class="num">HSM</th>
+          <th scope="col" class="num">Chords<br><span style="font-weight:400;text-transform:none;letter-spacing:0">Manikonda</span></th>
+          <th scope="col" class="num">Furtados<br><span style="font-weight:400;text-transform:none;letter-spacing:0">National</span></th>
+          <th scope="col" class="num">Artium<br><span style="font-weight:400;text-transform:none;letter-spacing:0">Online</span></th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><th scope="row">Findability — indexable surface area, query coverage</th><td class="num hsmcol">4</td><td class="num">6</td><td class="num">9</td><td class="num">10</td></tr>
+        <tr><th scope="row">Positioning — is the reason to choose you unmistakable</th><td class="num hsmcol">9</td><td class="num">6</td><td class="num">5</td><td class="num">8</td></tr>
+        <tr><th scope="row">Proof — testimonials, reviews, faces, verifiable results</th><td class="num hsmcol">4</td><td class="num">8</td><td class="num">8</td><td class="num">9</td></tr>
+        <tr><th scope="row">Conversion path — CTA clarity, lead capture, fallbacks</th><td class="num hsmcol">7</td><td class="num">8</td><td class="num">7</td><td class="num">9</td></tr>
+        <tr><th scope="row">Content depth — course pages, blog, top-of-funnel</th><td class="num hsmcol">3</td><td class="num">5</td><td class="num">9</td><td class="num">10</td></tr>
+        <tr><th scope="row">Trust signals — real people, credentials, third parties</th><td class="num hsmcol">5</td><td class="num">9</td><td class="num">8</td><td class="num">8</td></tr>
+        <tr><th scope="row">Pricing transparency</th><td class="num hsmcol">6</td><td class="num">8</td><td class="num">2</td><td class="num">4</td></tr>
+        <tr><th scope="row">Engagement mechanism — reason to stay after enrolling</th><td class="num hsmcol">9</td><td class="num">6</td><td class="num">7</td><td class="num">8</td></tr>
+      </tbody>
+      <tfoot>
+        <tr>
+          <th scope="row">Total / 80</th>
+          <td class="num hsmcol">47</td><td class="num">56</td><td class="num">55</td><td class="num">66</td>
+        </tr>
+        <tr>
+          <th scope="row">Grade</th>
+          <td class="num hsmcol"><span class="grade g-pass">Pass</span></td>
+          <td class="num"><span class="grade g-merit">Merit</span></td>
+          <td class="num"><span class="grade g-pass">Pass</span></td>
+          <td class="num"><span class="grade g-merit">Merit</span></td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+
+  <p style="font-size:14.5px;color:var(--slate)">Read the shape, not the total. HSM tops the table on the two hardest things to build — positioning and a real engagement mechanism — and sits last on the four easiest things to fix. That is a favourable position to be in, but only if the easy things get fixed.</p>
+
+  <div class="stave"><span>03 — Assets</span></div>
+  <h2>What HSM is already winning on — protect these</h2>
+  <div class="wins">
+    <div class="win">
+      <h4>The 167-hours frame</h4>
+      <p>A specific, memorable, checkable claim that reframes the whole category. Nobody else in the set attempts an argument this sharp. Furtados leads with "bring out the performer in you"; Chords with "Hyderabad's Premier Music Academy". Both are wallpaper.</p>
+    </div>
+    <div class="win">
+      <h4>The practice loop diagram</h4>
+      <p>Assign → practice → record → review → assess, shown as a weekly cycle. This is the most persuasive block on the site and it is buried at position four. It answers the real parent objection: "my child won't practise."</p>
+    </div>
+    <div class="win">
+      <h4>Published class schedule</h4>
+      <p>A live grid of which instrument runs on which day. No competitor in the set publishes this. It removes a whole round of back-and-forth and signals an organised operation.</p>
+    </div>
+    <div class="win">
+      <h4>Ensemble-first teaching</h4>
+      <p>A defensible contrast against 1:1 online players. Artium's entire model is 1:1 remote; HSM's counter — real musicians play with other people — is strong and under-used.</p>
+    </div>
+  </div>
+
+  <div class="stave"><span>04 — Gaps</span></div>
+  <h2>What's costing you clicks and enquiries</h2>
+
+  <div class="findings">
+
+    <div class="finding">
+      <div class="mark m-crit">Critical</div>
+      <div>
+        <h4>One page cannot rank for thirty intents</h4>
+        <p>Every navigation link on hsm.org.in is an anchor (<code>#programs</code>, <code>#teachers</code>). There is one indexable URL plus <code>/intake</code> and <code>/terms</code>. Ten instruments are listed as cards with an "Enquire →" that scrolls rather than navigates. Meanwhile Furtados runs <code>/guitar-classes-for-beginners-to-professionals/</code> and eight siblings; Artium runs a page per course, per language, and per audience segment.</p>
+        <p class="fix"><b>Fix</b> Build ten real pages: <code>/guitar-classes-hyderabad</code>, <code>/piano-classes-hyderabad</code>, and so on, each 600–900 words with its own title tag, its own faculty, its own schedule row, its own FAQ, its own demo CTA. Add two locality pages for Kismatpur and PBEL City. This is the highest-leverage item on the list by a wide margin.</p>
+      </div>
+    </div>
+
+    <div class="finding">
+      <div class="mark m-crit">Critical</div>
+      <div>
+        <h4>Your numbers contradict each other</h4>
+        <p>The hero says <strong>100+ Students</strong> and <strong>9 Streams</strong>. The About section says <strong>200+ students</strong> and <strong>8 Instruments &amp; streams</strong>. The programs grid lists <strong>ten</strong> streams. A parent who notices this stops trusting the 100% Trinity claim too, and that claim is the most valuable sentence on the site.</p>
+        <p class="fix"><b>Fix</b> Pick one source of truth for student count, stream count and rating, and render every instance from it. One number, everywhere.</p>
+      </div>
+    </div>
+
+    <div class="finding">
+      <div class="mark m-crit">Critical</div>
+      <div>
+        <h4>The faculty section reads as machine-generated</h4>
+        <p>"Sangeeta" and "Sangeeta Pbel" appear as separate teachers with byte-identical quotes. "Mriganka Das" (no bio, no instrument, labelled "Instructor") and "Mriganko" (Piano) look like the same person entered twice. David and Mriganko share the same verbatim quote about piano teaching you to listen to every voice. No teacher has a photograph — all eight are letter avatars.</p>
+        <p>Chords, by contrast, leads with a photograph of both founders, names the founder's mentor, states his Trinity Grade 8, and shows real photos of parents visiting the academy.</p>
+        <p class="fix"><b>Fix</b> Deduplicate to the real roster. One photograph per teacher, one genuine sentence in their own words, their instrument, their years teaching, their own qualification. For a local service business this is among the highest-converting content on any page.</p>
+      </div>
+    </div>
+
+    <div class="finding">
+      <div class="mark m-high">High</div>
+      <div>
+        <h4>One testimonial, no review proof</h4>
+        <p>The site shows a single review (Kishore Gandhi, guitar) and claims 4.9★ with no count and no link out to the Google listing. Chords shows four. Furtados shows ten across parents and partner-school principals. Artium runs testimonials on every course page.</p>
+        <p class="fix"><b>Fix</b> Get to eight or more reviews on the page, each attributed to a named parent and a named instrument, and hyperlink the 4.9★ badge straight to the Google Business Profile with the review count shown. Ask the current cohort by WhatsApp — you already have the group.</p>
+      </div>
+    </div>
+
+    <div class="finding">
+      <div class="mark m-med">Medium</div>
+      <div>
+        <h4>The booking form exists, but it's always one click away</h4>
+        <p>A demo booking form is in place. It isn't in the page's rendered markup, though — it sits behind the CTA buttons and at <code>/intake</code>, so it costs a click to reach and can't be indexed or previewed. Meanwhile the WhatsApp buttons are immediate and appear twice. Two channels at different levels of friction, with no data on how the split falls.</p>
+        <p class="fix"><b>Fix</b> Put a three-field version — name, instrument, learner's age — inline in the page near the closing CTA, with the full form still available at <code>/intake</code>. Then tag both paths and measure the split for a month. If the form takes a meaningful share, it was catching people the WhatsApp-only path was losing; if it doesn't, you've lost nothing.</p>
+      </div>
+    </div>
+
+    <div class="finding">
+      <div class="mark m-high">High</div>
+      <div>
+        <h4>The footer links are broken</h4>
+        <p>The footer offers Curriculum (<code>#curriculum</code>), Faculty (<code>#faculty</code>), Ensembles (<code>#success</code>) and Careers (<code>#careers</code>). The actual section IDs on the page are <code>#programs</code>, <code>#teachers</code> and <code>#stories</code>. Four of the footer's six links go nowhere. Copyright reads "2024–2028".</p>
+        <p class="fix"><b>Fix</b> Ten-minute repair. Also worth an automated link check in the build, since this class of error recurs.</p>
+      </div>
+    </div>
+
+    <div class="finding">
+      <div class="mark m-high">High</div>
+      <div>
+        <h4>No social presence linked anywhere</h4>
+        <p>The footer has no Instagram, no YouTube, no Facebook. For a performance-oriented music school this is a significant absence — and it removes your best asset, which is students playing. Chords links a YouTube channel described as approaching 100k subscribers and an active Instagram from the top nav down.</p>
+        <p class="fix"><b>Fix</b> Post recital clips to Instagram and YouTube, embed the three strongest on the homepage above the testimonials, and link both in the header and footer. Video of a beginner playing their first song at week six is the single most persuasive artefact you can produce.</p>
+      </div>
+    </div>
+
+    <div class="finding">
+      <div class="mark m-med">Medium</div>
+      <div>
+        <h4>Fees are buried in FAQ item six</h4>
+        <p>The Trial Pack at ₹2000 and the Quarterly Pack are mentioned only inside a collapsed accordion. Chords publishes a full three-tier structure — 3, 6 and 12 month plans at 10/15/20% off with the inclusions spelled out — right on the homepage. Price-shoppers who can't find a number assume it's high and bounce.</p>
+        <p class="fix"><b>Fix</b> Surface a plans block on the homepage. Price is a qualifier: publishing it raises enquiry quality even where it lowers enquiry volume.</p>
+      </div>
+    </div>
+
+    <div class="finding">
+      <div class="mark m-med">Medium</div>
+      <div>
+        <h4>The portal is described but never shown</h4>
+        <p>The habit tracker and homework reviewer are your actual moat, and they appear only as prose. No screenshot, no short screen recording, no page of their own. Furtados gives its digital product (FSM Buddy) a whole sub-brand and its own domain.</p>
+        <p class="fix"><b>Fix</b> Give the practice system its own page with real screenshots — streak view, teacher feedback, monthly grade. It converts, it's linkable, and it's the natural subject of the first press or LinkedIn piece about HSM.</p>
+      </div>
+    </div>
+
+    <div class="finding">
+      <div class="mark m-med">Medium</div>
+      <div>
+        <h4>Missing structured data</h4>
+        <p>The FAQ content, the course list, the address and the opening hours are all present as visible text but there's no sign they're marked up as schema, so Google can't render them as rich results. This is free SERP real estate you've already written the content for.</p>
+        <p class="fix"><b>Fix</b> Add <code>MusicSchool</code>/<code>LocalBusiness</code>, <code>FAQPage</code> and <code>Course</code> JSON-LD.</p>
+      </div>
+    </div>
+
+    <div class="finding">
+      <div class="mark m-med">Medium</div>
+      <div>
+        <h4>The hero video is the heaviest thing on the page</h4>
+        <p>An autoplaying <code>hero-bg.mp4</code> is the first thing a mobile visitor on 4G downloads, which puts largest-contentful-paint at risk on exactly the devices most parents use. It also can't be read by search engines and can't carry your argument.</p>
+        <p class="fix"><b>Fix</b> Three viable directions, in order of how distinctive they'd make the page:</p>
+        <p style="font-size:14.5px;margin:10px 0 0"><strong>1 — Make the 167-hours claim the visual.</strong> A grid of 168 cells: one filled in gold and labelled "your class", 167 filled quietly and labelled "where we're still with you". Pure CSS, effectively zero weight, animates in on load, and turns your sharpest sentence into the thing people see first. No competitor could copy it without stealing the positioning underneath.</p>
+        <p style="font-size:14.5px;margin:8px 0 0"><strong>2 — A drawn melody line.</strong> An SVG stave where a phrase writes itself across the screen once on load, then rests. A few KB, respects <code>prefers-reduced-motion</code>, unmistakably a music school.</p>
+        <p style="font-size:14.5px;margin:8px 0 0"><strong>3 — One real photograph, art-directed.</strong> An actual HSM ensemble mid-session, shot wide, served as a single AVIF under 100 KB. Less inventive but it does double duty as proof, which the video never did.</p>
+      </div>
+    </div>
+
+    <div class="finding">
+      <div class="mark m-med">Medium</div>
+      <div>
+        <h4>No top-of-funnel content at all</h4>
+        <p>Furtados and Artium both publish continuously and pick up traffic from questions asked long before anyone is ready to enrol. HSM publishes nothing, so the only people who reach the site are those already searching for a music school by name or category.</p>
+        <p class="fix"><b>Fix</b> Eight posts answering the questions you already field in demos: what age to start piano, how much practice a Grade 1 student actually needs, keyboard versus piano for a beginner, what a Trinity exam day involves. You have the raw material from the method section already.</p>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="stave"><span>05 — Hero direction</span></div>
+  <h2>What replaces the video</h2>
+  <p class="lede">Removing the hero video shouldn't cost the site any of its character. A muted decorative clip behind a headline is currently the most common hero on the web; it reads as premium only when the video is the content. The stronger move is to make the hero carry the argument instead of decorating it.</p>
+
+  <div class="demo">
+    <p class="eyebrow">Recommended · live demonstration, not a mockup</p>
+    <h3>Every school teaches the one hour.<br>We're there for the <em>other 167.</em></h3>
+    <p class="demo-sub">One week, hour by hour. The gold cell is the lesson. Everything else is where practice actually happens — and where the portal, the streaks and the teacher feedback live.</p>
+    <div id="week" role="img" aria-label="A grid of 168 cells representing the hours in one week. One cell is highlighted, representing the weekly class; the remaining 167 represent the time between classes."></div>
+    <div class="legend">
+      <span><b class="swatch-lit"></b> 1 hour in class</span>
+      <span><b class="swatch-dim"></b> 167 hours HSM still supports</span>
+      <span>24 columns × 7 rows = 168</span>
+    </div>
+  </div>
+
+  <p style="font-size:14.5px;color:var(--slate)">Everything above renders from about 30 lines of CSS and a six-line loop — no image, no video, no library. It paints before a video file would have finished its first network round-trip, and it is the only hero in this competitive set that no rival could copy without also taking the positioning underneath it.</p>
+
+  <div class="opts">
+    <div class="opt pick">
+      <span class="tag">Option A · recommended</span>
+      <h4>The week grid</h4>
+      <p>Turns your sharpest sentence into the first thing anyone sees. Currently that argument sits four sections down the page as body copy, which means most mobile visitors never reach it.</p>
+      <p class="spec">~2 KB · CSS grid · animates once on load</p>
+    </div>
+    <div class="opt">
+      <span class="tag">Option B</span>
+      <h4>A melody that draws itself</h4>
+      <p>An SVG stave where a phrase writes across the screen once on load, then rests. Unmistakably a music school, and gentler than option A if the grid feels too austere for parents.</p>
+      <p class="spec">~6 KB · SVG path animation · no JS</p>
+    </div>
+    <div class="opt">
+      <span class="tag">Option C · safe</span>
+      <h4>One real photograph</h4>
+      <p>An actual HSM ensemble mid-session, shot wide. Less inventive, but it does double duty as the proof the site is currently short on — and it beats any stock image or video loop.</p>
+      <p class="spec">&lt;100 KB AVIF · needs a photo shoot</p>
+    </div>
+  </div>
+
+  <h3>Implementation notes</h3>
+  <ul>
+    <li><strong>Don't bin the footage.</strong> If there's a genuine performance clip in <code>hero-bg.mp4</code>, move it beside the testimonials as click-to-play with a poster frame. There it counts as evidence; in the hero it was wallpaper.</li>
+    <li><strong>Make text the LCP element.</strong> With any of these options the headline should paint first. That alone is likely worth a second or more on mid-range Android over 4G.</li>
+    <li><strong>Honour <code>prefers-reduced-motion</code>.</strong> Options A and B should render in their final state with no animation when it's set — the grid still reads correctly static.</li>
+    <li><strong>Keep the gold cell honest.</strong> If most students attend twice a week, light two cells. The claim is strong because it's checkable; don't round it for symmetry.</li>
+    <li><strong>Give it an <code>aria-label</code>.</strong> The grid is meaningful content, not decoration, so it needs to describe itself to a screen reader — as the demo above does.</li>
+  </ul>
+
+  <div class="stave"><span>06 — Sequence</span></div>
+  <h2>What to do, in order</h2>
+  <p>Sequenced by impact per hour of work rather than by theme. The first horizon is largely correctness work you can finish in a weekend; it is listed first because credibility gaps devalue every rupee spent on traffic afterwards.</p>
+
+  <div class="horizon">
+    <div class="horizon-head">
+      <h3>Fix the foundation</h3>
+      <span class="tempo">This week · ~1 weekend</span>
+    </div>
+    <p style="margin:0;color:var(--slate);font-size:14.5px">Nothing here needs design work or new content — it's correcting what's already there.</p>
+    <ol>
+      <li>Reconcile every number on the site to one source of truth. <span class="impact">Trust</span></li>
+      <li>Deduplicate the faculty roster and remove the placeholder entry. <span class="impact">Trust</span></li>
+      <li>Repair the four dead footer anchors and the copyright line. <span class="impact">UX</span></li>
+      <li>Surface a three-field version of the demo form inline, and tag form-vs-WhatsApp bookings. <span class="impact">Conversion</span></li>
+      <li>Link the 4.9★ badge to the live Google listing with its review count. <span class="impact">Trust</span></li>
+      <li>Add LocalBusiness, FAQPage and Course JSON-LD. <span class="impact">Search</span></li>
+      <li>Replace the autoplaying hero video with a lightweight hero (see finding above). <span class="impact">Speed</span></li>
+    </ol>
+  </div>
+
+  <div class="horizon">
+    <div class="horizon-head">
+      <h3>Build the surface area</h3>
+      <span class="tempo">Weeks 2–6</span>
+    </div>
+    <p style="margin:0;color:var(--slate);font-size:14.5px">This is where the click-rate gain actually comes from. Everything above is a precondition for it paying off.</p>
+    <ol>
+      <li>Ten instrument pages, each with its own title, schedule, faculty, FAQ and CTA. <span class="impact">Highest leverage</span></li>
+      <li>Two locality pages — Kismatpur and PBEL City — targeting "near me" searches. <span class="impact">Local search</span></li>
+      <li>A dedicated page for the practice system, with real screenshots. <span class="impact">Differentiation</span></li>
+      <li>A visible plans-and-fees block on the homepage. <span class="impact">Lead quality</span></li>
+      <li>Photograph every teacher; replace the letter avatars. <span class="impact">Conversion</span></li>
+      <li>Collect and publish eight or more named reviews. <span class="impact">Proof</span></li>
+    </ol>
+  </div>
+
+  <div class="horizon">
+    <div class="horizon-head">
+      <h3>Compound it</h3>
+      <span class="tempo">Ongoing from month 2</span>
+    </div>
+    <p style="margin:0;color:var(--slate);font-size:14.5px">Slow-burn assets. None of these pay back inside a month; all of them widen the gap against Chords over a year.</p>
+    <ol>
+      <li>Publish recital and student-progress video to YouTube and Instagram; embed the best on site. <span class="impact">Proof + reach</span></li>
+      <li>One blog post a fortnight answering real demo-call questions. <span class="impact">Top of funnel</span></li>
+      <li>Publish Trinity results as they land — named students, grades, dates. <span class="impact">Proof</span></li>
+      <li>Reframe the homepage so the practice loop sits directly under the hero, above the instrument grid. <span class="impact">Conversion</span></li>
+      <li>Open the practice portal as a limited free tool for non-students as a lead magnet. <span class="impact">Acquisition</span></li>
+    </ol>
+  </div>
+
+  <div class="stave"><span>07 — Measurement</span></div>
+  <h2>How you'll know it worked</h2>
+  <p>Right now there's no way to tell a good week from a bad one. Before starting horizon one, instrument these four so the roadmap can be judged on evidence rather than feel.</p>
+
+  <div class="metrics">
+    <div class="metric">
+      <span class="k">Search impressions</span>
+      <span class="v">Baseline now</span>
+      <p>Google Search Console, queries and pages. The instrument pages should show up here within 3–6 weeks of publishing.</p>
+    </div>
+    <div class="metric">
+      <span class="k">Demo bookings / week</span>
+      <span class="v">By channel</span>
+      <p>Split WhatsApp versus form versus phone. If the form takes 30%+ of bookings, it was capturing people you were previously losing.</p>
+    </div>
+    <div class="metric">
+      <span class="k">Demo → enrolment</span>
+      <span class="v">Conversion %</span>
+      <p>The number the whole funnel is judged on. Track it before you change anything, or you can't attribute improvement.</p>
+    </div>
+    <div class="metric">
+      <span class="k">Scroll depth to CTA</span>
+      <span class="v">% reaching</span>
+      <p>How many visitors ever see the practice-loop section. If it's under half, the section needs to move up the page.</p>
+    </div>
+  </div>
+
+  <p style="font-size:14.5px;color:var(--slate);margin-top:24px">A note on scope: this audit covers public-facing pages only, and the scores are judgment rather than measurement. Once Search Console and booking-source data exist, several of these calls are worth revisiting against real numbers — particularly the pricing-transparency recommendation, which is the one item here where reasonable people disagree and where your own data should decide it.</p>
+
+</main>
+
+<footer class="wrap">
+  Hyderabad School of Music — competitive audit, July 2026. Sites reviewed: hsm.org.in, chordsmusicacademy.in, furtadosschoolofmusic.com, artiumacademy.com.
+</footer>
+
+</body>
+</html>

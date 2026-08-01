@@ -1,4 +1,5 @@
 import React from 'react';
+import { SITE_STATS } from '@/lib/siteStats';
 
 const AboutSection: React.FC = () => {
   return (
@@ -12,7 +13,7 @@ const AboutSection: React.FC = () => {
             </h2>
             <p className="about-body">
               At Hyderabad School of Music, we believe every person carries a musician waiting to be heard.
-              Since opening our doors in Kismatpur, we have helped over <strong>200 students</strong> — from
+              Since opening our doors in Kismatpur, we have helped over <strong>{SITE_STATS.studentsLabel} students</strong> — from
               curious five-year-olds to adults revisiting an old passion — find their voice through music.
             </p>
             <p className="about-body">
@@ -28,7 +29,7 @@ const AboutSection: React.FC = () => {
 
           <div className="about-stats">
             <div className="about-stat-card">
-              <span className="about-stat-number">200+</span>
+              <span className="about-stat-number">{SITE_STATS.studentsLabel}</span>
               <span className="about-stat-label">Students taught</span>
             </div>
             <div className="about-stat-card">
@@ -36,11 +37,11 @@ const AboutSection: React.FC = () => {
               <span className="about-stat-label">Trinity Merit / Distinction rate</span>
             </div>
             <div className="about-stat-card">
-              <span className="about-stat-number">8</span>
+              <span className="about-stat-number">{SITE_STATS.streamsCount}</span>
               <span className="about-stat-label">Instruments &amp; streams</span>
             </div>
             <div className="about-stat-card">
-              <span className="about-stat-number">4.9★</span>
+              <span className="about-stat-number">{SITE_STATS.rating}★</span>
               <span className="about-stat-label">Google rating</span>
             </div>
           </div>

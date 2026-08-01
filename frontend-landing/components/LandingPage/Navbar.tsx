@@ -1,6 +1,8 @@
 'use client';
 
 import React, { useState } from 'react';
+import { usePathname } from 'next/navigation';
+import SocialLinks from './SocialLinks';
 
 interface NavbarProps {
   isScrolled: boolean;
@@ -21,8 +23,15 @@ const NAV_LINKS = [
 
 const Navbar: React.FC<NavbarProps> = ({ isScrolled, onLogin, onOpenModal, promoActive }) => {
   const [menuOpen, setMenuOpen] = useState(false);
+  const pathname = usePathname();
+  const isHome = pathname === '/';
 
   const closeMenu = () => setMenuOpen(false);
+
+  // Section anchors (e.g. #programs) only exist on the homepage. On every other
+  // page (instrument pages, localities, practice-portal) they must point back
+  // to the homepage first, otherwise clicking them is a no-op.
+  const navHref = (hash: string) => (isHome ? hash : `/${hash}`);
 
   return (
     <>
@@ -31,7 +40,7 @@ const Navbar: React.FC<NavbarProps> = ({ isScrolled, onLogin, onOpenModal, promo
         id="navbar"
       >
         <div className="nav-container">
-          <a href="#" className="logo">
+          <a href="/" className="logo">
             <img
               src="/HSM_Logo_Horizontal.png"
               alt="HSM Logo"
@@ -41,11 +50,12 @@ const Navbar: React.FC<NavbarProps> = ({ isScrolled, onLogin, onOpenModal, promo
 
           <div className="nav-links">
             {NAV_LINKS.map(link => (
-              <a key={link.href} href={link.href}>{link.label}</a>
+              <a key={link.href} href={navHref(link.href)}>{link.label}</a>
             ))}
           </div>
 
           <div className="nav-actions">
+            <SocialLinks className="nav-social" />
             <button onClick={onLogin} className="btn btn-outline nav-signin">
               Sign In
             </button>
@@ -70,7 +80,7 @@ const Navbar: React.FC<NavbarProps> = ({ isScrolled, onLogin, onOpenModal, promo
         aria-hidden={!menuOpen}
       >
         {NAV_LINKS.map(link => (
-          <a key={link.href} href={link.href} className="mobile-nav-link" onClick={closeMenu}>
+          <a key={link.href} href={navHref(link.href)} className="mobile-nav-link" onClick={closeMenu}>
             {link.label}
           </a>
         ))}
@@ -81,6 +91,7 @@ const Navbar: React.FC<NavbarProps> = ({ isScrolled, onLogin, onOpenModal, promo
           >
             Book Free Demo Class →
           </button>
+          <SocialLinks className="nav-social nav-social--mobile" />
         </div>
       </div>
 

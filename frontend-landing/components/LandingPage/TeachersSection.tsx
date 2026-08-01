@@ -1,8 +1,9 @@
 'use client';
 import React, { useRef, useEffect, useState, useCallback } from 'react';
+import { TEACHER_PROFILES } from '@/lib/teacherProfiles';
 
 interface Teacher {
-  id?: number;
+  id?: number | string;
   name: string;
   specialty?: string;
   experience?: string;
@@ -13,61 +14,6 @@ interface Teacher {
 interface TeachersSectionProps {
   teachers: Teacher[];
 }
-
-interface TeacherProfile {
-  displayName?: string;
-  specialty: string;
-  icon: string;
-  quote: string;
-}
-
-const TEACHER_PROFILES: Record<string, TeacherProfile> = {
-  josva: {
-    specialty: 'Keyboard · Guitar',
-    icon: '🎸🎹',
-    quote: '"The guitar and keyboard are two sides of the same musical coin — master one and the other opens up."',
-  },
-  david: {
-    specialty: 'Piano',
-    icon: '🎹',
-    quote: '"Piano teaches you to listen to every voice simultaneously — it builds your musical mind from the ground up."',
-  },
-  shiva: {
-    displayName: 'Mriganko',
-    specialty: 'Piano',
-    icon: '🎹',
-    quote: '"Piano teaches you to listen to every voice simultaneously — it builds your musical mind from the ground up."',
-  },
-  subroto: {
-    displayName: 'Subroto Bhaduri',
-    specialty: 'Drums · Tabla · Octopad',
-    icon: '🥁',
-    quote: '"Rhythm is the heartbeat of all music. Before you play a note, you must first feel the pulse."',
-  },
-  subrata: {
-    displayName: 'Subroto Bhaduri',
-    specialty: 'Drums · Tabla · Octopad',
-    icon: '🥁',
-    quote: '"Rhythm is the heartbeat of all music. Before you play a note, you must first feel the pulse."',
-  },
-  issac: {
-    displayName: 'Issac Lawrence',
-    specialty: 'Violin',
-    icon: '🎻',
-    quote: '"Every string speaks. The violin gives voice to the emotions that words can never quite reach."',
-  },
-  lawrence: {
-    displayName: 'Issac Lawrence',
-    specialty: 'Violin',
-    icon: '🎻',
-    quote: '"Every string speaks. The violin gives voice to the emotions that words can never quite reach."',
-  },
-  sangeeta: {
-    specialty: 'Hindustani Classical · Carnatic Classical',
-    icon: '🎤',
-    quote: '"Your voice is the most personal instrument you will ever own — train it and it stays with you forever."',
-  },
-};
 
 const TeachersSection: React.FC<TeachersSectionProps> = ({ teachers }) => {
   const gridRef = useRef<HTMLDivElement>(null);

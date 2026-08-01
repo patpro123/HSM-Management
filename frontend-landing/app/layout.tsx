@@ -1,6 +1,8 @@
 import type { Metadata, Viewport } from "next";
 import { Inter, Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
+import { SITE_STATS } from "@/lib/siteStats";
+import { SOCIAL_LINKS } from "@/lib/socialLinks";
 
 const inter = Inter({
     subsets: ["latin"],
@@ -86,6 +88,10 @@ export default function RootLayout({
                             "logo": "https://hsm.org.in/HSM_Logo_Horizontal.png",
                             "telephone": "+919652444188",
                             "description": "Music school in Kismatpur, Hyderabad offering classes in Guitar, Keyboard, Piano, Drums, Tabla, Violin, Hindustani Vocals, and Carnatic Vocals. 100% Merit/Distinction rate in Trinity College London exams.",
+                            "sameAs": [
+                                SOCIAL_LINKS.instagram,
+                                SOCIAL_LINKS.facebook,
+                            ],
                             "address": {
                                 "@type": "PostalAddress",
                                 "streetAddress": "Kismatpur",
@@ -106,8 +112,8 @@ export default function RootLayout({
                             ],
                             "aggregateRating": {
                                 "@type": "AggregateRating",
-                                "ratingValue": "4.9",
-                                "reviewCount": "47",
+                                "ratingValue": String(SITE_STATS.rating),
+                                "reviewCount": String(SITE_STATS.reviewCount),
                                 "bestRating": "5"
                             },
                             "hasOfferCatalog": {
@@ -119,8 +125,17 @@ export default function RootLayout({
                                 ].map(instrument => ({
                                     "@type": "Offer",
                                     "itemOffered": {
-                                        "@type": "Service",
-                                        "name": `${instrument} Classes`
+                                        "@type": ["Service", "Course"],
+                                        "name": `${instrument} Classes`,
+                                        "provider": {
+                                            "@type": "MusicSchool",
+                                            "name": "Hyderabad School of Music"
+                                        },
+                                        "hasCourseInstance": {
+                                            "@type": "CourseInstance",
+                                            "courseMode": "Onsite",
+                                            "location": "Kismatpur, Hyderabad"
+                                        }
                                     }
                                 }))
                             }

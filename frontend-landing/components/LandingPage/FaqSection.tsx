@@ -31,7 +31,9 @@ const FaqSection: React.FC<FaqSectionProps> = ({ faqs, activeFaq, onToggle }) =>
                 <span className={`faq-icon ${activeFaq === idx ? 'open' : ''}`}>+</span>
               </button>
               <div className={`faq-answer ${activeFaq === idx ? 'open' : ''}`}>
-                <p>{faq.a}</p>
+                <div className="faq-answer-inner">
+                  <p>{faq.a}</p>
+                </div>
               </div>
             </div>
           ))}

@@ -1,10 +1,20 @@
+'use client';
+
 import React from 'react';
+import { usePathname } from 'next/navigation';
+import InlineLeadForm from './InlineLeadForm';
+import SocialLinks from './SocialLinks';
 
 interface FooterCTAProps {
   onOpenModal: (e: React.MouseEvent) => void;
 }
 
 const FooterCTA: React.FC<FooterCTAProps> = ({ onOpenModal }) => {
+  const pathname = usePathname();
+  const isHome = pathname === '/';
+  // Section anchors only exist on the homepage — link back to it from every other page.
+  const navHref = (hash: string) => (isHome ? hash : `/${hash}`);
+
   return (
     <section className="stack-section footer-section" id="trial">
       <div className="footer-cta container">
@@ -18,6 +28,10 @@ const FooterCTA: React.FC<FooterCTAProps> = ({ onOpenModal }) => {
           <button onClick={onOpenModal} className="btn btn-cta btn-large pulse-animation">
             Book Your Free Demo Now →
           </button>
+          <p className="text-white body-text text-center inline-lead-form-divider">
+            or leave your number and we&apos;ll call you
+          </p>
+          <InlineLeadForm />
         </div>
       </div>
 
@@ -31,23 +45,23 @@ const FooterCTA: React.FC<FooterCTAProps> = ({ onOpenModal }) => {
               style={{ height: '160px', marginTop: '-40px', marginBottom: '0', marginLeft: '-20px' }}
             />
             <p className="text-muted">Hyderabad School of Music. Where students become performers.</p>
+            <SocialLinks className="nav-social nav-social--footer" />
           </div>
           <div className="footer-links">
             <h4>Explore</h4>
-            <a href="#curriculum">Curriculum</a>
-            <a href="#faculty">Faculty</a>
-            <a href="#success">Ensembles</a>
+            <a href={navHref('#programs')}>Curriculum</a>
+            <a href={navHref('#teachers')}>Faculty</a>
+            <a href={navHref('#stories')}>Ensembles</a>
           </div>
           <div className="footer-links">
             <h4>Connect</h4>
-            <a href="#contact">Contact Us</a>
+            <a href={navHref('#contact')}>Contact Us</a>
             <a href="/intake" style={{ display: 'block', marginBottom: '0.75rem' }}>Enrollment</a>
-            <a href="#careers">Careers</a>
           </div>
         </div>
         <div className="container" style={{ borderTop: '1px solid rgba(255,255,255,0.12)', marginTop: '2rem', paddingTop: '1.25rem', display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem' }}>
           <p className="text-muted" style={{ fontSize: '0.8rem', margin: 0 }}>
-            © 2024–2028 Hyderabad School of Music. All rights reserved.
+            © {new Date().getFullYear()} Hyderabad School of Music. All rights reserved.
           </p>
           <a href="/terms" className="text-muted" style={{ fontSize: '0.8rem', textDecoration: 'underline' }}>
             Terms of Use

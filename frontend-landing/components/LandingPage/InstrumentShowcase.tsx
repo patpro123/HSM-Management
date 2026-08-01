@@ -1,24 +1,37 @@
 'use client';
 import React, { useRef, useEffect, useState, useCallback } from 'react';
+import Link from 'next/link';
+import Image from 'next/image';
+import { useRouter } from 'next/navigation';
+import { INSTRUMENTS } from '@/lib/instruments';
+import guitarPhoto from '@/app/[instrument]/guitar.webp';
+import baseGuitarPhoto from '@/app/[instrument]/base_guitar.webp';
+import keyboardPhoto from '@/app/[instrument]/keyboard.webp';
+import pianoPhoto from '@/app/[instrument]/piano.webp';
+import drumsPhoto from '@/app/[instrument]/drums.webp';
+import octopadPhoto from '@/app/[instrument]/octopad.jpeg';
+import violinPhoto from '@/app/[instrument]/violin.jpg';
+import vocalsPhoto from '@/app/[instrument]/vocals.webp';
+
+const CARD_PHOTOS: Partial<Record<string, typeof guitarPhoto>> = {
+  guitar: guitarPhoto,
+  bass_guitar: baseGuitarPhoto,
+  keyboard: keyboardPhoto,
+  piano: pianoPhoto,
+  drums: drumsPhoto,
+  octopad: octopadPhoto,
+  violin: violinPhoto,
+  tabla: vocalsPhoto,
+  hindustani: vocalsPhoto,
+  carnatic: vocalsPhoto,
+};
 
 interface InstrumentShowcaseProps {
   onOpenModal: (e: React.MouseEvent, instrument?: string) => void;
 }
 
-const INSTRUMENTS = [
-  { id: 'guitar',      name: 'Guitar',               icon: '🎸', desc: 'Most popular worldwide — acoustic to electric' },
-  { id: 'bass_guitar', name: 'Bass Guitar',           icon: '🎸', desc: 'The rhythmic backbone — groove, funk, and feel' },
-  { id: 'keyboard',    name: 'Keyboard',              icon: '🎹', desc: 'Build musical foundations fast — ideal first instrument' },
-  { id: 'piano',       name: 'Piano',                 icon: '🎹', desc: 'Classical elegance; read music, compose, perform' },
-  { id: 'tabla',       name: 'Tabla',                 icon: '🪘', desc: "India's heartbeat — rhythm, tradition, discipline" },
-  { id: 'drums',       name: 'Drums',                 icon: '🥁', desc: 'Rhythm, coordination, and confidence on stage' },
-  { id: 'octopad',     name: 'Octopad',               icon: '🎛️', desc: 'Electronic percussion — versatile, modern, exciting' },
-  { id: 'violin',      name: 'Violin',                icon: '🎻', desc: 'Versatile across classical, folk, and film music' },
-  { id: 'hindustani',  name: 'Hindustani Classical',  icon: '🎤', desc: 'North Indian classical — raga, taal, expression' },
-  { id: 'carnatic',    name: 'Carnatic Classical',    icon: '🎤', desc: 'South Indian classical — precise, devotional, powerful' },
-];
-
 const InstrumentShowcase: React.FC<InstrumentShowcaseProps> = ({ onOpenModal }) => {
+  const router = useRouter();
   const instrumentGridRef = useRef<HTMLDivElement>(null);
   const [deckIndex, setDeckIndex] = useState(0);
   const touchStartX = useRef(0);
@@ -73,19 +86,18 @@ const InstrumentShowcase: React.FC<InstrumentShowcaseProps> = ({ onOpenModal }) 
         {/* Desktop: grid */}
         <div className="instrument-grid instrument-grid--desktop" ref={instrumentGridRef}>
           {INSTRUMENTS.map(inst => (
-            <div
-              className="instrument-card pop-shadow"
-              key={inst.id}
-              onClick={e => onOpenModal(e, inst.id)}
-              role="button"
-              tabIndex={0}
-              onKeyDown={e => e.key === 'Enter' && onOpenModal(e as any, inst.id)}
-            >
-              <div className="instrument-icon">{inst.icon}</div>
+            <Link href={`/${inst.slug}`} className="instrument-card pop-shadow" key={inst.id}>
+              {CARD_PHOTOS[inst.id] ? (
+                <div className="instrument-photo">
+                  <Image src={CARD_PHOTOS[inst.id]!} alt="" fill sizes="72px" style={{ objectFit: 'cover' }} />
+                </div>
+              ) : (
+                <div className="instrument-icon">{inst.icon}</div>
+              )}
               <h3 className="instrument-name">{inst.name}</h3>
               <p className="instrument-desc">{inst.desc}</p>
-              <span style={{ fontSize: '0.75rem', color: 'var(--brand-orange)', fontWeight: 600, marginTop: '0.5rem' }}>Enquire →</span>
-            </div>
+              <span style={{ fontSize: '0.75rem', color: 'var(--brand-orange)', fontWeight: 600, marginTop: '0.5rem' }}>View details &amp; book a demo →</span>
+            </Link>
           ))}
         </div>
 
@@ -106,9 +118,15 @@ const InstrumentShowcase: React.FC<InstrumentShowcaseProps> = ({ onOpenModal }) 
                 <div
                   key={inst.id}
                   className={`deck-card instrument-deck-card ${pos}`}
-                  onClick={pos === 'deck-card--active' ? nextCard : undefined}
+                  onClick={() => router.push(`/${inst.slug}`)}
                 >
-                  <div className="instrument-icon" style={{ fontSize: '3rem', marginBottom: '1rem' }}>{inst.icon}</div>
+                  {CARD_PHOTOS[inst.id] ? (
+                    <div className="instrument-photo instrument-photo--lg">
+                      <Image src={CARD_PHOTOS[inst.id]!} alt="" fill sizes="96px" style={{ objectFit: 'cover' }} />
+                    </div>
+                  ) : (
+                    <div className="instrument-icon" style={{ fontSize: '3rem', marginBottom: '1rem' }}>{inst.icon}</div>
+                  )}
                   <h3 className="instrument-name" style={{ fontSize: '1.3rem', marginBottom: '0.5rem' }}>{inst.name}</h3>
                   <p className="instrument-desc" style={{ fontSize: '0.9rem', marginBottom: '1.25rem' }}>{inst.desc}</p>
                   {pos === 'deck-card--active' && (
@@ -121,22 +139,26 @@ const InstrumentShowcase: React.FC<InstrumentShowcaseProps> = ({ onOpenModal }) 
                     </button>
                   )}
                   {pos === 'deck-card--active' && (
-                    <p className="deck-tap-hint">Tap card to browse · swipe to jump</p>
+                    <p className="deck-tap-hint">Tap card for details · swipe or use arrows to browse</p>
                   )}
                 </div>
               );
             })}
           </div>
           <div className="deck-footer">
-            <div className="deck-dots">
-              {INSTRUMENTS.map((_, i) => (
-                <button
-                  key={i}
-                  className={`deck-dot${i === deckIndex ? ' deck-dot--active' : ''}`}
-                  onClick={() => setDeckIndex(i)}
-                  aria-label={`Go to ${INSTRUMENTS[i].name}`}
-                />
-              ))}
+            <div className="deck-nav-row">
+              <button className="deck-arrow" onClick={prevCard} aria-label="Previous instrument">‹</button>
+              <div className="deck-dots">
+                {INSTRUMENTS.map((_, i) => (
+                  <button
+                    key={i}
+                    className={`deck-dot${i === deckIndex ? ' deck-dot--active' : ''}`}
+                    onClick={() => setDeckIndex(i)}
+                    aria-label={`Go to ${INSTRUMENTS[i].name}`}
+                  />
+                ))}
+              </div>
+              <button className="deck-arrow" onClick={nextCard} aria-label="Next instrument">›</button>
             </div>
             <span className="deck-counter">{deckIndex + 1} / {total}</span>
           </div>

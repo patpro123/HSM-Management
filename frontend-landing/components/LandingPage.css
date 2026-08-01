@@ -260,6 +260,99 @@ img {
     background-color: var(--bg-secondary);
 }
 
+/* Non-homepage pages (instrument/locality/practice-portal) reuse FooterCTA,
+   which is built with .stack-section — but the sticky full-viewport-stack
+   effect only makes sense in the homepage's single continuous scroll. */
+.subpage .stack-section {
+    position: static;
+    min-height: auto;
+    display: block;
+    box-shadow: none;
+}
+
+/* .footer-cta's translateY/negative-margin makes the CTA card slide up and
+   overlap the previous section as it "sticks" — homepage-only. On subpages
+   (position: static, no stacking) the same values just push the whole CTA
+   far down the page with a large dead gap above it, so neutralize them. */
+.subpage .footer-cta {
+    transform: none;
+    margin-top: 0;
+}
+
+/* This padding exists to leave room for the CTA card overlapping into the
+   footer on the homepage; without that overlap on subpages it's just an
+   oversized gap of navy background above the footer links. */
+.subpage .real-footer {
+    padding-top: 4rem;
+}
+
+/* Instrument page hero (photo alongside the intro copy) */
+.instrument-hero-grid {
+    display: grid;
+    grid-template-columns: 1.1fr 1fr;
+    gap: 2.5rem;
+    align-items: center;
+}
+
+.instrument-hero-media {
+    position: relative;
+    width: 100%;
+}
+
+.instrument-hero-photo {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 4 / 3;
+    border-radius: var(--border-radius-lg);
+    overflow: hidden;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.12);
+}
+
+.instrument-hero-accent {
+    position: absolute;
+    width: 42%;
+    aspect-ratio: 3 / 4;
+    bottom: -1.5rem;
+    right: -1.5rem;
+    border-radius: 16px;
+    overflow: hidden;
+    border: 6px solid #fff;
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.18);
+    transform: rotate(4deg);
+}
+
+.instrument-hero-fallback {
+    width: 100%;
+    aspect-ratio: 4 / 3;
+    border-radius: var(--border-radius-lg);
+    background: linear-gradient(135deg, rgba(242, 107, 56, 0.14), rgba(242, 107, 56, 0.04));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.instrument-hero-fallback-icon {
+    font-size: 7rem;
+    filter: drop-shadow(0 10px 20px rgba(0, 0, 0, 0.12));
+}
+
+@media (max-width: 900px) {
+    .instrument-hero-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .instrument-hero-media {
+        max-width: 480px;
+        margin: 0 auto;
+    }
+
+    .instrument-hero-accent {
+        width: 38%;
+        bottom: -1rem;
+        right: -0.5rem;
+    }
+}
+
 /* Navigation */
 .navbar {
     position: fixed;
@@ -339,6 +432,57 @@ img {
     display: flex;
     align-items: center;
     gap: 0.75rem;
+}
+
+/* Social icon links — reused in header, mobile menu, and footer */
+.nav-social {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+}
+
+.social-icon-link {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    color: var(--text-heading);
+    transition: color 0.2s, background 0.2s;
+}
+
+.social-icon-link:hover {
+    color: var(--brand-orange);
+    background: rgba(242, 107, 56, 0.08);
+}
+
+/* Header copy is replaced by the slide-down menu's copy below 768px — scoped to
+   .nav-actions so it can never also hide the mobile-menu or footer instances. */
+@media (max-width: 767px) {
+    .nav-actions .nav-social {
+        display: none;
+    }
+}
+
+.nav-social--mobile {
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.nav-social--footer {
+    margin-top: 1rem;
+    gap: 0.75rem;
+}
+
+.nav-social--footer .social-icon-link {
+    color: var(--text-muted);
+}
+
+.nav-social--footer .social-icon-link:hover {
+    color: white;
+    background: rgba(255, 255, 255, 0.08);
 }
 
 @media (max-width: 767px) {
@@ -566,39 +710,13 @@ img {
 /* Hero Section */
 .hero {
     padding-top: 0;
-    /* Remove top padding to allow video to fill */
     position: relative;
     display: flex;
     align-items: center;
     justify-content: center;
     min-height: 100vh;
     overflow: hidden;
-}
-
-.video-background {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    z-index: 0;
-}
-
-.hero-video {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-}
-
-.video-overlay {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background-color: rgba(0, 0, 0, 0.5);
-    /* 50% dark overlay */
-    z-index: 1;
+    background: radial-gradient(ellipse at top, #24344f 0%, var(--brand-navy) 60%);
 }
 
 .hero-content-new {
@@ -684,6 +802,113 @@ img {
     flex: 1;
 }
 
+.hero-heatmap-wrap {
+    display: flex;
+    gap: 6px;
+    justify-content: center;
+    width: 100%;
+    max-width: 420px;
+    margin: 0 auto 0.75rem;
+}
+
+.hero-heatmap-days {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    padding: 1px 0;
+}
+
+.hero-heatmap-days span {
+    font-size: 8px;
+    line-height: 1;
+    color: rgba(255, 255, 255, 0.45);
+    height: calc((100% - 6 * 3px) / 7);
+    display: flex;
+    align-items: center;
+}
+
+.hero-heatmap {
+    display: flex;
+    gap: 3px;
+    flex: 1;
+}
+
+.hero-heatmap-col {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    flex: 1;
+}
+
+.hero-heatmap-col i {
+    display: block;
+    aspect-ratio: 1;
+    border-radius: 2px;
+    background: rgba(255, 255, 255, 0.09);
+    animation: hsm-week-cellin 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.hero-heatmap-col i.cell-practice {
+    background: rgba(242, 107, 56, 0.45);
+}
+
+.hero-heatmap-col i.cell-class {
+    background: var(--brand-orange);
+    animation: hsm-week-cellin 0.6s cubic-bezier(0.16, 1, 0.3, 1) both,
+                hsm-week-glow 3.2s ease-in-out 1.4s infinite;
+}
+
+@keyframes hsm-week-cellin {
+    from { opacity: 0; transform: scale(0.35) translateY(6px); }
+    to { opacity: 1; transform: none; }
+}
+
+@keyframes hsm-week-glow {
+    0%, 84%, 100% { box-shadow: 0 0 0 0 rgba(242, 107, 56, 0); }
+    42% { box-shadow: 0 0 0 5px rgba(242, 107, 56, 0.35); }
+}
+
+.hero-week-legend {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.5rem 1.5rem;
+    font-size: 0.8rem;
+    color: rgba(255, 255, 255, 0.75);
+    margin-bottom: 1.75rem;
+}
+
+.hero-week-legend span {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.hero-week-swatch {
+    width: 10px;
+    height: 10px;
+    display: inline-block;
+    border-radius: 1px;
+}
+
+.hero-week-swatch--class {
+    background: var(--brand-orange);
+}
+
+.hero-week-swatch--practice {
+    background: rgba(242, 107, 56, 0.45);
+}
+
+.hero-week-swatch--rest {
+    background: rgba(255, 255, 255, 0.09);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .hero-heatmap-col i {
+        animation: none !important;
+    }
+}
+
 .trust-strip {
     display: flex;
     flex-wrap: wrap;
@@ -693,6 +918,16 @@ img {
     color: rgba(255, 255, 255, 0.9);
     font-size: 1rem;
     margin-bottom: 0.5rem;
+}
+
+.trust-item--link {
+    color: inherit;
+    text-decoration: none;
+    border-bottom: 1px dotted rgba(255, 255, 255, 0.5);
+}
+
+.trust-item--link:hover {
+    border-bottom-color: rgba(255, 255, 255, 0.9);
 }
 
 .trust-location {
@@ -863,6 +1098,22 @@ img {
 .instrument-icon {
     font-size: 2rem;
     margin-bottom: 0.6rem;
+}
+
+.instrument-photo {
+    position: relative;
+    width: 72px;
+    height: 72px;
+    border-radius: 50%;
+    overflow: hidden;
+    margin-bottom: 0.75rem;
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12);
+}
+
+.instrument-photo--lg {
+    width: 96px;
+    height: 96px;
+    margin-bottom: 1rem;
 }
 
 .instrument-name {
@@ -1282,13 +1533,21 @@ img {
 }
 
 .faq-answer {
-    max-height: 0;
-    overflow: hidden;
-    transition: max-height 0.3s ease;
+    display: grid;
+    grid-template-rows: 0fr;
+    transition: grid-template-rows 0.3s ease;
 }
 
 .faq-answer.open {
-    max-height: 200px;
+    grid-template-rows: 1fr;
+}
+
+/* This inner wrapper (not the p's own padding) is the actual grid item —
+   keeping padding off it means overflow:hidden clips it fully to 0 height
+   when closed, instead of leaving the p's padding behind as dead space. */
+.faq-answer-inner {
+    overflow: hidden;
+    min-height: 0;
 }
 
 .faq-answer p {
@@ -1389,6 +1648,48 @@ img {
 .cta-box .serif-heading {
     font-size: clamp(2.5rem, 4vw, 3.5rem);
     margin-bottom: 1.5rem;
+}
+
+.inline-lead-form-divider {
+    opacity: 0.85;
+    font-size: 0.9rem;
+    margin: 1.25rem 0 1rem;
+}
+
+.inline-lead-form {
+    width: 100%;
+    max-width: 420px;
+    text-align: left;
+}
+
+.inline-lead-form .form-grid {
+    margin-bottom: 1.25rem;
+}
+
+.inline-lead-form .form-grid .form-group,
+.inline-lead-form .form-grid input {
+    min-width: 0;
+}
+
+.inline-lead-form .btn-cta {
+    width: 100%;
+    justify-content: center;
+}
+
+.inline-lead-form-error {
+    color: #fff;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 8px;
+    padding: 0.6rem 0.85rem;
+    font-size: 0.85rem;
+    margin-bottom: 1rem;
+}
+
+.inline-lead-form--success {
+    text-align: center;
+    color: #fff;
+    font-weight: 600;
+    max-width: 420px;
 }
 
 .mb-4 {
@@ -1679,6 +1980,39 @@ img {
     padding-top: 0.5rem;
 }
 
+.deck-nav-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+}
+
+.deck-arrow {
+    flex-shrink: 0;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    background: #fff;
+    color: var(--text-heading);
+    font-size: 1.3rem;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    transition: background 0.2s, transform 0.15s;
+}
+
+.deck-arrow:hover {
+    background: var(--bg-secondary);
+}
+
+.deck-arrow:active {
+    transform: scale(0.92);
+}
+
 .deck-dots {
     display: flex;
     gap: 6px;
@@ -1715,6 +2049,17 @@ img {
 }
 .schedule-deck .deck-stack {
     height: 420px;
+}
+.pricing-deck .deck-stack {
+    height: 340px;
+}
+
+.pricing-deck-card {
+    align-items: center;
+}
+.pricing-deck-card .deck-tap-hint {
+    color: inherit;
+    opacity: 0.65;
 }
 
 /* ========== MOBILE FIXES ========== */
@@ -1796,7 +2141,8 @@ img {
     .teachers-carousel--desktop,
     .instrument-grid--desktop,
     .trinity-grid--desktop,
-    .schedule-table-desktop {
+    .schedule-table-desktop,
+    .pricing-grid--desktop {
         display: none !important;
     }
 

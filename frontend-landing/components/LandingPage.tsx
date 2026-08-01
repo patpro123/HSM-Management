@@ -15,25 +15,16 @@ import AlumniSection from './LandingPage/AlumniSection';
 import HSMMethodSection from './LandingPage/HSMMethodSection';
 import MethodologyInfographic from './LandingPage/MethodologyInfographic';
 import ScheduleSection from './LandingPage/ScheduleSection';
+import PricingSection from './LandingPage/PricingSection';
 import FaqSection from './LandingPage/FaqSection';
 import AboutSection from './LandingPage/AboutSection';
 import LocationSection from './LandingPage/LocationSection';
 import FooterCTA from './LandingPage/FooterCTA';
+import type { Teacher, Batch } from '@/lib/data';
+import { plansFaqAnswer } from '@/lib/plans';
 
 const PORTAL_URL = process.env.NEXT_PUBLIC_PORTAL_URL || 'https://portal.hsm.org.in';
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'https://hsm-management.onrender.com';
-
-interface Teacher {
-    id: number;
-    name: string;
-    specialty?: string;
-    [key: string]: unknown;
-}
-
-interface Batch {
-    instrument_name: string;
-    [key: string]: unknown;
-}
 
 interface LandingPageProps {
     teachers: Teacher[];
@@ -46,7 +37,7 @@ const faqs = [
     { q: "Does my child need prior experience?", a: "Not at all. We start from the very beginning and move at your child's pace." },
     { q: "What age groups do you teach?", a: "We welcome students from age 5 to 60+. Music has no age limit." },
     { q: "How soon will my child play a real song?", a: "Most students play their first song within 4–6 weeks. We make early wins a priority." },
-    { q: "What are the fees?", a: "We offer a Trial Pack (4 classes, starting ₹2000) and a Quarterly Pack (24 classes). Your first demo class is completely free — no commitment." },
+    { q: "What are the fees?", a: plansFaqAnswer() },
 ];
 
 const testimonials = [
@@ -152,6 +143,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ teachers, batches }) => {
                 />
                 <AlumniSection />
                 <ScheduleSection batches={batches} onOpenModal={handleOpenModal} />
+                <PricingSection onOpenModal={handleOpenModal} />
                 <FaqSection
                     faqs={faqs}
                     activeFaq={activeFaq}
