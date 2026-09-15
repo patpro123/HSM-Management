@@ -28,12 +28,17 @@ router.get('/:paymentId', authenticateJWT, authorizeRole(['admin']), async (req,
       `SELECT p.id, p.amount, p.method, p.metadata, p.timestamp, p.receipt_number,
               s.name AS student_name, s.phone AS student_phone, s.guardian_contact,
               s.metadata->>'email' AS student_email,
-              pkg.name AS package_name, i.name AS instrument_name,
+              pkg.name AS package_name,
+              COALESCE(bi.name, pkgi.name) AS instrument_name,
+              t.name AS teacher_name,
               u.name AS recorded_by_name
        FROM payments p
        JOIN students s ON p.student_id = s.id
        LEFT JOIN packages pkg ON p.package_id = pkg.id
-       LEFT JOIN instruments i ON pkg.instrument_id = i.id
+       LEFT JOIN instruments pkgi ON pkg.instrument_id = pkgi.id
+       LEFT JOIN batches b ON b.id = (p.metadata->>'batch_id')::uuid
+       LEFT JOIN instruments bi ON b.instrument_id = bi.id
+       LEFT JOIN teachers t ON b.teacher_id = t.id
        LEFT JOIN users u ON p.recorded_by = u.id
        WHERE p.id = $1`,
       [paymentId]
@@ -65,6 +70,8 @@ router.get('/:paymentId', authenticateJWT, authorizeRole(['admin']), async (req,
       amount: row.amount,
       payment_method: row.method,
       description: descriptionLabel,
+      instrument_name: row.instrument_name || null,
+      teacher_name: row.teacher_name || null,
       location_label: locationLabel,
       recorded_by_name: row.recorded_by_name || null,
     });

@@ -1,7 +1,19 @@
 import React, { useEffect, useState } from 'react';
-import { pdf, Document, Page, Text, View, Image, StyleSheet } from '@react-pdf/renderer';
+import { pdf, Document, Page, Text, View, Image, StyleSheet, Font } from '@react-pdf/renderer';
 import { apiGet, apiPost } from '../api';
 import hsmLogo from '../images/hsmLogo.jpg';
+import notoSansRegular from '../fonts/NotoSans-Regular.ttf';
+import notoSansBold from '../fonts/NotoSans-Bold.ttf';
+
+// Helvetica (the react-pdf/PDF standard font) has no ₹ glyph — it silently renders
+// as a stray superscript "1". Noto Sans covers the Indian Rupee sign (U+20B9).
+Font.register({
+  family: 'Noto Sans',
+  fonts: [
+    { src: notoSansRegular },
+    { src: notoSansBold, fontWeight: 'bold' },
+  ],
+});
 
 interface ReceiptData {
   payment_id: string;
@@ -13,6 +25,8 @@ interface ReceiptData {
   amount: number | string;
   payment_method: string | null;
   description: string;
+  instrument_name: string | null;
+  teacher_name: string | null;
   location_label: string | null;
   recorded_by_name: string | null;
 }
@@ -28,22 +42,22 @@ function fmtDate(iso: string) {
 // ── PDF Document ─────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
-  page:       { padding: 40, fontFamily: 'Helvetica', fontSize: 10, color: '#1e293b' },
+  page:       { padding: 40, fontFamily: 'Noto Sans', fontSize: 10, color: '#1e293b' },
   header:     { flexDirection: 'row', alignItems: 'center', marginBottom: 16 },
   logo:       { width: 60, height: 60, marginRight: 14 },
-  schoolName: { fontSize: 16, fontFamily: 'Helvetica-Bold' },
+  schoolName: { fontSize: 16, fontFamily: 'Noto Sans', fontWeight: 'bold' },
   contactLine:{ fontSize: 8.5, color: '#64748b', marginTop: 2 },
   divider:    { borderBottomWidth: 1, borderBottomColor: '#e2e8f0', marginVertical: 14 },
-  title:      { fontSize: 13, fontFamily: 'Helvetica-Bold', textAlign: 'center', marginBottom: 16, letterSpacing: 1 },
+  title:      { fontSize: 13, fontFamily: 'Noto Sans', fontWeight: 'bold', textAlign: 'center', marginBottom: 16, letterSpacing: 1 },
   metaRow:    { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 16 },
   metaLabel:  { fontSize: 8.5, color: '#64748b' },
-  metaValue:  { fontSize: 10, fontFamily: 'Helvetica-Bold' },
+  metaValue:  { fontSize: 10, fontFamily: 'Noto Sans', fontWeight: 'bold' },
   row:        { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: '#f1f5f9' },
   label:      { fontSize: 9.5, color: '#475569' },
-  value:      { fontSize: 9.5, fontFamily: 'Helvetica-Bold', color: '#1e293b' },
-  amountRow:  { flexDirection: 'row', justifyContent: 'space-between', marginTop: 16, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#10b981' },
-  amountLabel:{ fontSize: 11, fontFamily: 'Helvetica-Bold' },
-  amountValue:{ fontSize: 14, fontFamily: 'Helvetica-Bold', color: '#10b981' },
+  value:      { fontSize: 9.5, fontFamily: 'Noto Sans', fontWeight: 'bold', color: '#1e293b' },
+  amountRow:  { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 16, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#10b981' },
+  amountLabel:{ fontSize: 11, fontFamily: 'Noto Sans', fontWeight: 'bold' },
+  amountValue:{ fontSize: 16, fontFamily: 'Noto Sans', fontWeight: 'bold', color: '#10b981' },
   footer:     { marginTop: 40, fontSize: 8, color: '#94a3b8', textAlign: 'center' },
 });
 
@@ -88,6 +102,18 @@ const ReceiptPDF: React.FC<{ data: ReceiptData }> = ({ data }) => (
         <Text style={styles.label}>Description</Text>
         <Text style={styles.value}>{data.description}</Text>
       </View>
+      {data.instrument_name && (
+        <View style={styles.row}>
+          <Text style={styles.label}>Instrument</Text>
+          <Text style={styles.value}>{data.instrument_name}</Text>
+        </View>
+      )}
+      {data.teacher_name && (
+        <View style={styles.row}>
+          <Text style={styles.label}>Teacher</Text>
+          <Text style={styles.value}>{data.teacher_name}</Text>
+        </View>
+      )}
       <View style={styles.row}>
         <Text style={styles.label}>Payment Method</Text>
         <Text style={styles.value}>{(data.payment_method || '').toUpperCase()}</Text>
@@ -223,6 +249,18 @@ const ReceiptPanel: React.FC<ReceiptPanelProps> = ({ paymentId, onClose }) => {
                   <span className="text-slate-500">Amount</span>
                   <span className="font-semibold text-emerald-600">{fmtAmount(data.amount)}</span>
                 </div>
+                {data.instrument_name && (
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">Instrument</span>
+                    <span className="font-semibold">{data.instrument_name}</span>
+                  </div>
+                )}
+                {data.teacher_name && (
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">Teacher</span>
+                    <span className="font-semibold">{data.teacher_name}</span>
+                  </div>
+                )}
                 <div className="flex justify-between">
                   <span className="text-slate-500">Description</span>
                   <span className="font-semibold">{data.description}</span>

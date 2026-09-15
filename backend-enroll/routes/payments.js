@@ -197,6 +197,11 @@ router.post('/', authenticateJWT, authorizeRole(['admin']), async (req, res) => 
       }
     }
 
+    // Record which batch this payment was for, so receipts can show instrument + teacher later
+    if (targetBatchId) {
+      metadata.batch_id = targetBatchId;
+    }
+
     // package_id may be a fee_structures.id (from the modern packages endpoint) rather than
     // a packages.id. The payments FK only references packages, so we must verify before inserting.
     let resolvedPackageId = null;
