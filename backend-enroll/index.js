@@ -248,6 +248,7 @@ app.use('/api/students', student360Router);
 app.use('/api/teachers', require('./routes/teachers'));
 app.use('/api/teachers', authenticateJWT, require('./routes/teacher360'));
 app.use('/api/payments', require('./routes/payments'));
+app.use('/api/receipts', require('./routes/receipts'));
 app.use('/api/users', require('./routes/users'));
 app.use('/api/finance', require('./routes/finance'));
 app.use('/api/finance', require('./routes/payouts'));

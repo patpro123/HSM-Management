@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { apiPost, apiPut, apiGet } from '../api';
 import { Student, PaymentRecord, Batch, Instrument } from '../types';
+import ReceiptPanel from './PaymentReceipt';
 
 interface Package {
   id: string;
@@ -24,6 +25,7 @@ interface PaymentModuleProps {
 const PaymentModule: React.FC<PaymentModuleProps> = ({ students, payments, onRefresh }) => {
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingPayment, setEditingPayment] = useState<PaymentRecord | null>(null);
+  const [receiptPaymentId, setReceiptPaymentId] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     student_id: '',
     amount: '',
@@ -249,7 +251,7 @@ const PaymentModule: React.FC<PaymentModuleProps> = ({ students, payments, onRef
           packageId = selectedPackageId || undefined;
         }
 
-        await apiPost('/api/payments', {
+        const created = await apiPost('/api/payments', {
           student_id: formData.student_id,
           amount,
           payment_method: formData.payment_method,
@@ -261,7 +263,7 @@ const PaymentModule: React.FC<PaymentModuleProps> = ({ students, payments, onRef
           class_credits: classCredits,
           batch_id: paymentBatchId || undefined
         });
-        alert('Payment recorded successfully!');
+        setReceiptPaymentId(String(created.payment.id));
       }
 
       setShowAddModal(false);
@@ -493,12 +495,20 @@ const PaymentModule: React.FC<PaymentModuleProps> = ({ students, payments, onRef
                       </td>
                       <td className="px-6 py-4 text-slate-500 text-sm max-w-[180px] truncate">{meta.notes || payment.notes || '-'}</td>
                       <td className="px-6 py-4">
-                        <button
-                          onClick={() => handleEdit(payment)}
-                          className="text-indigo-600 hover:text-indigo-800 font-medium text-sm"
-                        >
-                          Edit
-                        </button>
+                        <div className="flex items-center gap-3">
+                          <button
+                            onClick={() => handleEdit(payment)}
+                            className="text-indigo-600 hover:text-indigo-800 font-medium text-sm"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => setReceiptPaymentId(String(payment.id))}
+                            className="text-emerald-600 hover:text-emerald-800 font-medium text-sm"
+                          >
+                            Receipt
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -860,6 +870,10 @@ const PaymentModule: React.FC<PaymentModuleProps> = ({ students, payments, onRef
             </form>
           </div>
         </div>
+      )}
+
+      {receiptPaymentId && (
+        <ReceiptPanel paymentId={receiptPaymentId} onClose={() => setReceiptPaymentId(null)} />
       )}
     </div>
   );

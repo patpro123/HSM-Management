@@ -109,4 +109,54 @@ async function sendPaymentReminder({ guardianEmail, studentName, instrument, cla
   });
 }
 
-module.exports = { sendAbsenceNotification, sendPaymentReminder };
+async function sendReceiptEmail({ guardianEmail, studentName, receiptNumber, amount, pdfBuffer }) {
+  const transporter = buildTransporter();
+
+  const formattedAmount = `₹${Number(amount).toLocaleString('en-IN')}`;
+
+  const html = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body { font-family: Arial, sans-serif; color: #333; font-size: 15px; }
+    .header { background: #1a1a2e; color: white; padding: 20px 30px; }
+    .header h1 { margin: 0; font-size: 22px; }
+    .content { padding: 30px; }
+    .info-box { background: #f5f5f5; border-left: 4px solid #10b981; padding: 15px 20px; margin: 20px 0; border-radius: 4px; }
+    .footer { background: #f0f0f0; padding: 15px 30px; font-size: 12px; color: #888; }
+  </style>
+</head>
+<body>
+  <div class="header"><h1>Hyderabad School of Music</h1></div>
+  <div class="content">
+    <p>Dear Parent/Guardian,</p>
+    <p>
+      Please find attached the payment receipt for <strong>${studentName}</strong>.
+    </p>
+    <div class="info-box">
+      <strong>Receipt No:</strong> ${receiptNumber}<br>
+      <strong>Amount:</strong> ${formattedAmount}
+    </div>
+    <p>Thank you for your payment.</p>
+    <p>Warm regards,<br><strong>The HSM Team</strong></p>
+  </div>
+  <div class="footer">Hyderabad School of Music &bull; This is an automated message.</div>
+</body>
+</html>`;
+
+  await transporter.sendMail({
+    from:    `"HSM — Hyderabad School of Music" <${process.env.SMTP_USER}>`,
+    to:      guardianEmail,
+    subject: `Payment Receipt ${receiptNumber} — ${studentName}`,
+    html,
+    attachments: [
+      {
+        filename: `Receipt_${receiptNumber.replace(/\//g, '-')}.pdf`,
+        content: pdfBuffer,
+      },
+    ],
+  });
+}
+
+module.exports = { sendAbsenceNotification, sendPaymentReminder, sendReceiptEmail };

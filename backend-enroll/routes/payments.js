@@ -1,6 +1,9 @@
 const express = require('express');
 const router = express.Router();
 const pool = require('../db');
+const { authenticateJWT } = require('../auth/jwtMiddleware');
+const { authorizeRole } = require('../auth/rbacMiddleware');
+const { assignReceiptNumber } = require('../services/receiptService');
 
 // GET /api/payments - List all payments
 router.get('/', async (req, res) => {
@@ -156,7 +159,7 @@ router.get('/status/:studentId', async (req, res) => {
 });
 
 // POST /api/payments - Record a new payment
-router.post('/', async (req, res) => {
+router.post('/', authenticateJWT, authorizeRole(['admin']), async (req, res) => {
   const { student_id, batch_id, amount, payment_method, payment_for, notes, class_credits, payment_frequency, payment_date, package_id, location } = req.body;
 
   if (!student_id || !amount) {
@@ -208,11 +211,14 @@ router.post('/', async (req, res) => {
     }
 
     const paymentRes = await client.query(
-      `INSERT INTO payments (student_id, package_id, amount, method, metadata, timestamp)
-       VALUES ($1, $2, $3, $4, $5, $6)
+      `INSERT INTO payments (student_id, package_id, amount, method, metadata, timestamp, recorded_by)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
        RETURNING *`,
-      [student_id, resolvedPackageId, amount, payment_method, JSON.stringify(metadata), payment_date || new Date()]
+      [student_id, resolvedPackageId, amount, payment_method, JSON.stringify(metadata), payment_date || new Date(), req.user?.id || null]
     );
+
+    // Auto-assign a financial-year-scoped receipt number right away
+    const receiptNumber = await assignReceiptNumber(client, paymentRes.rows[0].id, paymentRes.rows[0].timestamp);
 
     // 2. Update Student Credits (add purchased credits to total)
     if (creditsToAdd !== 0) {
@@ -242,7 +248,10 @@ router.post('/', async (req, res) => {
     }
 
     await client.query('COMMIT');
-    res.status(201).json({ payment: paymentRes.rows[0], message: 'Payment recorded successfully' });
+    res.status(201).json({
+      payment: { ...paymentRes.rows[0], receipt_number: receiptNumber, recorded_by: req.user?.id || null },
+      message: 'Payment recorded successfully'
+    });
 
   } catch (err) {
     await client.query('ROLLBACK');
@@ -254,7 +263,7 @@ router.post('/', async (req, res) => {
 });
 
 // PUT /api/payments/:id - Update a payment
-router.put('/:id', async (req, res) => {
+router.put('/:id', authenticateJWT, authorizeRole(['admin']), async (req, res) => {
   const { id } = req.params;
   const { payment_date, notes, payment_method, payment_for } = req.body;
 
