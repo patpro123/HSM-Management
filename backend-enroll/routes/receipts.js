@@ -29,13 +29,18 @@ router.get('/:paymentId', authenticateJWT, authorizeRole(['admin']), async (req,
               s.name AS student_name, s.phone AS student_phone, s.guardian_contact,
               s.metadata->>'email' AS student_email,
               pkg.name AS package_name,
-              COALESCE(bi.name, pkgi.name) AS instrument_name,
+              COALESCE(bi.name, pkgi.name, fsi.name) AS instrument_name,
               t.name AS teacher_name,
               u.name AS recorded_by_name
        FROM payments p
        JOIN students s ON p.student_id = s.id
        LEFT JOIN packages pkg ON p.package_id = pkg.id
        LEFT JOIN instruments pkgi ON pkg.instrument_id = pkgi.id
+       -- Modern package flow: package_id sent by the frontend is often a fee_structures.id,
+       -- which doesn't match the legacy packages table, so it's stashed in metadata instead
+       -- (see routes/payments.js). Fall back to it for the instrument name.
+       LEFT JOIN fee_structures fs ON fs.id = (p.metadata->>'fee_structure_id')::uuid
+       LEFT JOIN instruments fsi ON fs.instrument_id = fsi.id
        LEFT JOIN batches b ON b.id = (p.metadata->>'batch_id')::uuid
        LEFT JOIN instruments bi ON b.instrument_id = bi.id
        LEFT JOIN teachers t ON b.teacher_id = t.id
