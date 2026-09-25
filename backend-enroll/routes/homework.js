@@ -56,7 +56,7 @@ async function getStudentRecipients(studentId) {
 }
 
 // POST /api/homework/assign — teacher/admin assigns homework to a student
-router.post('/homework/assign', async (req, res) => {
+router.post('/homework/assign', resolveUser, async (req, res) => {
   const { student_id, title, instructions, due_date, assigned_by, total_marks, marks_breakdown,
           habit_target_habit_id, habit_target_count,
           theory_prompt_text, theory_prompt_file } = req.body;
@@ -116,6 +116,7 @@ router.post('/homework/assign', async (req, res) => {
     res.status(201).json({ assignment });
 
     // Notification (fire-and-forget)
+    const assignedByName = req.user?.name || null;
     getStudentRecipients(assignment.student_id).then(recipients => {
       if (!recipients || recipients.recipient_user_ids.length === 0) {
         console.warn(`[homework] assignment ${assignment.id} has no linked student/guardian accounts — notification skipped`);
@@ -125,9 +126,11 @@ router.post('/homework/assign', async (req, res) => {
       notifyUsers(recipients.recipient_user_ids, {
         type:        'HOMEWORK_ASSIGNED',
         title:       'New Homework Assigned',
-        message:     `New homework "${assignment.title}" has been assigned to ${recipients.student_name}`,
+        message:     assignedByName
+          ? `New homework "${assignment.title}" has been assigned to ${recipients.student_name} by ${assignedByName}`
+          : `New homework "${assignment.title}" has been assigned to ${recipients.student_name}`,
         action_link: '/student-profile',
-        metadata:    { assignment_id: assignment.id, student_id: assignment.student_id, student_name: recipients.student_name, title: assignment.title },
+        metadata:    { assignment_id: assignment.id, student_id: assignment.student_id, student_name: recipients.student_name, title: assignment.title, assigned_by_name: assignedByName },
       }).catch(() => {});
     }).catch(() => {});
   } catch (err) {
@@ -137,7 +140,7 @@ router.post('/homework/assign', async (req, res) => {
 });
 
 // POST /api/homework/assign-bulk — assign the same homework to multiple students in one go
-router.post('/homework/assign-bulk', async (req, res) => {
+router.post('/homework/assign-bulk', resolveUser, async (req, res) => {
   const { student_ids, title, instructions, due_date, assigned_by, total_marks,
           marks_breakdown, theory_prompt_text, theory_prompt_file } = req.body;
 
@@ -199,6 +202,7 @@ router.post('/homework/assign-bulk', async (req, res) => {
     res.status(201).json({ created: assignment_ids.length, assignment_ids });
 
     // Notifications (fire-and-forget)
+    const assignedByName = req.user?.name || null;
     (async () => {
       const { notifyUsers } = require('../utils/notifyRecipients');
       for (let i = 0; i < student_ids.length; i++) {
@@ -213,9 +217,11 @@ router.post('/homework/assign-bulk', async (req, res) => {
           await notifyUsers(recipients.recipient_user_ids, {
             type:        'HOMEWORK_ASSIGNED',
             title:       'New Homework Assigned',
-            message:     `New homework "${title.trim()}" has been assigned to ${recipients.student_name}`,
+            message:     assignedByName
+              ? `New homework "${title.trim()}" has been assigned to ${recipients.student_name} by ${assignedByName}`
+              : `New homework "${title.trim()}" has been assigned to ${recipients.student_name}`,
             action_link: '/student-profile',
-            metadata:    { assignment_id: assignmentId, student_id: studentId, student_name: recipients.student_name, title: title.trim() },
+            metadata:    { assignment_id: assignmentId, student_id: studentId, student_name: recipients.student_name, title: title.trim(), assigned_by_name: assignedByName },
           });
         } catch (err) {
           console.error('[assign-bulk] notification failed:', err.message);
@@ -559,13 +565,14 @@ router.post('/homework/:id/submit', async (req, res) => {
     // XP + notification (fire-and-forget)
     pool.query(
       `SELECT s.id AS student_id, s.name AS student_name,
-              a.title, a.due_date, a.assigned_by_user_id,
+              a.title, a.due_date, a.assigned_by_user_id, u.name AS assigned_by_name,
               a.habit_target_habit_id, a.habit_target_count, a.created_at
        FROM homework_assignments a JOIN students s ON s.id = a.student_id
+       LEFT JOIN users u ON u.id = a.assigned_by_user_id
        WHERE a.id = $1`, [id]
     ).then(async ({ rows }) => {
       if (!rows.length) return;
-      const { student_id, student_name, title, due_date, assigned_by_user_id,
+      const { student_id, student_name, title, due_date, assigned_by_user_id, assigned_by_name,
               habit_target_habit_id, habit_target_count, created_at } = rows[0];
       const xpService = require('../services/xpService');
 
@@ -593,20 +600,19 @@ router.post('/homework/:id/submit', async (req, res) => {
         } catch (_) {}
       }
 
-      const { notifyUsers, notifyAdmins } = require('../utils/notifyRecipients');
-      const submittedNotification = {
+      const { notifyTeacherAndAdmins } = require('../utils/notifyRecipients');
+      if (!assigned_by_user_id) {
+        console.warn(`[homework] assignment ${id} has no assigned_by_user_id — notifying admins only`);
+      }
+      notifyTeacherAndAdmins(assigned_by_user_id, {
         type:        'HOMEWORK_SUBMITTED',
         title:       'Homework Submitted',
-        message:     `${student_name} submitted "${title}"`,
+        message:     assigned_by_name
+          ? `${student_name} submitted "${title}" (assigned by ${assigned_by_name})`
+          : `${student_name} submitted "${title}"`,
         action_link: '/students',
-        metadata:    { assignment_id: id, student_id, student_name, title },
-      };
-      if (assigned_by_user_id) {
-        notifyUsers([assigned_by_user_id], submittedNotification).catch(() => {});
-      } else {
-        console.warn(`[homework] assignment ${id} has no assigned_by_user_id — notifying admins instead`);
-        notifyAdmins(submittedNotification).catch(() => {});
-      }
+        metadata:    { assignment_id: id, student_id, student_name, title, assigned_by_name },
+      }).catch(() => {});
 
       // This submission is the "acted upon" response to being assigned (or returned) — clear it.
       require('./notifications').deleteByAssignment(id, ['HOMEWORK_ASSIGNED', 'HOMEWORK_RETURNED']);

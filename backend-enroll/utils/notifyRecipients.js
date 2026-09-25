@@ -34,4 +34,13 @@ async function notifyAdmins(notification) {
   return notifyUsers(admins.map(a => a.user_id), notification);
 }
 
-module.exports = { notifyUsers, notifyAdmins };
+// Union of the acting teacher and every admin — used for events an admin should always
+// see (e.g. a student's submission), regardless of whether a teacher is also on record.
+async function notifyTeacherAndAdmins(teacherUserId, notification) {
+  const { rows: admins } = await pool.query(
+    `SELECT user_id FROM user_roles WHERE role = 'admin' AND revoked_at IS NULL`
+  );
+  return notifyUsers([...admins.map(a => a.user_id), teacherUserId], notification);
+}
+
+module.exports = { notifyUsers, notifyAdmins, notifyTeacherAndAdmins };
