@@ -166,17 +166,6 @@ const UserManagement: React.FC = () => {
     }
   };
 
-  const handleMarkActivated = async (id: string, email: string) => {
-    if (!confirm(`Mark provisioning for ${email} as activated?`)) return;
-    try {
-      await apiPut(`/api/users/provisioned/${id}/activate`, {});
-      showSuccess(`${email} marked as activated`);
-      fetchAll();
-    } catch (err: any) {
-      showError(err.message || 'Failed to activate provisioning');
-    }
-  };
-
   const openRelink = (user: User) => {
     setRelinkUserId(user.id);
     setRelinkEntityType(user.teacher_id ? 'teacher' : 'student');
@@ -410,12 +399,6 @@ const UserManagement: React.FC = () => {
                     <td className="px-5 py-3">
                       {!p.used_at && (
                         <div className="flex gap-3">
-                          <button
-                            onClick={() => handleMarkActivated(p.id, p.email)}
-                            className="text-xs text-green-600 hover:text-green-800 font-medium"
-                          >
-                            Mark Activated
-                          </button>
                           <button
                             onClick={() => handleRemoveProvision(p.id, p.email)}
                             className="text-xs text-red-500 hover:text-red-700 font-medium"

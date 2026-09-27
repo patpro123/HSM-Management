@@ -142,24 +142,6 @@ router.post('/provision', authenticateJWT, authorizeRole(['admin']), async (req,
   }
 });
 
-// Manually mark a provisioning entry as activated (admin tool / local testing)
-router.put('/provisioned/:id/activate', authenticateJWT, authorizeRole(['admin']), async (req, res) => {
-  try {
-    const { id } = req.params;
-    const result = await db.query(
-      `UPDATE provisioned_users SET used_at = NOW() WHERE id = $1 AND used_at IS NULL RETURNING *`,
-      [id]
-    );
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'Provisioning record not found or already activated' });
-    }
-    res.json(result.rows[0]);
-  } catch (error) {
-    console.error('Error activating provisioned user:', error);
-    res.status(500).json({ error: 'Failed to activate provisioned user' });
-  }
-});
-
 // Remove a provisioning entry (only allowed if not yet activated)
 router.delete('/provisioned/:id', authenticateJWT, authorizeRole(['admin']), async (req, res) => {
   const client = await db.connect();
