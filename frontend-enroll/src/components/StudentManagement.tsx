@@ -335,6 +335,22 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students: propStu
         const responseData = await response.json().catch(() => ({}));
         const savedId = String(responseData.student?.id || editingStudent?.id || (editingStudent as any)?.student_id || prospectId || '');
         const savedName = `${formData.first_name || ''} ${formData.last_name || ''}`.trim() || 'Student';
+
+        if (formData.whatsapp_consent_dirty && savedId) {
+          const consentPhone = formData.guardian_phone || formData.phone;
+          if (consentPhone) {
+            apiPost('/api/whatsapp/contacts', {
+              phone: consentPhone,
+              student_id: savedId,
+              is_opted_in: formData.whatsapp_consent,
+              consent_source: formData.whatsapp_consent ? 'enrollment_form' : undefined,
+              consent_text: formData.whatsapp_consent
+                ? 'Parent/guardian checked the WhatsApp consent box on the enrollment form, agreeing to receive class reminders and updates from HSM via WhatsApp.'
+                : undefined,
+            }).catch(err => console.error('Failed to update WhatsApp opt-in status:', err));
+          }
+        }
+
         setShowAddModal(false);
         onRefresh();
         if (prospectId) {

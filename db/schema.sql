@@ -594,6 +594,43 @@ CREATE TABLE IF NOT EXISTS notifications (
 
 CREATE INDEX IF NOT EXISTS idx_notifications_user_is_read ON notifications(user_id, is_read);
 
+-- ==================== WHATSAPP (Cloud API) ====================
+-- Added by migrations 032 (tables) and 033 (consent metadata columns).
+
+CREATE TABLE IF NOT EXISTS whatsapp_contacts (
+  id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  phone         text NOT NULL UNIQUE,         -- E.164 digits only, no +: "919876543210"
+  student_id    uuid REFERENCES students(id) ON DELETE SET NULL,
+  is_opted_in   boolean NOT NULL DEFAULT true,
+  opted_in_at   timestamptz DEFAULT now(),
+  opted_out_at  timestamptz,
+  consent_source text,                        -- 'enrollment_form' | 'whatsapp_self_serve' | 'manual_admin_entry'
+  consent_text  text,                          -- exact disclosure/message the contact agreed to
+  wa_id         text,                          -- WhatsApp's own contact ID (populated on first reply)
+  created_at    timestamptz DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_wa_contacts_student ON whatsapp_contacts(student_id);
+CREATE INDEX IF NOT EXISTS idx_wa_contacts_phone   ON whatsapp_contacts(phone);
+
+CREATE TABLE IF NOT EXISTS whatsapp_messages (
+  id             uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  wa_message_id  text UNIQUE,                 -- Meta message ID (wamid.xxx)
+  direction      text NOT NULL CHECK (direction IN ('inbound', 'outbound')),
+  phone          text NOT NULL,
+  template_name  text,                        -- outbound template messages only
+  body           text,
+  status         text DEFAULT 'sent',         -- sent | delivered | read | failed
+  student_id     uuid REFERENCES students(id) ON DELETE SET NULL,
+  metadata       jsonb DEFAULT '{}'::jsonb,
+  created_at     timestamptz DEFAULT now(),
+  updated_at     timestamptz DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_wa_messages_phone   ON whatsapp_messages(phone);
+CREATE INDEX IF NOT EXISTS idx_wa_messages_student ON whatsapp_messages(student_id);
+CREATE INDEX IF NOT EXISTS idx_wa_messages_wa_id   ON whatsapp_messages(wa_message_id);
+
 -- ==================== NOTES ====================
 -- 
 -- Migrations Applied:

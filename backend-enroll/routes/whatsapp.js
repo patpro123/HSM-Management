@@ -50,6 +50,20 @@ router.post('/webhook', async (req, res) => {
   }));
 });
 
+// Best-effort match of an inbound WhatsApp number to an existing student record,
+// since a first-time opt-in won't have a whatsapp_contacts row yet.
+async function findStudentIdByPhone(normalizedPhone) {
+  const last10 = normalizedPhone.slice(-10);
+  const { rows } = await pool.query(
+    `SELECT id FROM students
+     WHERE regexp_replace(phone, '\\D', '', 'g') LIKE '%' || $1
+        OR regexp_replace(metadata->>'guardian_phone', '\\D', '', 'g') LIKE '%' || $1
+     LIMIT 1`,
+    [last10]
+  );
+  return rows[0]?.id || null;
+}
+
 async function handleWebhookPayload(payload) {
   const entries = payload?.entry || [];
   for (const entry of entries) {
@@ -90,13 +104,23 @@ async function handleWebhookPayload(payload) {
           );
         }
 
-        // Handle START / opt back in
-        if (/^start$/i.test(body.trim())) {
+        // Handle JOIN / START — self-serve opt-in. Upsert since a first-time
+        // sender has no whatsapp_contacts row yet. The inbound text itself
+        // (sent after seeing the disclosure next to the wa.me link/QR code)
+        // is the consent record.
+        if (/^(join|start)$/i.test(body.trim())) {
+          const matchedStudentId = studentId || await findStudentIdByPhone(phone);
           await pool.query(
-            `UPDATE whatsapp_contacts
-             SET is_opted_in = true, opted_out_at = null, opted_in_at = now()
-             WHERE phone = $1`,
-            [phone]
+            `INSERT INTO whatsapp_contacts (phone, student_id, is_opted_in, opted_in_at, consent_source, consent_text)
+             VALUES ($1, $2, true, now(), 'whatsapp_self_serve', $3)
+             ON CONFLICT (phone) DO UPDATE
+               SET is_opted_in = true,
+                   opted_out_at = null,
+                   opted_in_at = now(),
+                   student_id = COALESCE(whatsapp_contacts.student_id, EXCLUDED.student_id),
+                   consent_source = 'whatsapp_self_serve',
+                   consent_text = EXCLUDED.consent_text`,
+            [phone, matchedStudentId, body.trim()]
           );
         }
       }
@@ -106,12 +130,21 @@ async function handleWebhookPayload(payload) {
 
 // GET /api/whatsapp/contacts — list opted-in contacts (admin)
 router.get('/contacts', authenticateJWT, authorizeRole(['admin']), async (req, res) => {
+  const { student_id } = req.query;
   try {
+    const params = [];
+    let where = '';
+    if (student_id) {
+      params.push(student_id);
+      where = 'WHERE wc.student_id = $1';
+    }
     const { rows } = await pool.query(
       `SELECT wc.*, s.name AS student_name
        FROM whatsapp_contacts wc
        LEFT JOIN students s ON s.id = wc.student_id
-       ORDER BY wc.created_at DESC`
+       ${where}
+       ORDER BY wc.created_at DESC`,
+      params
     );
     res.json({ contacts: rows });
   } catch (err) {
@@ -122,21 +155,26 @@ router.get('/contacts', authenticateJWT, authorizeRole(['admin']), async (req, r
 
 // POST /api/whatsapp/contacts — register / upsert a contact
 router.post('/contacts', authenticateJWT, authorizeRole(['admin']), async (req, res) => {
-  const { phone, student_id } = req.body;
+  const { phone, student_id, consent_source, consent_text, is_opted_in } = req.body;
   if (!phone) return res.status(400).json({ error: 'phone required' });
 
   const normalized = normalizePhone(phone);
+  const optingIn = is_opted_in !== false;
   try {
+    // consent_source/consent_text record how opt-IN was obtained, so an opt-out
+    // (is_opted_in: false) must never overwrite that original record.
     const { rows } = await pool.query(
-      `INSERT INTO whatsapp_contacts (phone, student_id, is_opted_in, opted_in_at)
-       VALUES ($1, $2, true, now())
+      `INSERT INTO whatsapp_contacts (phone, student_id, is_opted_in, opted_in_at, opted_out_at, consent_source, consent_text)
+       VALUES ($1, $2, $3, CASE WHEN $3 THEN now() ELSE NULL END, CASE WHEN $3 THEN NULL ELSE now() END, $4, $5)
        ON CONFLICT (phone) DO UPDATE
          SET student_id = COALESCE(EXCLUDED.student_id, whatsapp_contacts.student_id),
-             is_opted_in = true,
-             opted_in_at = now(),
-             opted_out_at = null
+             is_opted_in = $3,
+             opted_in_at = CASE WHEN $3 THEN now() ELSE whatsapp_contacts.opted_in_at END,
+             opted_out_at = CASE WHEN $3 THEN NULL ELSE now() END,
+             consent_source = CASE WHEN $3 THEN COALESCE($4, whatsapp_contacts.consent_source) ELSE whatsapp_contacts.consent_source END,
+             consent_text = CASE WHEN $3 THEN COALESCE($5, whatsapp_contacts.consent_text) ELSE whatsapp_contacts.consent_text END
        RETURNING *`,
-      [normalized, student_id || null]
+      [normalized, student_id || null, optingIn, optingIn ? (consent_source || 'manual_admin_entry') : null, optingIn ? (consent_text || null) : null]
     );
     res.status(201).json({ contact: rows[0] });
   } catch (err) {

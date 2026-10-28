@@ -29,7 +29,8 @@ interface StudentDetailsProps {
 const StudentDetails: React.FC<StudentDetailsProps> = ({ student, batches, instruments, onSave, onCancel, initialProspectId }) => {
   const [formData, setFormData] = useState({
     first_name: '', last_name: '', date_of_birth: '',
-    email: '', phone: '', guardian_name: '', guardian_phone: '', address: ''
+    email: '', phone: '', guardian_name: '', guardian_phone: '', address: '',
+    whatsapp_consent: false, whatsapp_consent_dirty: false
   });
   const [selectedInstrumentIds, setSelectedInstrumentIds] = useState<string[]>([]);
   const [selectedBatches, setSelectedBatches] = useState<EnrollmentSelection[]>([]);
@@ -141,8 +142,23 @@ const StudentDetails: React.FC<StudentDetailsProps> = ({ student, batches, instr
         phone: student.phone || '',
         guardian_name: metadata.guardian_name || student.guardian_name || (student as any).guardian_contact || '',
         guardian_phone: metadata.guardian_phone || student.guardian_phone || '',
-        address: metadata.address || student.address || ''
+        address: metadata.address || student.address || '',
+        whatsapp_consent: false, whatsapp_consent_dirty: false
       });
+      // Reflect actual opt-in status so the checkbox doesn't silently reset
+      // (and so an unchanged save doesn't overwrite the original consent record).
+      // The admin student list is sourced from /api/enrollments, whose rows carry
+      // `student_id` rather than `id` — same shape quirk StudentManagement.tsx
+      // already works around when resolving the id for save/edit.
+      const studentId = student.id || (student as any).student_id;
+      if (studentId) {
+        apiGet(`/api/whatsapp/contacts?student_id=${studentId}`)
+          .then(res => {
+            const optedIn = (res.contacts || []).some((c: any) => c.is_opted_in);
+            setFormData(prev => ({ ...prev, whatsapp_consent: optedIn }));
+          })
+          .catch(() => {});
+      }
       const studentBatches = (student as any).batches || (student as any).enrollments || [];
       const initBatches: EnrollmentSelection[] = studentBatches.map((enr: any) => ({
         batch_id: enr.batch_id || '',
@@ -162,7 +178,7 @@ const StudentDetails: React.FC<StudentDetailsProps> = ({ student, batches, instr
       });
       setInstrumentSettings(settings);
     } else {
-      setFormData({ first_name: '', last_name: '', date_of_birth: '', email: '', phone: '', guardian_name: '', guardian_phone: '', address: '' });
+      setFormData({ first_name: '', last_name: '', date_of_birth: '', email: '', phone: '', guardian_name: '', guardian_phone: '', address: '', whatsapp_consent: false, whatsapp_consent_dirty: false });
       setSelectedBatches([]);
       setSelectedInstrumentIds([]);
       const settings: Record<string, any> = {};
@@ -441,6 +457,20 @@ const StudentDetails: React.FC<StudentDetailsProps> = ({ student, batches, instr
             <label className="block text-sm font-semibold text-slate-700 mb-2">Address</label>
             <textarea name="address" value={formData.address} onChange={handleInputChange} rows={2} className="w-full px-4 py-2 rounded-lg border border-slate-300 focus:border-orange-500 focus:ring-2 focus:ring-orange-200 outline-none" />
           </div>
+
+          <label className="flex items-start gap-3 cursor-pointer bg-green-50 border border-green-200 rounded-lg p-3">
+            <input
+              type="checkbox"
+              checked={formData.whatsapp_consent}
+              onChange={e => setFormData({ ...formData, whatsapp_consent: e.target.checked, whatsapp_consent_dirty: true })}
+              className="w-5 h-5 mt-0.5 text-green-600 rounded"
+            />
+            <span className="text-sm text-slate-700">
+              The parent/guardian has agreed to receive class reminders and updates from HSM via WhatsApp,
+              at the phone number given above. They can reply <strong>STOP</strong> anytime to opt out.
+              {student && <span className="block text-xs text-slate-500 mt-1">Reflects current opt-in status — uncheck to opt them out.</span>}
+            </span>
+          </label>
 
           {/* Branch Selector */}
           {branches.length > 1 && (
