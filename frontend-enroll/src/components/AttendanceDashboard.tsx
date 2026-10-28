@@ -3,6 +3,7 @@ import { apiGet, apiPost } from '../api';
 import { Batch, AttendanceStatus, CreditReport } from '../types';
 import MarkAttendanceTab from './AttendanceDashboard/MarkAttendanceTab';
 import CreditReportTab from './AttendanceDashboard/CreditReportTab';
+import DailyAttendanceView from './DailyAttendanceView';
 
 interface AttendanceDashboardProps {
   batches: Batch[];
@@ -20,7 +21,7 @@ interface BatchStudent {
 
 const AttendanceDashboard: React.FC<AttendanceDashboardProps> = ({ batches, onRefresh }) => {
   // ── Sub-tab ──────────────────────────────────────────────────────────────
-  const [activeTab, setActiveTab] = useState<'mark' | 'credit-report'>('mark');
+  const [activeTab, setActiveTab] = useState<'by-date' | 'mark' | 'credit-report'>('by-date');
 
   // ── Mark Attendance state ─────────────────────────────────────────────────
   const [selectedBatch, setSelectedBatch] = useState<string>('');
@@ -369,7 +370,7 @@ const AttendanceDashboard: React.FC<AttendanceDashboardProps> = ({ batches, onRe
   };
 
   // Switch to credit report tab and pre-load student list
-  const handleTabChange = (tab: 'mark' | 'credit-report') => {
+  const handleTabChange = (tab: 'by-date' | 'mark' | 'credit-report') => {
     setActiveTab(tab);
     if (tab === 'credit-report') fetchCrStudents();
   };
@@ -378,20 +379,30 @@ const AttendanceDashboard: React.FC<AttendanceDashboardProps> = ({ batches, onRe
   return (
     <div className="space-y-6">
       {/* Sub-tab toggle */}
-      <div className="flex gap-1 bg-slate-100 p-1 rounded-xl w-fit">
+      <div className="flex gap-1 bg-slate-100 p-1 rounded-xl w-full sm:w-fit">
+        <button
+          onClick={() => handleTabChange('by-date')}
+          className={`flex-1 sm:flex-none px-3 sm:px-5 py-2 rounded-lg text-sm font-semibold transition ${
+            activeTab === 'by-date'
+              ? 'bg-white text-indigo-700 shadow-sm'
+              : 'text-slate-500 hover:text-slate-700'
+          }`}
+        >
+          By Date
+        </button>
         <button
           onClick={() => handleTabChange('mark')}
-          className={`px-5 py-2 rounded-lg text-sm font-semibold transition ${
+          className={`flex-1 sm:flex-none px-3 sm:px-5 py-2 rounded-lg text-sm font-semibold transition ${
             activeTab === 'mark'
               ? 'bg-white text-indigo-700 shadow-sm'
               : 'text-slate-500 hover:text-slate-700'
           }`}
         >
-          Mark Attendance
+          By Batch
         </button>
         <button
           onClick={() => handleTabChange('credit-report')}
-          className={`px-5 py-2 rounded-lg text-sm font-semibold transition ${
+          className={`flex-1 sm:flex-none px-3 sm:px-5 py-2 rounded-lg text-sm font-semibold transition ${
             activeTab === 'credit-report'
               ? 'bg-white text-indigo-700 shadow-sm'
               : 'text-slate-500 hover:text-slate-700'
@@ -400,6 +411,10 @@ const AttendanceDashboard: React.FC<AttendanceDashboardProps> = ({ batches, onRe
           Credit Report
         </button>
       </div>
+
+      {activeTab === 'by-date' && (
+        <DailyAttendanceView mode="admin" onSaved={onRefresh} />
+      )}
 
       {activeTab === 'mark' && (
         <MarkAttendanceTab

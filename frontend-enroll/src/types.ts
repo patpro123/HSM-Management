@@ -3,6 +3,31 @@ export type PayoutType = 'fixed' | 'per_student_monthly';
 export type PaymentFrequency = 'monthly' | 'quarterly' | 'half_yearly' | 'yearly';
 export type AttendanceStatus = 'present' | 'absent' | 'excused';
 
+// GET /api/attendance/by-date
+export interface DailyAttendanceStudent {
+  student_id: string;
+  student_name: string;
+  status: AttendanceStatus | null;
+  is_guest: boolean;
+}
+
+export interface DailyAttendanceBatch {
+  batch_id: string;
+  instrument_name: string;
+  teacher_id: string | null;
+  teacher_name: string | null;
+  recurrence: string | null;
+  time_slot: string | null;
+  scheduled: boolean;
+  students: DailyAttendanceStudent[];
+}
+
+export interface DailyAttendanceResponse {
+  date: string;
+  viewer_teacher_id: string | null;
+  batches: DailyAttendanceBatch[];
+}
+
 export interface Teacher {
   id: number | string;
   name: string;

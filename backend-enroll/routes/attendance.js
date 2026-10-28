@@ -60,25 +60,36 @@ router.get('/', rbac.filterTeacherData, async (req, res) => {
 });
 
 // POST /api/attendance - mark attendance
-router.post('/', rbac.filterTeacherData, async (req, res) => {
+router.post('/', authenticateJWT, rbac.filterTeacherData, async (req, res) => {
   const { records } = req.body;
   if (!Array.isArray(records) || records.length === 0) {
     return res.status(400).json({ error: 'No attendance records provided' });
   }
 
-  // Teachers may only mark attendance for their own batches
+  // Teachers may mark attendance for any batch (e.g. covering for a colleague).
+  // Records in batches they don't own get a note naming who marked them.
+  const proxyNotes = new Map(); // batch_id -> note
   if (req.dataFilter?.isTeacher) {
     const teacherId = req.dataFilter.teacherId;
     if (!teacherId) {
       return res.status(403).json({ error: 'Teacher account not linked to a profile' });
     }
     const batchIds = [...new Set(records.map(r => r.batch_id))];
-    const owned = await pool.query(
-      'SELECT id FROM batches WHERE id = ANY($1) AND teacher_id = $2',
-      [batchIds, teacherId]
+    const batchRes = await pool.query(
+      `SELECT b.id, b.teacher_id, t.name AS teacher_name
+       FROM batches b LEFT JOIN teachers t ON t.id = b.teacher_id
+       WHERE b.id = ANY($1)`,
+      [batchIds]
     );
-    if (owned.rows.length !== batchIds.length) {
-      return res.status(403).json({ error: 'You can only mark attendance for your own batches' });
+    if (batchRes.rows.length !== batchIds.length) {
+      return res.status(404).json({ error: 'One or more batches not found' });
+    }
+    const markerRes = await pool.query('SELECT name FROM teachers WHERE id = $1', [teacherId]);
+    const markerName = markerRes.rows[0]?.name || req.user.name || req.user.email;
+    for (const b of batchRes.rows) {
+      if (b.teacher_id !== teacherId) {
+        proxyNotes.set(b.id, `Marked by ${markerName} on behalf of ${b.teacher_name || 'batch teacher'}`);
+      }
     }
   }
 
@@ -88,11 +99,12 @@ router.post('/', rbac.filterTeacherData, async (req, res) => {
 
     for (const record of records) {
       const { batch_id, student_id, date, status, is_extra } = record;
+      const note = proxyNotes.get(batch_id) || null;
 
       if (is_extra) {
         await client.query(
-          'INSERT INTO attendance_records (batch_id, student_id, session_date, status, source, is_extra, finalized_at) VALUES ($1, $2, $3, $4, $5, TRUE, NOW())',
-          [batch_id, student_id, date, status, 'manual']
+          'INSERT INTO attendance_records (batch_id, student_id, session_date, status, source, is_extra, finalized_at, notes) VALUES ($1, $2, $3, $4, $5, TRUE, NOW(), $6)',
+          [batch_id, student_id, date, status, 'manual', note]
         );
       } else {
         const checkRes = await client.query(
@@ -102,13 +114,13 @@ router.post('/', rbac.filterTeacherData, async (req, res) => {
 
         if (checkRes.rows.length > 0) {
           await client.query(
-            'UPDATE attendance_records SET status = $1, source = $2, finalized_at = NOW() WHERE id = $3',
-            [status, 'manual', checkRes.rows[0].id]
+            'UPDATE attendance_records SET status = $1, source = $2, finalized_at = NOW(), notes = COALESCE($4, notes) WHERE id = $3',
+            [status, 'manual', checkRes.rows[0].id, note]
           );
         } else {
           await client.query(
-            'INSERT INTO attendance_records (batch_id, student_id, session_date, status, source, is_extra, finalized_at) VALUES ($1, $2, $3, $4, $5, FALSE, NOW())',
-            [batch_id, student_id, date, status, 'manual']
+            'INSERT INTO attendance_records (batch_id, student_id, session_date, status, source, is_extra, finalized_at, notes) VALUES ($1, $2, $3, $4, $5, FALSE, NOW(), $6)',
+            [batch_id, student_id, date, status, 'manual', note]
           );
         }
       }
@@ -147,6 +159,24 @@ router.post('/', rbac.filterTeacherData, async (req, res) => {
     res.status(500).json({ error: 'Failed to save attendance' });
   } finally {
     client.release();
+  }
+});
+
+// DELETE /api/attendance?batch_id=&student_id=&date= — un-mark a student (removes the regular, non-extra record)
+router.delete('/', authenticateJWT, authorizeRole(['admin', 'teacher']), async (req, res) => {
+  const { batch_id, student_id, date } = req.query;
+  if (!batch_id || !student_id || !date) {
+    return res.status(400).json({ error: 'batch_id, student_id and date are required' });
+  }
+  try {
+    const result = await pool.query(
+      'DELETE FROM attendance_records WHERE batch_id = $1 AND student_id = $2 AND session_date = $3 AND is_extra = FALSE',
+      [batch_id, student_id, date]
+    );
+    res.json({ success: true, removed: result.rowCount });
+  } catch (err) {
+    console.error('Delete attendance error:', err);
+    res.status(500).json({ error: 'Failed to remove attendance' });
   }
 });
 
@@ -386,6 +416,113 @@ router.get('/absences', authenticateJWT, authorizeRole(['admin']), async (req, r
   } catch (err) {
     console.error('[GET /attendance/absences]', err);
     res.status(500).json({ error: 'Failed to fetch absences' });
+  }
+});
+
+// Returns the "HH:MM-HH:MM" slot a recurrence string lists for a given day-of-week, or null.
+function slotForDay(recurrenceStr, dayOfWeek) {
+  if (!recurrenceStr) return null;
+  const dayNames = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
+  for (const part of recurrenceStr.split(',')) {
+    const [day, slot] = part.trim().split(/\s+/);
+    if (day && day.toUpperCase() === dayNames[dayOfWeek]) return slot || null;
+  }
+  return null;
+}
+
+// GET /api/attendance/by-date — every batch with its students and attendance for one date.
+// Admins and teachers both get all teachers' batches so a teacher can cover for a colleague;
+// the frontend defaults teachers to their own batches (viewer_teacher_id).
+// Query: date=YYYY-MM-DD (defaults to today)
+router.get('/by-date', authenticateJWT, authorizeRole(['admin', 'teacher']), rbac.filterTeacherData, async (req, res) => {
+  const date = req.query.date || toLocalDateStr(new Date());
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    return res.status(400).json({ error: 'date must be YYYY-MM-DD' });
+  }
+  const dow = new Date(date + 'T00:00:00').getDay();
+
+  try {
+    const batchesRes = await pool.query(`
+      SELECT b.id, b.recurrence, b.start_time, b.end_time, b.teacher_id,
+             t.name AS teacher_name, i.name AS instrument_name
+      FROM batches b
+      JOIN instruments i ON i.id = b.instrument_id
+      LEFT JOIN teachers t ON t.id = b.teacher_id
+      WHERE b.is_makeup = FALSE
+    `);
+    const batchIds = batchesRes.rows.map(b => b.id);
+
+    // Enrolled students, plus anyone already marked in the batch that day (out-of-turn guests)
+    const studentsRes = await pool.query(`
+      SELECT * FROM (
+        SELECT DISTINCT ON (eb.batch_id, s.id)
+          eb.batch_id, s.id AS student_id, s.name AS student_name,
+          ar.status AS attendance_status, FALSE AS is_guest
+        FROM enrollment_batches eb
+        JOIN enrollments e ON e.id = eb.enrollment_id AND e.status = 'active'
+        JOIN students s ON s.id = e.student_id
+        LEFT JOIN attendance_records ar
+               ON ar.student_id = s.id AND ar.batch_id = eb.batch_id
+              AND ar.session_date = $1 AND ar.is_extra = FALSE
+        WHERE eb.batch_id = ANY($2)
+        ORDER BY eb.batch_id, s.id, ar.finalized_at DESC NULLS LAST
+      ) enrolled
+      UNION ALL
+      SELECT * FROM (
+        SELECT DISTINCT ON (ar.batch_id, s.id)
+          ar.batch_id, s.id AS student_id, s.name AS student_name,
+          ar.status AS attendance_status, TRUE AS is_guest
+        FROM attendance_records ar
+        JOIN students s ON s.id = ar.student_id
+        WHERE ar.session_date = $1 AND ar.is_extra = FALSE AND ar.batch_id = ANY($2)
+          AND NOT EXISTS (
+            SELECT 1 FROM enrollment_batches eb
+            JOIN enrollments e ON e.id = eb.enrollment_id AND e.status = 'active'
+            WHERE eb.batch_id = ar.batch_id AND e.student_id = ar.student_id
+          )
+        ORDER BY ar.batch_id, s.id, ar.finalized_at DESC NULLS LAST
+      ) guests
+    `, [date, batchIds]);
+
+    const studentsByBatch = {};
+    for (const row of studentsRes.rows) {
+      (studentsByBatch[row.batch_id] ||= []).push({
+        student_id: row.student_id,
+        student_name: row.student_name,
+        status: row.attendance_status || null,
+        is_guest: row.is_guest,
+      });
+    }
+
+    const batches = batchesRes.rows
+      .map(b => {
+        const slot = slotForDay(b.recurrence, dow);
+        const students = (studentsByBatch[b.id] || []).sort((x, y) => x.student_name.localeCompare(y.student_name));
+        return {
+          batch_id: b.id,
+          instrument_name: b.instrument_name,
+          teacher_id: b.teacher_id,
+          teacher_name: b.teacher_name,
+          recurrence: b.recurrence,
+          time_slot: slot || (b.start_time && b.end_time ? `${String(b.start_time).slice(0, 5)}-${String(b.end_time).slice(0, 5)}` : null),
+          scheduled: slot !== null || batchScheduledOnDay(b.recurrence, dow),
+          students,
+        };
+      })
+      .filter(b => b.students.length > 0)
+      .sort((a, b) =>
+        (a.time_slot || '99').localeCompare(b.time_slot || '99') ||
+        a.instrument_name.localeCompare(b.instrument_name)
+      );
+
+    res.json({
+      date,
+      viewer_teacher_id: req.dataFilter?.isTeacher ? req.dataFilter.teacherId : null,
+      batches,
+    });
+  } catch (err) {
+    console.error('[GET /attendance/by-date]', err);
+    res.status(500).json({ error: 'Failed to fetch attendance for date' });
   }
 });
 

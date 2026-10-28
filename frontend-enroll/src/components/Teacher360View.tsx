@@ -7,7 +7,7 @@ import BulkHomeworkPanel from './BulkHomeworkPanel';
 import TeacherPTMTab from './TeacherPTMTab';
 import MakeupAssignPanel, { MakeupMaterialTarget } from './MakeupAssignPanel';
 import ViewAssignedMaterialModal from './ViewAssignedMaterialModal';
-import TeacherMarkAttendance from './TeacherMarkAttendance';
+import DailyAttendanceView from './DailyAttendanceView';
 import MaterialLibrary from './MaterialLibrary';
 
 interface Teacher360ViewProps {
@@ -393,9 +393,11 @@ const Teacher360View: React.FC<Teacher360ViewProps> = ({
               <div className="space-y-6">
                 {resolvedId && (
                   <div className="border-b border-gray-100 pb-6">
-                    <TeacherMarkAttendance
-                      batches={data.profile.batches.map(b => ({ id: b.id, instrument_name: b.instrument_name, recurrence: b.recurrence }))}
-                      onMarked={refreshAbsences}
+                    <h3 className="font-semibold text-lg text-gray-800 mb-4">Mark Attendance</h3>
+                    <DailyAttendanceView
+                      mode={selfView ? 'teacher' : 'admin'}
+                      initialTeacherId={selfView ? undefined : resolvedId}
+                      onSaved={refreshAbsences}
                     />
                   </div>
                 )}
