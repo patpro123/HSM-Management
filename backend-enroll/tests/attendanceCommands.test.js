@@ -4,7 +4,7 @@
 jest.mock('../db', () => ({ query: jest.fn(), connect: jest.fn() }));
 
 const {
-  parseDate, parseTime, parseListCommand, parseMarkCommand, matchNames, planChanges, findContext,
+  parseDate, parseTime, parseListCommand, parseSummaryCommand, parseMarkCommand, matchNames, planChanges, findContext,
 } = require('../llm/attendanceCommands');
 
 const TODAY = '2026-10-28'; // a Wednesday
@@ -69,9 +69,46 @@ describe('parseListCommand', () => {
       .toMatchObject({ instrumentText: 'keyboard', dateText: 'today', time: '6pm' });
   });
 
+  it('peels a trailing date off the instrument', () => {
+    expect(parseListCommand('List students for guitar today')).toMatchObject({ instrumentText: 'guitar', dateText: 'today' });
+    expect(parseListCommand('show students in hindustani vocals 28 Oct at 5pm'))
+      .toMatchObject({ instrumentText: 'hindustani vocals', dateText: '28 Oct', time: '5pm' });
+  });
+
+  it('accepts the instrument before "students"', () => {
+    expect(parseListCommand('guitar students today')).toEqual({
+      instrumentText: 'guitar', dateText: 'today', time: null, teacher: null, loose: true,
+    });
+    expect(parseListCommand('list keyboard students')).toMatchObject({ instrumentText: 'keyboard', dateText: 'today', loose: true });
+    expect(parseListCommand('show me the drums students for yesterday at 6pm'))
+      .toMatchObject({ instrumentText: 'drums', dateText: 'yesterday', time: '6pm', loose: true });
+    expect(parseListCommand('Carnatic Vocals students on 28/10?')).toMatchObject({ instrumentText: 'Carnatic Vocals', dateText: '28/10' });
+  });
+
   it('ignores unrelated messages', () => {
     expect(parseListCommand('How many students do we have?')).toBeNull();
+    expect(parseListCommand('Which students have low credits?')).toBeNull();
     expect(parseListCommand("Show me today's attendance summary")).toBeNull();
+  });
+});
+
+describe('parseSummaryCommand', () => {
+  it.each([
+    ["Show me today's attendance summary", 'today'],
+    ["Today's attendance", 'today'],
+    ['todays attendance', 'today'],
+    ['today’s attendance', 'today'],
+    ['attendance summary', 'today'],
+    ["what's the attendance today?", 'today'],
+    ["this week's attendance", 'week'],
+    ['attendance stats for this month', 'month'],
+  ])('%s → %s', (input, period) => {
+    expect(parseSummaryCommand(input)).toEqual({ period });
+  });
+
+  it('ignores other attendance requests', () => {
+    expect(parseSummaryCommand('attendance for Riya last month')).toBeNull();
+    expect(parseSummaryCommand('mark attendance for guitar')).toBeNull();
   });
 });
 

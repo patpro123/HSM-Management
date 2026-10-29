@@ -4,6 +4,7 @@
 //
 //   "Get all students for <instrument> for date <date> [at <time>] [teacher <name>]"
 //     → lists every student in that instrument's classes on that date
+//       (also "guitar students today", "list keyboard students for 28 Oct")
 //   "Set students <names> as absent and rest as present"
 //   "Mark all present except <names>"
 //     → marks attendance for the students in the most recent list in this chat
@@ -114,10 +115,26 @@ function parseTime(text) {
 // ── Parsers (pure) ───────────────────────────────────────────────────────────
 
 const LIST_RE = /^\s*(?:get|show|list|fetch)\s+(?:me\s+)?(?:all\s+)?(?:the\s+)?students\s+(?:for|in|of)\s+(.+?)(?:\s+(?:for|on)\s+(?:the\s+)?(?:date\s+)?(.+?))?\s*[.?!]*\s*$/i;
+// Instrument before "students": "guitar students today", "list keyboard students for 28 Oct at 5pm"
+const LOOSE_LIST_RE = /^\s*(?:(?:get|show|list|fetch)\s+(?:me\s+)?(?:all\s+)?(?:the\s+)?)?(.+?)\s+students\b(?:\s+(?:for|on)\s+(?:the\s+)?(?:date\s+)?|\s+)?(.*?)\s*[.?!]*\s*$/i;
 
-// Returns null if the message isn't a list command
+// "guitar today" → ['guitar', 'today']; text that doesn't end in a date comes back unchanged
+function splitTrailingDate(text) {
+  const words = text.split(/\s+/);
+  for (let n = Math.min(3, words.length - 1); n >= 1; n--) {
+    const dateText = words.slice(-n).join(' ');
+    if (parseDate(dateText)) return [words.slice(0, -n).join(' '), dateText];
+  }
+  return [text, ''];
+}
+
+// Returns null if the message isn't a list command. A `loose` result (instrument before
+// "students") may just be a question like "active students"; the caller falls through to
+// the LLM when its instrument doesn't resolve.
 function parseListCommand(message) {
-  const m = String(message).match(LIST_RE);
+  const strict = String(message).match(LIST_RE);
+  const loose = strict ? null : String(message).match(LOOSE_LIST_RE);
+  const m = strict || loose;
   if (!m) return null;
   let instrumentText = m[1].trim();
   let tail = (m[2] || '').trim();
@@ -136,9 +153,23 @@ function parseListCommand(message) {
     return s;
   };
   if (tail) tail = takeFilters(tail);
-  else instrumentText = takeFilters(instrumentText);
+  else [instrumentText, tail] = splitTrailingDate(takeFilters(instrumentText));
 
-  return { instrumentText, dateText: tail || 'today', time, teacher };
+  if (loose && tail && !parseDate(tail)) return null; // "how many students do we have"
+  const cmd = { instrumentText, dateText: tail || 'today', time, teacher };
+  if (loose) cmd.loose = true;
+  return cmd;
+}
+
+// "Today's attendance", "attendance summary", "this week's attendance", "attendance stats for this month"
+const SUMMARY_RE = /^\s*(?:(?:get|show|give|tell)\s+(?:me\s+)?|what(?:['’]s|\s+is|\s+was)\s+)?(?:the\s+)?(?:(today|this\s+week|this\s+month)(?:['’]?s)?\s+)?attendance(?:\s+(?:summary|stats|statistics|report|overview|numbers|counts?))?(?:\s+(?:for\s+)?(today|this\s+week|this\s+month))?\s*[.?!]*\s*$/i;
+
+// Returns { period: 'today' | 'week' | 'month' } or null
+function parseSummaryCommand(message) {
+  const m = String(message).match(SUMMARY_RE);
+  if (!m) return null;
+  const when = (m[1] || m[2] || 'today').toLowerCase();
+  return { period: when.endsWith('week') ? 'week' : when.endsWith('month') ? 'month' : 'today' };
 }
 
 const MARK_RE = /^\s*(?:set|mark)\s+(?:the\s+)?(?:students?\s+)?(.+?)\s+(?:as\s+)?(present|absent|excused)\b(.*)$/i;
@@ -380,7 +411,7 @@ async function runList(cmd) {
     return makeResponse('text', `I couldn't read the date "${cmd.dateText}". Try today, yesterday, 28/10, 28 Oct or 2026-10-28.`, []);
   }
   const resolved = await resolveInstrument(pool, cmd.instrumentText);
-  if (resolved.error) return makeResponse('text', resolved.error, []);
+  if (resolved.error) return cmd.loose ? null : makeResponse('text', resolved.error, []);
   const { instrument } = resolved;
 
   let batches = (await svc.getAttendanceByDate(pool, date))
@@ -434,7 +465,10 @@ async function tryAttendanceCommand({ message, user, history }) {
   if (!canUseTool(resolvePersona(user.roles), 'attendance.mark_batch')) return null;
 
   const list = parseListCommand(message);
-  if (list) return runList(list);
+  if (list) {
+    const listResponse = await runList(list);
+    if (listResponse) return listResponse;
+  }
 
   const mark = parseMarkCommand(message);
   if (mark) return runMark(mark, user, history);
@@ -483,6 +517,7 @@ module.exports = {
   parseDate,
   parseTime,
   parseListCommand,
+  parseSummaryCommand,
   parseMarkCommand,
   matchNames,
   planChanges,
