@@ -3,6 +3,8 @@
 const pool = require('../db');
 const emailService = require('../services/emailService');
 const { computeClassesRemaining } = require('../utils/credits');
+const attendanceService = require('../services/attendanceService');
+const attendanceCommands = require('./attendanceCommands');
 
 const makeResponse = (type, text, suggestions = [], card = null) =>
   ({ type, text, suggestions, card });
@@ -277,189 +279,47 @@ const skills = {
     return makeResponse('card', lines, ['Enroll now', 'Compare packages'], { packages: rows });
   },
 
-  'attendance.mark_batch': async ({ params }) => {
-    let { batch_id, default_status, exceptions, session_date } = params;
+  // Covers every class of the instrument on that date; shares code with the
+  // fixed-format "Set students … as absent" chat command.
+  'attendance.mark_batch': async ({ params, user }) =>
+    attendanceCommands.markBatchFromSkill(params, user),
 
-    // Resolve batch — accepts name, instrument, or UUID
-    const resolvedBatchId = await resolveBatchId({ batch_id });
-    if (!resolvedBatchId) {
-      return makeResponse('text', 'Which batch? Please specify the instrument or batch time, e.g. "Guitar Tuesday 5pm".', ['List my batches']);
-    }
-
-    // Batch metadata
-    const batchRow = (await pool.query(
-      `SELECT b.id, b.recurrence, i.name AS instrument, t.name AS teacher
-       FROM batches b
-       JOIN instruments i ON b.instrument_id = i.id
-       JOIN teachers   t ON b.teacher_id    = t.id
-       WHERE b.id = $1`,
-      [resolvedBatchId]
-    )).rows[0];
-    if (!batchRow) return makeResponse('error', 'Batch not found.', []);
-
-    // All active students in the batch
-    const students = (await pool.query(
-      `SELECT s.id, s.name
-       FROM enrollment_batches eb
-       JOIN enrollments e ON eb.enrollment_id = e.id
-       JOIN students   s ON e.student_id      = s.id
-       WHERE eb.batch_id = $1 AND e.status = 'active'
-       ORDER BY s.name`,
-      [resolvedBatchId]
-    )).rows;
-
-    if (!students.length) {
-      return makeResponse('text', `No active students in the ${batchRow.instrument} batch.`, ['View batch schedule']);
-    }
-
-    // Normalize default status
-    const defStatus = ['absent', 'excused'].includes((default_status || '').toLowerCase())
-      ? default_status.toLowerCase()
-      : 'present';
-    const oppStatus = defStatus === 'present' ? 'absent' : 'present';
-
-    // Normalize exceptions — accept array or comma-separated string
-    let exceptionNames = [];
-    if (Array.isArray(exceptions) && exceptions.length) {
-      exceptionNames = exceptions.map(n => String(n).toLowerCase().trim()).filter(Boolean);
-    } else if (typeof exceptions === 'string' && exceptions.trim()) {
-      exceptionNames = exceptions.split(/[,;]+/).map(n => n.toLowerCase().trim()).filter(Boolean);
-    }
-
-    // Fuzzy-match exception names → student IDs
-    const exceptionIds = new Set();
-    const unmatched = [];
-    for (const exName of exceptionNames) {
-      const match = students.find(s => {
-        const sn = s.name.toLowerCase();
-        return sn.includes(exName) || exName.includes(sn.split(' ')[0]);
-      });
-      if (match) exceptionIds.add(match.id);
-      else unmatched.push(exName);
-    }
-
-    // Build per-student attendance map
-    const attendanceMap = students.map(s => ({
-      id: s.id,
-      name: s.name,
-      status: exceptionIds.has(s.id) ? oppStatus : defStatus,
-    }));
-
-    // Session date — default to today IST
-    const date = session_date || new Date(
-      new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata' })
-    ).toISOString().split('T')[0];
-
-    // Execute in a single transaction with proper credit deduction / refund
-    const client = await pool.connect();
-    try {
-      await client.query('BEGIN');
-
-      for (const { id: studentId, status } of attendanceMap) {
-        const existing = (await client.query(
-          `SELECT id, status FROM attendance_records
-           WHERE batch_id = $1 AND student_id = $2 AND session_date = $3 AND is_extra = FALSE`,
-          [resolvedBatchId, studentId, date]
-        )).rows[0];
-
-        if (existing) {
-          const oldStatus = existing.status;
-          await client.query(
-            `UPDATE attendance_records SET status = $1, source = 'chatbot', finalized_at = NOW() WHERE id = $2`,
-            [status, existing.id]
-          );
-          // Credit transitions
-          if (oldStatus !== 'present' && status === 'present') {
-            await client.query(
-              `UPDATE enrollment_batches eb
-               SET classes_remaining = classes_remaining - 1
-               FROM enrollments e
-               WHERE eb.enrollment_id = e.id AND e.student_id = $1
-                 AND eb.batch_id = $2 AND eb.classes_remaining > 0`,
-              [studentId, resolvedBatchId]
-            );
-          } else if (oldStatus === 'present' && status !== 'present') {
-            await client.query(
-              `UPDATE enrollment_batches eb
-               SET classes_remaining = classes_remaining + 1
-               FROM enrollments e
-               WHERE eb.enrollment_id = e.id AND e.student_id = $1 AND eb.batch_id = $2`,
-              [studentId, resolvedBatchId]
-            );
-          }
-        } else {
-          await client.query(
-            `INSERT INTO attendance_records
-               (batch_id, student_id, session_date, status, source, is_extra, finalized_at)
-             VALUES ($1, $2, $3, $4, 'chatbot', FALSE, NOW())`,
-            [resolvedBatchId, studentId, date, status]
-          );
-          if (status === 'present') {
-            await client.query(
-              `UPDATE enrollment_batches eb
-               SET classes_remaining = classes_remaining - 1
-               FROM enrollments e
-               WHERE eb.enrollment_id = e.id AND e.student_id = $1
-                 AND eb.batch_id = $2 AND eb.classes_remaining > 0`,
-              [studentId, resolvedBatchId]
-            );
-          }
-        }
-      }
-
-      await client.query('COMMIT');
-    } catch (err) {
-      await client.query('ROLLBACK');
-      throw err;
-    } finally {
-      client.release();
-    }
-
-    const presentCount = attendanceMap.filter(s => s.status === 'present').length;
-    const absentCount = attendanceMap.filter(s => s.status === 'absent').length;
-
-    let summaryText = `Attendance saved — ${batchRow.instrument} (${date}): ${presentCount} present, ${absentCount} absent.`;
-    if (unmatched.length) {
-      summaryText += ` Could not find: ${unmatched.join(', ')} — please check spelling.`;
-    }
-
-    return makeResponse('list', summaryText,
-      ['Send absence notifications', 'View batch roster', 'Mark another batch'],
-      {
-        students: attendanceMap.map(s => ({
-          name: s.name,
-          label: s.status.charAt(0).toUpperCase() + s.status.slice(1),
-          value: s.name,
-        })),
-      }
-    );
-  },
-
-  'attendance.mark': async ({ params }) => {
+  'attendance.mark': async ({ params, user }) => {
     let { batch_id, student_id, status, session_date } = params;
-    if (!isUUID(batch_id)) batch_id = (await resolveBatchId(params));
-    if (!isUUID(student_id)) student_id = null; // must be explicit for writes
-    if (!batch_id) return makeResponse('text', 'Which batch? Please specify the instrument and time.', []);
-    if (!student_id) return makeResponse('text', 'Which student? Please provide their name to mark attendance.', []);
-    const date = session_date || new Date().toISOString().split('T')[0];
-    await pool.query(
-      `INSERT INTO attendance_records (batch_id, student_id, session_date, status, source)
-       VALUES ($1, $2, $3, $4, 'chatbot')
-       ON CONFLICT (batch_id, student_id, session_date)
-       DO UPDATE SET status = EXCLUDED.status`,
-      [batch_id, student_id, date, status]
-    );
-    if (status === 'present') {
-      await pool.query(
-        `UPDATE enrollment_batches eb
-         SET classes_remaining = classes_remaining - 1
-         FROM enrollments e
-         WHERE eb.enrollment_id = e.id
-           AND eb.batch_id = $1 AND e.student_id = $2
-           AND eb.classes_remaining > 0`,
-        [batch_id, student_id]
-      );
+    if (!['present', 'absent', 'excused'].includes(status)) {
+      return makeResponse('text', 'Should I mark them present, absent or excused?', []);
     }
+    if (!isUUID(student_id)) student_id = null; // must be explicit for writes
+    if (!student_id) return makeResponse('text', 'Which student? Please provide their name to mark attendance.', []);
+    if (!isUUID(batch_id)) {
+      // Pick the student's batch, narrowed by instrument name if one was given
+      const rows = (await pool.query(
+        `SELECT eb.batch_id FROM enrollment_batches eb
+         JOIN enrollments e ON e.id = eb.enrollment_id AND e.status = 'active'
+         JOIN batches b ON b.id = eb.batch_id
+         JOIN instruments i ON i.id = b.instrument_id
+         WHERE e.student_id = $1 AND b.is_makeup = FALSE AND ($2::text IS NULL OR i.name ILIKE $2)`,
+        [student_id, batch_id ? `%${batch_id}%` : null]
+      )).rows;
+      if (rows.length !== 1) {
+        return makeResponse('text', rows.length ? 'This student is in more than one batch. Which instrument?' : 'Which batch? Please specify the instrument.', []);
+      }
+      batch_id = rows[0].batch_id;
+    }
+    const date = session_date || attendanceService.todayIST();
+
+    const roles = user?.roles || [];
+    const teacherId = roles.includes('admin') ? null : await attendanceService.getLinkedTeacherId(pool, user?.id);
+    if (!roles.includes('admin') && !teacherId) {
+      return makeResponse('text', "Your account isn't linked to a teacher profile yet, so I can't mark attendance.", []);
+    }
+    const notes = await attendanceService.buildAttendanceNotes(pool, {
+      batchIds: [batch_id], teacherId, markerName: user?.name || user?.email, via: 'Cleff',
+    });
+    if (!notes) return makeResponse('text', 'Batch not found.', []);
+    await attendanceService.saveAttendanceTransaction(
+      [{ batch_id, student_id, date, status, is_extra: false }], notes
+    );
     return makeResponse('text', `Attendance marked: ${status} for ${date}.`, ['Mark another student', 'View roster']);
   },
 
@@ -1959,11 +1819,11 @@ const TOOL_DEFINITIONS = [
   T('chart.turnover', 'Grouped bar chart of student turnover. group_by=month compares this vs last month; group_by=stream breaks down by instrument; group_by=teacher breaks down by teacher', { group_by: S('month | stream | teacher'), period: S('this_month | last_month'), chart_type: S('bar | line') }),
   // Actions
   T('attendance.mark_batch',
-    'Mark attendance for ALL students in a batch at once. ' +
+    'Mark attendance for ALL students of an instrument on a date (every class of that instrument that day). ' +
     'Set default_status (usually present) then list exceptions by name to mark them the opposite. ' +
     '"Mark all present except John and Mary" → default_status=present, exceptions=["John","Mary"].',
     {
-      batch_id: S('instrument name, batch time, or UUID'),
+      batch_id: S('instrument name or batch UUID'),
       default_status: { type: 'string', enum: ['present', 'absent'], description: 'Status for all students (default: present)' },
       exceptions: { type: 'array', items: { type: 'string' }, description: 'Names of students to mark with the OPPOSITE status' },
       session_date: S('YYYY-MM-DD, defaults to today'),
