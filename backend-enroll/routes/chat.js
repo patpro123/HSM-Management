@@ -9,8 +9,22 @@ const { skills, TOOL_DEFINITIONS, ACTION_SKILLS } = require('../llm/skills');
 const { getPrompt } = require('../llm/prompts');
 const { checkRateLimit, getCached, setCached } = require('../llm/rateLimit');
 
+const { tryAttendanceCommand } = require('../llm/attendanceCommands');
+
 const SESSION_TTL_DAYS = 7;
 const MAX_HISTORY_MESSAGES = 20;
+
+// Attendance command replies carry a full student list for follow-up commands;
+// the LLM doesn't need it, so drop the card to save tokens.
+function withoutAttendanceContext(msg) {
+  if (msg.role !== 'assistant' || typeof msg.content !== 'string' || !msg.content.includes('attendance_context')) return msg;
+  try {
+    const parsed = JSON.parse(msg.content);
+    return { ...msg, content: JSON.stringify({ ...parsed, card: null }) };
+  } catch {
+    return msg;
+  }
+}
 
 // POST /api/chat
 router.post('/', authenticateJWT, async (req, res) => {
@@ -42,17 +56,6 @@ router.post('/', authenticateJWT, async (req, res) => {
   }
 
   try {
-    // Rate limit check
-    const allowed = await checkRateLimit(userId, userRole, pool);
-    if (!allowed) {
-      return res.status(429).json({
-        type: 'error',
-        text: 'Daily chat limit reached. Please try again tomorrow.',
-        suggestions: [],
-        card: null,
-      });
-    }
-
     // Load or create session
     let session = null;
     if (session_id) {
@@ -76,10 +79,37 @@ router.post('/', authenticateJWT, async (req, res) => {
     const history = Array.isArray(session.messages) ? session.messages : [];
     const trimmed = history.slice(-MAX_HISTORY_MESSAGES);
 
+    const saveHistory = (botResponse) => pool.query(
+      `UPDATE chat_sessions SET messages = $1::jsonb, updated_at = NOW() WHERE session_id = $2`,
+      [JSON.stringify([
+        ...trimmed,
+        { role: 'user', content: message.trim() },
+        { role: 'assistant', content: JSON.stringify(botResponse) },
+      ].slice(-MAX_HISTORY_MESSAGES)), session.session_id]
+    );
+
+    // Fixed-format attendance commands — no LLM call, not rate limited
+    const commandResponse = await tryAttendanceCommand({ message: message.trim(), user: req.user, history: trimmed });
+    if (commandResponse) {
+      await saveHistory(commandResponse);
+      return res.json({ session_id: session.session_id, ...commandResponse });
+    }
+
+    // Rate limit check
+    const allowed = await checkRateLimit(userId, userRole, pool);
+    if (!allowed) {
+      return res.status(429).json({
+        type: 'error',
+        text: 'Daily chat limit reached. Please try again tomorrow.',
+        suggestions: [],
+        card: null,
+      });
+    }
+
     const systemPrompt = getPrompt(userRole, new Date(), userName);
     const llmMessages = [
       { role: 'system', content: systemPrompt },
-      ...trimmed,
+      ...trimmed.map(withoutAttendanceContext),
       { role: 'user', content: message.trim() },
     ];
 
@@ -112,7 +142,7 @@ router.post('/', authenticateJWT, async (req, res) => {
       if (!skillHandler) {
         botResponse = { type: 'error', text: `Unknown skill: ${skillName}`, suggestions: [], card: null };
       } else {
-        const skillResult = await skillHandler({ params: skillParams, userId, userRole, pool });
+        const skillResult = await skillHandler({ params: skillParams, userId, userRole, user: req.user, pool });
 
         // Always return skill result directly — skip second LLM call to halve token usage.
         botResponse = skillResult;
@@ -136,17 +166,7 @@ router.post('/', authenticateJWT, async (req, res) => {
       setCached(cacheKey, botResponse);
     }
 
-    // Persist updated message history
-    const updatedMessages = [
-      ...trimmed,
-      { role: 'user', content: message.trim() },
-      { role: 'assistant', content: JSON.stringify(botResponse) },
-    ].slice(-MAX_HISTORY_MESSAGES);
-
-    await pool.query(
-      `UPDATE chat_sessions SET messages = $1::jsonb, updated_at = NOW() WHERE session_id = $2`,
-      [JSON.stringify(updatedMessages), session.session_id]
-    );
+    await saveHistory(botResponse);
 
     return res.json({ session_id: session.session_id, ...botResponse });
 

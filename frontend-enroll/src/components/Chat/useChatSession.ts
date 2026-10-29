@@ -33,14 +33,16 @@ function botResponseToMessage(resp: BotApiResponse): ChatMessageUnion {
       }
       const items = rawItems.map(item => ({
         primary:   String(item.name ?? item.instrument ?? item.package ?? item.teacher ?? item.label ?? ''),
-        secondary: item.classes_remaining != null
+        secondary: item.secondary != null
+          ? String(item.secondary)
+          : item.classes_remaining != null
           ? `${item.classes_remaining} classes remaining`
           : item.amount != null
           ? `₹${item.amount}`
           : item.present != null
           ? `${item.present}/${item.total} present`
           : undefined,
-        value: String(item.id ?? item.student_id ?? item.name ?? ''),
+        value: String(item.value ?? item.id ?? item.student_id ?? item.name ?? ''),
       }));
       return { ...base, type: 'list', heading: resp.text, items };
     }
@@ -250,9 +252,12 @@ export function useChatSession(userRole: ChatUserRole, userName?: string): UseCh
   const saveAttendance = useCallback(async (result: AttendancePickerResult) => {
     try {
       await apiPost('/api/attendance', {
-        batch_id: result.batchId,
-        session_date: result.sessionDate,
-        records: result.attendance,
+        records: result.attendance.map(a => ({
+          batch_id: result.batchId,
+          student_id: a.student_id,
+          date: result.sessionDate,
+          status: a.status,
+        })),
       });
       const confirmMsg = makeBotMessage('text', state.sessionId ?? '', {
         text: `Attendance saved for ${result.attendance.filter(a => a.status === 'present').length} present, ${result.attendance.filter(a => a.status === 'absent').length} absent.`,
