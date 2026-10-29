@@ -203,7 +203,7 @@ const UserManagement: React.FC = () => {
   );
 
   const entityOptions = provEntityType === 'student' ? students : teachers;
-  const availableRoles = ['admin', 'teacher', 'parent', 'student'];
+  const availableRoles = ['admin', 'head_of_school', 'teacher', 'parent', 'student'];
 
   return (
     <div className="space-y-6">

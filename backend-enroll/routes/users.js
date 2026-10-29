@@ -266,7 +266,7 @@ router.post('/:id/roles', authenticateJWT, authorizeRole(['admin']), async (req,
     const { role } = req.body;
     
     // Validate role
-    const validRoles = ['admin', 'teacher', 'parent', 'student'];
+    const validRoles = ['admin', 'head_of_school', 'teacher', 'parent', 'student'];
     if (!validRoles.includes(role)) {
       return res.status(400).json({ error: 'Invalid role. Must be one of: admin, teacher, parent, student' });
     }

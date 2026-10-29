@@ -58,7 +58,7 @@ END$$;
 
 -- User roles for RBAC (added via migration 004)
 DO $$ BEGIN
-    CREATE TYPE user_role_type AS ENUM ('admin', 'teacher', 'parent', 'student');
+    CREATE TYPE user_role_type AS ENUM ('admin', 'head_of_school', 'teacher', 'parent', 'student');
 EXCEPTION
     WHEN duplicate_object THEN null;
 END$$;

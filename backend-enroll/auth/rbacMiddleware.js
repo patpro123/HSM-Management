@@ -1,5 +1,6 @@
 // Role-Based Access Control (RBAC) Middleware
 const pool = require('../db')
+const { isOperationsStaff } = require('./actionPermissions')
 
 /**
  * Middleware to check if user has required role(s)
@@ -43,9 +44,9 @@ const filterTeacherData = async (req, res, next) => {
 
   const userRoles = req.user.roles || []
 
-  // Admins see everything - no filter
-  if (userRoles.includes('admin')) {
-    req.dataFilter = { isAdmin: true }
+  // Admins and Head of School see everything - no filter
+  if (isOperationsStaff(userRoles)) {
+    req.dataFilter = { isAdmin: userRoles.includes('admin'), isHeadOfSchool: userRoles.includes('head_of_school') }
     return next()
   }
 
@@ -85,9 +86,9 @@ const filterParentData = async (req, res, next) => {
 
   const userRoles = req.user.roles || []
 
-  // Admins see everything - no filter
-  if (userRoles.includes('admin')) {
-    req.dataFilter = { ...req.dataFilter, isAdmin: true }
+  // Admins and Head of School see everything - no filter
+  if (isOperationsStaff(userRoles)) {
+    req.dataFilter = { ...req.dataFilter, isAdmin: userRoles.includes('admin'), isHeadOfSchool: userRoles.includes('head_of_school') }
     return next()
   }
 
@@ -130,8 +131,8 @@ const verifyBatchOwnership = async (req, res, next) => {
 
   const userRoles = req.user.roles || []
 
-  // Admins can access any batch
-  if (userRoles.includes('admin')) {
+  // Admins and Head of School can access any batch
+  if (isOperationsStaff(userRoles)) {
     return next()
   }
 
@@ -187,8 +188,8 @@ const verifyStudentAccess = async (req, res, next) => {
 
   const userRoles = req.user.roles || []
 
-  // Admins can access any student
-  if (userRoles.includes('admin')) {
+  // Admins and Head of School can access any student
+  if (isOperationsStaff(userRoles)) {
     return next()
   }
 
@@ -228,8 +229,8 @@ const restrictToTodayForTeachers = (req, res, next) => {
 
   const userRoles = req.user.roles || []
 
-  // Admins can mark attendance for any date
-  if (userRoles.includes('admin')) {
+  // Admins and Head of School can mark attendance for any date
+  if (isOperationsStaff(userRoles)) {
     return next()
   }
 

@@ -13,6 +13,7 @@
 
 const pool = require('../db');
 const svc = require('../services/attendanceService');
+const { isOperationsStaff, canMarkAttendanceOn, canUseTool, resolvePersona } = require('../auth/actionPermissions');
 
 const makeResponse = (type, text, suggestions = [], card = null) =>
   ({ type, text, suggestions, card });
@@ -341,8 +342,11 @@ async function applyMarks({ user, date, instrument, batches, plan }) {
   }
 
   const roles = user.roles || [];
+  if (!canMarkAttendanceOn(roles, date, svc.todayIST())) {
+    return makeResponse('text', 'Teachers can only mark attendance for today. Please ask an admin to change a past date.', []);
+  }
   let teacherId = null;
-  if (!roles.includes('admin')) {
+  if (!isOperationsStaff(roles)) {
     teacherId = await svc.getLinkedTeacherId(pool, user.id);
     if (!teacherId) {
       return makeResponse('text', "Your account isn't linked to a teacher profile yet, so I can't mark attendance. Please ask an admin.", []);
@@ -427,8 +431,7 @@ async function runMark(cmd, user, history) {
 // Entry point from routes/chat.js. Returns a bot response, or null if the message
 // isn't one of these commands (so the caller falls through to the LLM).
 async function tryAttendanceCommand({ message, user, history }) {
-  const roles = user.roles || [];
-  if (!roles.includes('admin') && !roles.includes('teacher')) return null;
+  if (!canUseTool(resolvePersona(user.roles), 'attendance.mark_batch')) return null;
 
   const list = parseListCommand(message);
   if (list) return runList(list);
