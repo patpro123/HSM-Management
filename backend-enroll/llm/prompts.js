@@ -16,8 +16,10 @@ Packages: Trial (4 classes, starting ₹2000) or Quarterly (24 classes). No mont
   switch (role) {
     case 'admin':
       return `${base}\nRole: admin — full access to all data. Use tools to answer. Ask one clarifying question if ambiguous.`;
+    case 'head_of_school':
+      return `${base}\nRole: head of school — operations and curriculum. Can view students, teachers, classes, reports and fee status, and mark attendance. Cannot record payments or payouts, or view revenue and finance.`;
     case 'teacher':
-      return `${base}\nRole: teacher — access only your batches/students. Cannot record payments or view financials.`;
+      return `${base}\nRole: teacher — you can mark attendance and view class rosters and schedules. Nothing else.`;
     case 'student':
     case 'parent':
       return `${base}\nRole: student/parent — only your own enrollment data. Cannot modify anything.`;

@@ -95,7 +95,7 @@ router.post('/', authenticateJWT, rbac.filterTeacherData, async (req, res) => {
 });
 
 // DELETE /api/attendance?batch_id=&student_id=&date= — un-mark a student (removes the regular, non-extra record)
-router.delete('/', authenticateJWT, authorizeRole(['admin', 'teacher']), async (req, res) => {
+router.delete('/', authenticateJWT, authorizeRole(['admin', 'head_of_school', 'teacher']), async (req, res) => {
   const { batch_id, student_id, date } = req.query;
   if (!batch_id || !student_id || !date) {
     return res.status(400).json({ error: 'batch_id, student_id and date are required' });
@@ -337,7 +337,7 @@ router.get('/absences', authenticateJWT, authorizeRole(['admin']), async (req, r
 // Admins and teachers both get all teachers' batches so a teacher can cover for a colleague;
 // the frontend defaults teachers to their own batches (viewer_teacher_id).
 // Query: date=YYYY-MM-DD (defaults to today)
-router.get('/by-date', authenticateJWT, authorizeRole(['admin', 'teacher']), rbac.filterTeacherData, async (req, res) => {
+router.get('/by-date', authenticateJWT, authorizeRole(['admin', 'head_of_school', 'teacher']), rbac.filterTeacherData, async (req, res) => {
   const date = req.query.date || toLocalDateStr(new Date());
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
     return res.status(400).json({ error: 'date must be YYYY-MM-DD' });

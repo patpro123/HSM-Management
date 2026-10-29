@@ -5,6 +5,7 @@ const emailService = require('../services/emailService');
 const { computeClassesRemaining } = require('../utils/credits');
 const attendanceService = require('../services/attendanceService');
 const attendanceCommands = require('./attendanceCommands');
+const { isOperationsStaff, canMarkAttendanceOn } = require('../auth/actionPermissions');
 
 const makeResponse = (type, text, suggestions = [], card = null) =>
   ({ type, text, suggestions, card });
@@ -309,8 +310,12 @@ const skills = {
     const date = session_date || attendanceService.todayIST();
 
     const roles = user?.roles || [];
-    const teacherId = roles.includes('admin') ? null : await attendanceService.getLinkedTeacherId(pool, user?.id);
-    if (!roles.includes('admin') && !teacherId) {
+    if (!canMarkAttendanceOn(roles, date, attendanceService.todayIST())) {
+      return makeResponse('text', 'Teachers can only mark attendance for today. Please ask an admin to change a past date.', []);
+    }
+    const staff = isOperationsStaff(roles);
+    const teacherId = staff ? null : await attendanceService.getLinkedTeacherId(pool, user?.id);
+    if (!staff && !teacherId) {
       return makeResponse('text', "Your account isn't linked to a teacher profile yet, so I can't mark attendance.", []);
     }
     const notes = await attendanceService.buildAttendanceNotes(pool, {

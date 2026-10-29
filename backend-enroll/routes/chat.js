@@ -7,6 +7,7 @@ const { authenticateJWT } = require('../auth/jwtMiddleware');
 const { callLLM } = require('../llm/client');
 const { skills, TOOL_DEFINITIONS, ACTION_SKILLS } = require('../llm/skills');
 const { getPrompt } = require('../llm/prompts');
+const { resolvePersona, canUseTool, toolsForPersona } = require('../auth/actionPermissions');
 const { checkRateLimit, getCached, setCached } = require('../llm/rateLimit');
 
 const { tryAttendanceCommand } = require('../llm/attendanceCommands');
@@ -39,7 +40,7 @@ router.post('/', authenticateJWT, async (req, res) => {
 
   const userId = req.user.id;
   const userName = req.user.name || null;
-  const userRole = (req.user.roles || []).find(r => ['admin', 'teacher', 'student', 'parent'].includes(r)) || 'parent';
+  const userRole = resolvePersona(req.user.roles) || 'parent';
   const provider = process.env.LLM_PROVIDER || 'groq';
 
   // Short-circuit greetings — no LLM call needed
@@ -121,7 +122,7 @@ router.post('/', authenticateJWT, async (req, res) => {
     }
 
     // First LLM call
-    let llmResponse = await callLLM({ messages: llmMessages, tools: TOOL_DEFINITIONS, provider });
+    let llmResponse = await callLLM({ messages: llmMessages, tools: toolsForPersona(TOOL_DEFINITIONS, userRole), provider });
     let botResponse = null;
 
     if (llmResponse.tool_calls && llmResponse.tool_calls.length > 0) {
@@ -141,6 +142,10 @@ router.post('/', authenticateJWT, async (req, res) => {
       const skillHandler = skills[skillName];
       if (!skillHandler) {
         botResponse = { type: 'error', text: `Unknown skill: ${skillName}`, suggestions: [], card: null };
+      } else if (!canUseTool(userRole, skillName)) {
+        // The model can only name tools it was shown, but never trust that: check again here.
+        console.warn(`[chat] ${userRole} ${userId} attempted ${skillName}`);
+        botResponse = { type: 'error', text: "You don't have access to that.", suggestions: ['What can you do?'], card: null };
       } else {
         const skillResult = await skillHandler({ params: skillParams, userId, userRole, user: req.user, pool });
 
