@@ -132,11 +132,48 @@ function splitTrailingDate(text) {
   return [text, ''];
 }
 
+// Optional trailing filters, in either order: "at 5pm", "teacher Mriganka" / "with Mriganka".
+// Returns { rest, time, teacher } with the filters removed from the end of s.
+function takeFilters(s) {
+  let time = null;
+  let teacher = null;
+  for (let i = 0; i < 2; i++) {
+    let f;
+    // Time first: it's anchored at the end, so "teacher X at 5pm" doesn't read "X at 5pm" as the teacher
+    if (!time && (f = s.match(/^(.*?)\s*\bat\s+(\d{1,2}(?::\d{2})?\s*(?:am|pm)?)$/i))) { time = f[2].trim(); s = f[1].trim(); continue; }
+    if (!teacher && (f = s.match(/^(.*?)\s*\b(?:teacher|with)\s+(.+)$/i))) { teacher = f[2].trim(); s = f[1].trim(); continue; }
+  }
+  return { rest: s, time, teacher };
+}
+
+// Words that can surround a date in a whole-day request without naming an instrument
+const DAY_LIST_FILLER = new Set((
+  'get show list fetch give me all the every students student who is are attending have has ' +
+  'class classes batch batches session sessions instrument instruments in of for on from scheduled date'
+).split(' '));
+
+// "students in today's batches", "who is attending today", "all students for all instruments on 28 Oct":
+// the message mentions students, and apart from filler words it is only a date.
+function parseDayListCommand(message) {
+  const text = String(message).replace(/’/g, "'").replace(/[.?!]+\s*$/, '').trim();
+  if (!/\b(?:students?|attending)\b/i.test(text)) return null;
+  const { rest, time, teacher } = takeFilters(text);
+  const dateText = rest.split(/\s+/)
+    .map(w => w.replace(/'s$/i, ''))
+    .filter(w => w && !DAY_LIST_FILLER.has(w.toLowerCase()))
+    .join(' ');
+  if (!dateText || !parseDate(dateText)) return null;
+  return { instrumentText: null, dateText, time, teacher };
+}
+
 // Returns null if the message isn't a list command. A `loose` result (instrument before
 // "students") may just be a question like "active students"; the caller falls through to
 // the LLM when its instrument doesn't resolve. instrumentText is null for every class on
-// the date ("all students today", "today's students").
+// the date ("all students today", "students in today's batches").
 function parseListCommand(message) {
+  const dayList = parseDayListCommand(message);
+  if (dayList) return dayList;
+
   const strict = String(message).match(LIST_RE);
   const loose = strict ? null : String(message).match(LOOSE_LIST_RE);
   const m = strict || loose;
@@ -146,21 +183,11 @@ function parseListCommand(message) {
   let time = null;
   let teacher = null;
 
-  // Optional trailing filters, in either order: "at 5pm", "teacher Mriganka" / "with Mriganka"
-  // They may follow the date or (when no date is given) the instrument.
-  const takeFilters = (s) => {
-    for (let i = 0; i < 2; i++) {
-      let f;
-      // Time first: it's anchored at the end, so "teacher X at 5pm" doesn't read "X at 5pm" as the teacher
-      if (!time && (f = s.match(/^(.*?)\s*\bat\s+(\d{1,2}(?::\d{2})?\s*(?:am|pm)?)$/i))) { time = f[2].trim(); s = f[1].trim(); continue; }
-      if (!teacher && (f = s.match(/^(.*?)\s*\b(?:teacher|with)\s+(.+)$/i))) { teacher = f[2].trim(); s = f[1].trim(); continue; }
-    }
-    return s;
-  };
+  // Filters may follow the date or (when no date is given) the instrument
   if (tail) {
-    tail = takeFilters(tail);
+    ({ rest: tail, time, teacher } = takeFilters(tail));
   } else {
-    instrumentText = takeFilters(instrumentText);
+    ({ rest: instrumentText, time, teacher } = takeFilters(instrumentText));
     // "list all students for today", "today's students": the date sits where the instrument would
     const asDate = instrumentText.replace(/^(?:the\s+)?date\s+/i, '').replace(/['’]s$/i, '');
     if (asDate && parseDate(asDate)) [instrumentText, tail] = ['', asDate];
