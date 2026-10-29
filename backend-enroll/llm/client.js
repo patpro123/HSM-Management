@@ -13,6 +13,7 @@ const GROQ_MODEL        = process.env.GROQ_MODEL || 'llama-3.1-8b-instant';
 const GEMINI_MODEL      = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
 const XAI_MODEL         = process.env.XAI_MODEL || 'grok-3-mini';
 const OPENROUTER_MODEL  = process.env.OPENROUTER_MODEL || 'google/gemini-2.0-flash-exp:free';
+const LLM_TIMEOUT_MS    = Number(process.env.LLM_TIMEOUT_MS) || 30000;
 
 const postJson = (urlString, payload, headers = {}) => new Promise((resolve, reject) => {
   const url = new URL(urlString);
@@ -44,6 +45,10 @@ const postJson = (urlString, payload, headers = {}) => new Promise((resolve, rej
       try { resolve({ status: res.statusCode, data: JSON.parse(data) }); }
       catch (e) { reject(new Error('Invalid JSON from LLM provider')); }
     });
+  });
+  // A hung provider (e.g. an overloaded model) would otherwise stall the request forever
+  req.setTimeout(LLM_TIMEOUT_MS, () => {
+    req.destroy(new Error(`timed out after ${LLM_TIMEOUT_MS / 1000}s`));
   });
   req.on('error', reject);
   req.write(body);
@@ -249,10 +254,11 @@ const callProvider = (provider, messages, tools, jsonMode, modelOverride) => {
  * @param {Array}    [opts.tools]        - OpenAI-style tool definitions
  * @param {string}   [opts.provider]     - Primary provider
  * @param {string[]} [opts.fallbackChain] - Providers to try in order if the primary fails
+ *                                          (defaults to LLM_FALLBACK_PROVIDER; pass [] for none)
  * @param {boolean}  [opts.jsonMode]     - Pass false to let Gemini return plain text (default: true)
  */
-const callLLM = async ({ messages, tools = [], provider = DEFAULT_PROVIDER, fallbackChain = [], jsonMode = true, modelOverride }) => {
-  const chain = [provider, ...fallbackChain].filter(isProviderConfigured);
+const callLLM = async ({ messages, tools = [], provider = DEFAULT_PROVIDER, fallbackChain = [FALLBACK_PROVIDER], jsonMode = true, modelOverride }) => {
+  const chain = [...new Set([provider, ...fallbackChain])].filter(isProviderConfigured);
 
   if (!chain.length) {
     throw new Error('No AI provider configured. Set OPENROUTER_API_KEY, GEMINI_API_KEY, or GROQ_API_KEY.');
