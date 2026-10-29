@@ -93,6 +93,14 @@ describe('parseListCommand', () => {
     ["today's students", 'today'],
     ['show me students today', 'today'],
     ['students for 28/10', '28/10'],
+    ["students in today's batches", 'today'],
+    ["all students in today’s batches", 'today'],
+    ["get all students for today's classes", 'today'],
+    ["list today's batch students", 'today'],
+    ['students who have class today', 'today'],
+    ['who is attending today?', 'today'],
+    ['all students for all instruments on 28 Oct', '28 Oct'],
+    ['students for all batches yesterday', 'yesterday'],
   ])('lists every class for "%s"', (input, dateText) => {
     expect(parseListCommand(input)).toMatchObject({ instrumentText: null, dateText });
   });
@@ -110,6 +118,8 @@ describe('parseListCommand', () => {
   it('ignores unrelated messages', () => {
     expect(parseListCommand('How many students do we have?')).toBeNull();
     expect(parseListCommand('Which students have low credits?')).toBeNull();
+    expect(parseListCommand('how many students today?')).toMatchObject({ instrumentText: 'how many', loose: true });
+    expect(parseListCommand('Set students Riya as absent and rest as present')).toBeNull();
     expect(parseListCommand("Show me today's attendance summary")).toBeNull();
   });
 });
