@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { API_BASE_URL } from '../config';
 
-type DevProfile = 'admin' | 'teacher' | 'student';
+type DevProfile = 'admin' | 'head_of_school' | 'teacher' | 'student';
 
 interface DevSwitcherProps {
   currentProfile: DevProfile;
@@ -11,6 +11,7 @@ interface DevSwitcherProps {
 
 const ROLE_STYLES: Record<DevProfile, string> = {
   admin:   'bg-purple-700 hover:bg-purple-800',
+  head_of_school: 'bg-amber-700 hover:bg-amber-800',
   teacher: 'bg-blue-700 hover:bg-blue-800',
   student: 'bg-emerald-700 hover:bg-emerald-800',
 };
@@ -65,7 +66,7 @@ const DevSwitcher: React.FC<DevSwitcherProps> = ({ currentProfile, currentOverri
 
             {/* Role buttons */}
             <div className="flex gap-1 mb-3">
-              {(['admin', 'teacher', 'student'] as DevProfile[]).map(p => (
+              {(['admin', 'head_of_school', 'teacher', 'student'] as DevProfile[]).map(p => (
                 <button
                   key={p}
                   onClick={() => switchProfile(p)}

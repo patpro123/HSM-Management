@@ -24,7 +24,7 @@ interface User {
 interface ProvisionedUser {
   id: string;
   email: string;
-  entity_type: 'student' | 'teacher' | 'admin';
+  entity_type: 'student' | 'teacher' | 'admin' | 'head_of_school';
   entity_id: string | null;
   role: string;
   entity_name: string | null;
@@ -51,7 +51,7 @@ const UserManagement: React.FC = () => {
 
   // Provision form state
   const [provEmail, setProvEmail] = useState('');
-  const [provEntityType, setProvEntityType] = useState<'student' | 'teacher' | 'admin'>('student');
+  const [provEntityType, setProvEntityType] = useState<'student' | 'teacher' | 'admin' | 'head_of_school'>('student');
   const [provEntityId, setProvEntityId] = useState('');
   const [provSubmitting, setProvSubmitting] = useState(false);
   const [showProvisionForm, setShowProvisionForm] = useState(false);
@@ -135,13 +135,13 @@ const UserManagement: React.FC = () => {
   const handleProvision = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!provEmail) return;
-    if (provEntityType !== 'admin' && !provEntityId) return;
+    if ((provEntityType === 'student' || provEntityType === 'teacher') && !provEntityId) return;
     setProvSubmitting(true);
     try {
       await apiPost('/api/users/provision', {
         email: provEmail,
         entity_type: provEntityType,
-        ...(provEntityType !== 'admin' && { entity_id: provEntityId }),
+        ...((provEntityType === 'student' || provEntityType === 'teacher') && { entity_id: provEntityId }),
       });
       showSuccess(`Access provisioned for ${provEmail}`);
       setProvEmail('');
@@ -286,9 +286,16 @@ const UserManagement: React.FC = () => {
                 >
                   Admin
                 </button>
+                <button
+                  type="button"
+                  onClick={() => { setProvEntityType('head_of_school'); setProvEntityId(''); }}
+                  className={`px-4 py-2 font-medium transition ${provEntityType === 'head_of_school' ? 'bg-orange-500 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'}`}
+                >
+                  Head of School
+                </button>
               </div>
             </div>
-            {provEntityType !== 'admin' && (
+            {(provEntityType === 'student' || provEntityType === 'teacher') && (
               <div className="flex flex-col gap-1">
                 <label className="text-xs font-medium text-slate-600">
                   Link to {provEntityType === 'student' ? 'Student' : 'Teacher'}
@@ -310,6 +317,13 @@ const UserManagement: React.FC = () => {
               <div className="flex items-end pb-2">
                 <p className="text-xs text-slate-500 max-w-xs">
                   Admin users have full system access. No student or teacher profile is required.
+                </p>
+              </div>
+            )}
+            {provEntityType === 'head_of_school' && (
+              <div className="flex items-end pb-2">
+                <p className="text-xs text-slate-500 max-w-xs">
+                  Head of School runs operations and curriculum and can see fee status, but not revenue, finance or payouts. No student or teacher profile is required.
                 </p>
               </div>
             )}
@@ -376,6 +390,7 @@ const UserManagement: React.FC = () => {
                       <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${
                         p.entity_type === 'teacher' ? 'bg-purple-100 text-purple-700'
                         : p.entity_type === 'admin' ? 'bg-red-100 text-red-700'
+                        : p.entity_type === 'head_of_school' ? 'bg-amber-100 text-amber-700'
                         : 'bg-blue-100 text-blue-700'
                       }`}>
                         {p.entity_type}

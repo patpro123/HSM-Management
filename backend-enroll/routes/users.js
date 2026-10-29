@@ -92,12 +92,13 @@ router.post('/provision', authenticateJWT, authorizeRole(['admin']), async (req,
       return res.status(400).json({ error: 'Invalid email format' });
     }
 
-    if (!['student', 'teacher', 'admin'].includes(entity_type)) {
-      return res.status(400).json({ error: 'entity_type must be "student", "teacher", or "admin"' });
+    if (!['student', 'teacher', 'admin', 'head_of_school'].includes(entity_type)) {
+      return res.status(400).json({ error: 'entity_type must be "student", "teacher", "admin", or "head_of_school"' });
     }
 
-    // Admin provisioning requires no entity linkage
-    if (entity_type !== 'admin' && !entity_id) {
+    // Admin and Head of School provisioning requires no entity linkage
+    const needsEntity = entity_type === 'student' || entity_type === 'teacher';
+    if (needsEntity && !entity_id) {
       return res.status(400).json({ error: 'entity_id is required for student and teacher provisioning' });
     }
 
@@ -118,8 +119,8 @@ router.post('/provision', authenticateJWT, authorizeRole(['admin']), async (req,
       }
     }
 
-    const role = entity_type; // 'student' → 'student', 'teacher' → 'teacher', 'admin' → 'admin'
-    const resolvedEntityId = entity_type === 'admin' ? null : entity_id;
+    const role = entity_type; // the provisioned entity type is also the role granted at first login
+    const resolvedEntityId = needsEntity ? entity_id : null;
 
     const result = await client.query(
       `INSERT INTO provisioned_users (email, entity_type, entity_id, role, provisioned_by)

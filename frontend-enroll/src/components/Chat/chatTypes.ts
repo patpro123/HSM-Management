@@ -1,4 +1,4 @@
-export type ChatUserRole = 'admin' | 'teacher' | 'student' | 'parent';
+export type ChatUserRole = 'admin' | 'head_of_school' | 'teacher' | 'student' | 'parent';
 
 export interface QuickReplyChip {
   label: string;
@@ -122,11 +122,16 @@ const DEFAULT_CHIPS: Record<ChatUserRole, QuickReplyChip[]> = {
     { label: 'Student turnover',   value: 'Show me student turnover this month vs last month',     icon: '📊' },
     { label: 'Low credits',        value: 'Who has overdue payments?',                             icon: '⚠️'  },
   ],
+  head_of_school: [
+    { label: "Today's attendance", value: "Show me today's attendance summary",              icon: '📋' },
+    { label: 'Overdue fees',       value: 'Who has overdue payments?',                         icon: '⚠️'  },
+    { label: 'Student turnover',   value: 'Show me student turnover this month vs last month', icon: '📊' },
+    { label: 'Active students',    value: 'List active students',                              icon: '👥' },
+  ],
   teacher: [
-    { label: 'My batches today',  value: 'Which of my batches are today?',          icon: '📅' },
-    { label: 'Mark attendance',   value: 'I want to mark attendance for my class',  icon: '✅' },
-    { label: 'My students',       value: 'Show me my current students',             icon: '👥' },
-    { label: 'My payout',         value: 'What is my projected payout this month?', icon: '💵' },
+    { label: 'Class schedule',    value: 'Show the schedule for Keyboard',                       icon: '📅' },
+    { label: 'Get class list',    value: 'Get all students for Keyboard for date today',         icon: '👥' },
+    { label: 'Mark all present',  value: 'Mark all present',                                     icon: '✅' },
   ],
   student: [
     { label: 'My classes',        value: 'How many classes do I have left?', icon: '🎵' },

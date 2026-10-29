@@ -30,6 +30,7 @@ let currentDevOverride = null
 
 const DEV_DEFAULTS = {
   admin: { id: '11111111-1111-1111-1111-111111111111', email: 'admin@local.dev', name: 'Local Admin', roles: ['admin'] },
+  head_of_school: { id: '44444444-4444-4444-4444-444444444444', email: 'hos@local.dev', name: 'Local Head of School', roles: ['head_of_school'] },
   teacher: { id: '22222222-2222-2222-2222-222222222222', email: 'teacher@local.dev', name: 'Local Teacher', roles: ['teacher'] },
   student: { id: '33333333-3333-3333-3333-333333333333', email: 'student@local.dev', name: 'Local Student', roles: ['student'] },
 }
@@ -193,7 +194,7 @@ if (DISABLE_AUTH) {
   app.post('/api/dev/switch-profile', async (req, res) => {
     const { profile, userRef } = req.body
     if (!DEV_DEFAULTS[profile]) {
-      return res.status(400).json({ error: 'Invalid profile. Use: admin, teacher, student' })
+      return res.status(400).json({ error: 'Invalid profile. Use: admin, head_of_school, teacher, student' })
     }
     currentDevProfile = profile
     currentDevOverride = null
