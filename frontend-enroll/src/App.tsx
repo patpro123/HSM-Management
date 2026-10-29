@@ -38,7 +38,7 @@ const App: React.FC = () => {
   const [chatOpen, setChatOpen] = useState(false);
   // Add new profile page states
   const [activeTab, setActiveTab] = useState<'stats' | 'students' | 'attendance' | 'payments' | 'finance' | 'teachers' | 'homework' | 'batch-manager' | 'users' | 'migration' | 'student-profile' | 'teacher-profile' | 'enrollment' | 'ptm' | 'marketing' | 'materials'>(
-    getCurrentUser()?.roles?.includes('admin') ? 'stats' : getCurrentUser()?.roles?.includes('teacher') ? 'teacher-profile' : 'student-profile'
+    getCurrentUser()?.roles?.includes('admin') ? 'stats' : getCurrentUser()?.roles?.includes('head_of_school') ? 'attendance' : getCurrentUser()?.roles?.includes('teacher') ? 'teacher-profile' : 'student-profile'
   );
   const [students, setStudents] = useState<Student[]>([]);
   const [batches, setBatches] = useState<Batch[]>([]);
@@ -59,7 +59,7 @@ const App: React.FC = () => {
   // doesn't re-force the panel back open.
   const [pendingHomeworkStudent, setPendingHomeworkStudent] = useState<{ studentId: string; mode: 'review' | 'view' } | null>(null);
   const [pendingHomeworkAssignmentId, setPendingHomeworkAssignmentId] = useState<string | null>(null);
-  const [devProfile, setDevProfile] = useState<'admin' | 'teacher' | 'student'>('admin');
+  const [devProfile, setDevProfile] = useState<'admin' | 'head_of_school' | 'teacher' | 'student'>('admin');
   const [devOverride, setDevOverride] = useState<{ email: string; name: string } | null>(null);
   const [impersonating, setImpersonating] = useState<ImpersonateTarget | null>(null);
   const [showImpersonateModal, setShowImpersonateModal] = useState(false);
@@ -106,14 +106,18 @@ const App: React.FC = () => {
   useEffect(() => {
     if (user) {
       const isAdminRole = user.roles.includes('admin');
-      const isTeacherRole = !isAdminRole && user.roles.includes('teacher');
+      const isHeadRole = !isAdminRole && user.roles.includes('head_of_school');
+      const isTeacherRole = !isAdminRole && !isHeadRole && user.roles.includes('teacher');
       if (isAdminRole && (activeTab === 'student-profile' || activeTab === 'teacher-profile')) {
         setActiveTab('stats');
+      }
+      if (isHeadRole && activeTab !== 'attendance') {
+        setActiveTab('attendance');
       }
       if (isTeacherRole && activeTab !== 'teacher-profile') {
         setActiveTab('teacher-profile');
       }
-      if (!isAdminRole && !isTeacherRole && activeTab !== 'student-profile') {
+      if (!isAdminRole && !isHeadRole && !isTeacherRole && activeTab !== 'student-profile') {
         setActiveTab('student-profile');
       }
     }
@@ -199,8 +203,8 @@ const App: React.FC = () => {
     const fakeToken = ['header', btoa(JSON.stringify(fakePayload)), 'signature'].join('.');
     setToken(fakeToken);
     setBypassedUser(newUser);
-    setDevProfile(newUser.roles.includes('admin') ? 'admin' : newUser.roles.includes('teacher') ? 'teacher' : 'student');
-    const isDefaultUser = ['1111', '2222', '3333'].some(p => newUser.id.startsWith(p));
+    setDevProfile(newUser.roles.includes('admin') ? 'admin' : newUser.roles.includes('head_of_school') ? 'head_of_school' : newUser.roles.includes('teacher') ? 'teacher' : 'student');
+    const isDefaultUser = ['1111', '2222', '3333', '4444'].some(p => newUser.id.startsWith(p));
     setDevOverride(isDefaultUser ? null : { email: newUser.email, name: newUser.name });
     setUser(newUser); // triggers fetchData via useEffect
   };
@@ -258,7 +262,8 @@ const App: React.FC = () => {
 
   // Main app UI
   const isAdmin = user && user.roles.includes('admin');
-  const isTeacherOnly = user && !isAdmin && user.roles.includes('teacher');
+  const isHeadOfSchool = user && !isAdmin && user.roles.includes('head_of_school');
+  const isTeacherOnly = user && !isAdmin && !isHeadOfSchool && user.roles.includes('teacher');
 
   // Menu items by role
   const menuItems = isAdmin
@@ -277,6 +282,10 @@ const App: React.FC = () => {
       { key: 'marketing', label: 'Marketing', icon: 'M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z' },
       { key: 'materials', label: 'Material Library', icon: 'M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10' },
     ]
+    : isHeadOfSchool
+      ? [
+        { key: 'attendance', label: 'Attendance', icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4' },
+      ]
     : isTeacherOnly
       ? [
         { key: 'teacher-profile', label: 'My Profile', icon: 'M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z' },
@@ -635,7 +644,7 @@ const App: React.FC = () => {
           {chatOpen && (
             <ChatPanel
               isOpen={chatOpen}
-              userRole={((user.roles?.[0] ?? 'student') as ChatUserRole)}
+              userRole={(['admin', 'head_of_school', 'teacher', 'parent', 'student'].find(r => user.roles?.includes(r)) ?? 'student') as ChatUserRole}
               userName={user.name ?? undefined}
               onClose={() => setChatOpen(false)}
             />

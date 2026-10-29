@@ -152,7 +152,8 @@ function makeWelcomeMessage(userRole: ChatUserRole, userName?: string): TextMess
   const greeting = firstName ? `Hey ${firstName}!` : 'Hey there!';
   const roleLines: Record<ChatUserRole, string> = {
     admin:   "I'm Cleff — your musical command centre. I know every student, batch, and rupee in this school.",
-    teacher: "I'm Cleff — your backstage crew. Ask me about your batches, students, or payout.",
+    head_of_school: "I'm Cleff — your school operations sidekick. Ask me about students, classes, attendance, or fees due.",
+    teacher: "I'm Cleff — your backstage crew. I can help you mark attendance and check your class lists and schedule.",
     student: "I'm Cleff — your musical journey tracker. Ask me about your classes, attendance, or next session.",
     parent:  "I'm Cleff — your child's musical diary. Ask me about classes remaining, attendance, or payments.",
   };

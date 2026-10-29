@@ -16,6 +16,7 @@ interface ChatPanelProps {
 
 const ROLE_TAGLINES: Record<ChatUserRole, string> = {
   admin:   'Maestro · Music school command centre',
+  head_of_school: 'Operations and curriculum, in tune',
   teacher: 'Your backstage pass to HSM',
   student: 'Your musical journey tracker',
   parent:  "Your child's musical diary",
