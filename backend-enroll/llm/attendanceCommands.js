@@ -5,6 +5,8 @@
 //   "Get all students for <instrument> for date <date> [at <time>] [teacher <name>]"
 //     → lists every student in that instrument's classes on that date
 //       (also "guitar students today", "list keyboard students for 28 Oct")
+//   "All students today" / "today's students" / "all students for 28 Oct at 5pm"
+//     → the same list across every instrument's classes on that date
 //   "Set students <names> as absent and rest as present"
 //   "Mark all present except <names>"
 //     → marks attendance for the students in the most recent list in this chat
@@ -116,7 +118,9 @@ function parseTime(text) {
 
 const LIST_RE = /^\s*(?:get|show|list|fetch)\s+(?:me\s+)?(?:all\s+)?(?:the\s+)?students\s+(?:for|in|of)\s+(.+?)(?:\s+(?:for|on)\s+(?:the\s+)?(?:date\s+)?(.+?))?\s*[.?!]*\s*$/i;
 // Instrument before "students": "guitar students today", "list keyboard students for 28 Oct at 5pm"
-const LOOSE_LIST_RE = /^\s*(?:(?:get|show|list|fetch)\s+(?:me\s+)?(?:all\s+)?(?:the\s+)?)?(.+?)\s+students\b(?:\s+(?:for|on)\s+(?:the\s+)?(?:date\s+)?|\s+)?(.*?)\s*[.?!]*\s*$/i;
+const LOOSE_LIST_RE = /^\s*(?:(?:get|show|list|fetch)\s+(?:me\s+)?(?:all\s+)?(?:the\s+)?)?(?:(.+?)\s+)?students\b(?:\s+(?:for|on)\s+(?:the\s+)?(?:date\s+)?|\s+)?(.*?)\s*[.?!]*\s*$/i;
+// Where the instrument would be, these mean every class on the date
+const ALL_INSTRUMENTS_RE = /^(?:all|all the|every|everyone|everybody)?$/i;
 
 // "guitar today" → ['guitar', 'today']; text that doesn't end in a date comes back unchanged
 function splitTrailingDate(text) {
@@ -130,13 +134,14 @@ function splitTrailingDate(text) {
 
 // Returns null if the message isn't a list command. A `loose` result (instrument before
 // "students") may just be a question like "active students"; the caller falls through to
-// the LLM when its instrument doesn't resolve.
+// the LLM when its instrument doesn't resolve. instrumentText is null for every class on
+// the date ("all students today", "today's students").
 function parseListCommand(message) {
   const strict = String(message).match(LIST_RE);
   const loose = strict ? null : String(message).match(LOOSE_LIST_RE);
   const m = strict || loose;
   if (!m) return null;
-  let instrumentText = m[1].trim();
+  let instrumentText = (m[1] || '').trim();
   let tail = (m[2] || '').trim();
   let time = null;
   let teacher = null;
@@ -152,9 +157,20 @@ function parseListCommand(message) {
     }
     return s;
   };
-  if (tail) tail = takeFilters(tail);
-  else [instrumentText, tail] = splitTrailingDate(takeFilters(instrumentText));
+  if (tail) {
+    tail = takeFilters(tail);
+  } else {
+    instrumentText = takeFilters(instrumentText);
+    // "list all students for today", "today's students": the date sits where the instrument would
+    const asDate = instrumentText.replace(/^(?:the\s+)?date\s+/i, '').replace(/['’]s$/i, '');
+    if (asDate && parseDate(asDate)) [instrumentText, tail] = ['', asDate];
+    else [instrumentText, tail] = splitTrailingDate(instrumentText);
+  }
 
+  if (ALL_INSTRUMENTS_RE.test(instrumentText)) {
+    if (!tail) return null; // "list all students" is a roster question — leave it to the LLM
+    instrumentText = null;
+  }
   if (loose && tail && !parseDate(tail)) return null; // "how many students do we have"
   const cmd = { instrumentText, dateText: tail || 'today', time, teacher };
   if (loose) cmd.loose = true;
@@ -289,8 +305,13 @@ async function resolveInstrument(db, text) {
 }
 
 const flattenEntries = (batches) => batches.flatMap(b =>
-  b.students.map(s => ({ ...s, batch_id: b.batch_id, time_slot: b.time_slot, teacher_name: b.teacher_name }))
+  b.students.map(s => ({
+    ...s, batch_id: b.batch_id, time_slot: b.time_slot, teacher_name: b.teacher_name, instrument_name: b.instrument_name,
+  }))
 );
+
+// Stands in for an instrument when a list covers every class on the date
+const ALL_CLASSES = { id: null, name: 'All classes' };
 
 const STATUS_LABEL = { present: '✓ Present', absent: '✗ Absent', excused: '~ Excused' };
 
@@ -319,6 +340,7 @@ function buildListResponse({ heading, instrument, date, batches }) {
       students: entries.map(e => ({
         name: e.student_name,
         secondary: [
+          instrument.id ? null : e.instrument_name,
           e.time_slot,
           e.teacher_name ? e.teacher_name.split(' ')[0] : null,
           STATUS_LABEL[e.status] || 'Not marked',
@@ -410,12 +432,15 @@ async function runList(cmd) {
   if (!date) {
     return makeResponse('text', `I couldn't read the date "${cmd.dateText}". Try today, yesterday, 28/10, 28 Oct or 2026-10-28.`, []);
   }
-  const resolved = await resolveInstrument(pool, cmd.instrumentText);
-  if (resolved.error) return cmd.loose ? null : makeResponse('text', resolved.error, []);
-  const { instrument } = resolved;
+  let instrument = ALL_CLASSES;
+  if (cmd.instrumentText !== null) {
+    const resolved = await resolveInstrument(pool, cmd.instrumentText);
+    if (resolved.error) return cmd.loose ? null : makeResponse('text', resolved.error, []);
+    instrument = resolved.instrument;
+  }
 
   let batches = (await svc.getAttendanceByDate(pool, date))
-    .filter(b => b.instrument_id === instrument.id && (b.scheduled || b.students.some(s => s.status)));
+    .filter(b => (!instrument.id || b.instrument_id === instrument.id) && (b.scheduled || b.students.some(s => s.status)));
 
   const filters = [];
   if (cmd.time) {
@@ -433,7 +458,8 @@ async function runList(cmd) {
   }
 
   if (batches.length === 0) {
-    return makeResponse('text', `No ${instrument.name} classes on ${formatDate(date)}${filters.length ? ' ' + filters.join(' ') : ''}.`, []);
+    const what = instrument.id ? `${instrument.name} classes` : 'classes';
+    return makeResponse('text', `No ${what} on ${formatDate(date)}${filters.length ? ' ' + filters.join(' ') : ''}.`, []);
   }
   return buildListResponse({ instrument, date, batches });
 }

@@ -85,6 +85,28 @@ describe('parseListCommand', () => {
     expect(parseListCommand('Carnatic Vocals students on 28/10?')).toMatchObject({ instrumentText: 'Carnatic Vocals', dateText: '28/10' });
   });
 
+  it.each([
+    ['all students today', 'today'],
+    ['All students for 28 Oct', '28 Oct'],
+    ['list all students for today', 'today'],
+    ['Get all students for date yesterday', 'yesterday'],
+    ["today's students", 'today'],
+    ['show me students today', 'today'],
+    ['students for 28/10', '28/10'],
+  ])('lists every class for "%s"', (input, dateText) => {
+    expect(parseListCommand(input)).toMatchObject({ instrumentText: null, dateText });
+  });
+
+  it('keeps time and teacher filters on the every-class list', () => {
+    expect(parseListCommand('all students today at 5pm teacher Mriganka'))
+      .toMatchObject({ instrumentText: null, dateText: 'today', time: '5pm', teacher: 'Mriganka' });
+  });
+
+  it('leaves "list all students" (no date) to the LLM', () => {
+    expect(parseListCommand('list all students')).toBeNull();
+    expect(parseListCommand('show me all the students')).toBeNull();
+  });
+
   it('ignores unrelated messages', () => {
     expect(parseListCommand('How many students do we have?')).toBeNull();
     expect(parseListCommand('Which students have low credits?')).toBeNull();
