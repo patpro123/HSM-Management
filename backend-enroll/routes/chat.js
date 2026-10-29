@@ -10,7 +10,7 @@ const { getPrompt } = require('../llm/prompts');
 const { resolvePersona, canUseTool, toolsForPersona } = require('../auth/actionPermissions');
 const { checkRateLimit, getCached, setCached } = require('../llm/rateLimit');
 
-const { tryAttendanceCommand } = require('../llm/attendanceCommands');
+const { tryAttendanceCommand, parseSummaryCommand } = require('../llm/attendanceCommands');
 
 const SESSION_TTL_DAYS = 7;
 const MAX_HISTORY_MESSAGES = 20;
@@ -94,6 +94,14 @@ router.post('/', authenticateJWT, async (req, res) => {
     if (commandResponse) {
       await saveHistory(commandResponse);
       return res.json({ session_id: session.session_id, ...commandResponse });
+    }
+
+    // "Today's attendance" and similar — answered by the stats skill directly, no LLM call
+    const summary = parseSummaryCommand(message.trim());
+    if (summary && canUseTool(userRole, 'stats.attendance')) {
+      const summaryResponse = await skills['stats.attendance']({ params: summary, userId, userRole, user: req.user, pool });
+      await saveHistory(summaryResponse);
+      return res.json({ session_id: session.session_id, ...summaryResponse });
     }
 
     // Rate limit check

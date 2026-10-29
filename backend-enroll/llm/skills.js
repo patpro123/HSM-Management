@@ -644,14 +644,15 @@ const skills = {
   'stats.attendance': async ({ params }) => {
     const period = (params.period || 'today').toLowerCase();
     let dateFilter, label;
+    // School days run on IST; the DB's CURRENT_DATE is UTC
     if (period === 'week') {
-      dateFilter = `ar.session_date >= date_trunc('week', CURRENT_DATE)`;
+      dateFilter = `ar.session_date >= date_trunc('week', $1::date) AND ar.session_date <= $1::date`;
       label = 'this week';
     } else if (period === 'month') {
-      dateFilter = `ar.session_date >= date_trunc('month', CURRENT_DATE)`;
+      dateFilter = `ar.session_date >= date_trunc('month', $1::date) AND ar.session_date <= $1::date`;
       label = 'this month';
     } else {
-      dateFilter = `ar.session_date = CURRENT_DATE`;
+      dateFilter = `ar.session_date = $1::date`;
       label = 'today';
     }
     const row = (await pool.query(
@@ -661,7 +662,8 @@ const skills = {
          COUNT(*) FILTER (WHERE ar.status = 'excused') AS excused,
          COUNT(DISTINCT ar.student_id)                 AS unique_students
        FROM attendance_records ar
-       WHERE ${dateFilter}`
+       WHERE ${dateFilter}`,
+      [attendanceService.todayIST()]
     )).rows[0];
     const text = `Attendance ${label}: ${row.present} present, ${row.absent} absent, ${row.excused} excused (${row.unique_students} unique students).`;
     return makeResponse('card', text, ['View by batch', 'Mark attendance'], {
