@@ -126,12 +126,13 @@ function definition(now) {
     },
     {
       id: 'payments', label: 'Payments', icon: '💳',
-      tools: ['payment.status', 'payment.record', 'reminder.payment', 'report.lowcredits', 'stats.unpaid', 'fee.query'],
+      tools: ['payment.status', 'payment.followup', 'payment.record', 'reminder.payment', 'report.lowcredits', 'stats.unpaid', 'fee.query'],
       items: [
         run('status', 'A student\'s payments', 'payment.status', { ask: [student()] }),
         run('overdue', 'Overdue and renewals', 'reminder.payment'),
         run('lowcredits', 'Low classes left', 'report.lowcredits'),
         run('unpaid', 'Out of classes', 'stats.unpaid'),
+        run('followup', 'Payment reminder on WhatsApp', 'payment.followup', { ask: [student()] }),
         run('fees', 'Fees for an instrument', 'fee.query', { ask: [instrument('instrument')] }),
         guide('record', 'Record a payment', 'payment.record',
           'Tell me the student, amount and how they paid. For example: "Record 3000 UPI payment from Riya".'),

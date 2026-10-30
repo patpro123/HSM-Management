@@ -1,18 +1,25 @@
 'use strict';
 
 const pool = require('../db');
+const { fetchDues, duesItems, fmtDate, money } = require('./dues');
+const { prepareMessage } = require('../services/whatsappMessages');
 const emailService = require('../services/emailService');
 const { computeClassesRemaining } = require('../utils/credits');
 const attendanceService = require('../services/attendanceService');
 const attendanceCommands = require('./attendanceCommands');
 const { isOperationsStaff, canMarkAttendanceOn } = require('../auth/actionPermissions');
-const { batchSkills, BATCH_TOOLS, recurrenceMatches, findBatches, batchChoices } = require('./batchSkills');
+const { batchSkills, BATCH_TOOLS, recurrenceMatches, findBatches, batchChoices, resolveStudent } = require('./batchSkills');
 const { attendanceSkills, ATTENDANCE_TOOLS } = require('./attendanceSkills');
 
 const makeResponse = (type, text, suggestions = [], card = null) =>
   ({ type, text, suggestions, card });
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+// A composed WhatsApp message for the chat to show and send (see services/whatsappMessages).
+// Any skill that messages a family returns this.
+const whatsappResponse = (msg, heading) => makeResponse('whatsapp',
+  msg.to ? heading : `${heading} (no phone number on file; you will pick the contact in WhatsApp)`, [], { whatsapp: msg });
+
+const UUID_RE =/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const isUUID = (v) => typeof v === 'string' && UUID_RE.test(v);
 
 // Resolve a student_id from params: accepts UUID, falls back to name search.
@@ -421,76 +428,65 @@ const skills = {
   },
 
   'reminder.payment': async ({ params }) => {
-    const threshold = params.threshold || 2;
-    const rows = (await pool.query(
-      `WITH raw_credits AS (
-         SELECT p.student_id, pkg.instrument_id,
-           CASE
-             WHEN (p.metadata->>'credits_bought') IS NOT NULL AND (p.metadata->>'credits_bought')::int > 0
-               THEN (p.metadata->>'credits_bought')::int
-             WHEN pkg.classes_count IS NOT NULL THEN pkg.classes_count
-             ELSE 0 END AS credits
-         FROM payments p
-         JOIN packages pkg ON p.package_id = pkg.id
-         UNION ALL
-         SELECT p.student_id,
-           (p.metadata->>'instrument_id')::uuid AS instrument_id,
-           (p.metadata->>'credits_bought')::int AS credits
-         FROM payments p
-         WHERE p.package_id IS NULL
-           AND (p.metadata->>'instrument_id') IS NOT NULL
-           AND (p.metadata->>'credits_bought') IS NOT NULL
-           AND (p.metadata->>'credits_bought')::int > 0
-         UNION ALL
-         SELECT p.student_id, si.instrument_id,
-           (p.metadata->>'credits_bought')::int AS credits
-         FROM payments p
-         JOIN (
-           SELECT e2.student_id, MAX(b2.instrument_id::text)::uuid AS instrument_id
-           FROM enrollment_batches eb2
-           JOIN enrollments e2 ON e2.id = eb2.enrollment_id AND e2.status = 'active'
-           JOIN batches b2 ON b2.id = eb2.batch_id
-           WHERE b2.is_makeup = false
-           GROUP BY e2.student_id
-           HAVING COUNT(DISTINCT b2.instrument_id) = 1
-         ) si ON si.student_id = p.student_id
-         WHERE p.package_id IS NULL
-           AND (p.metadata->>'instrument_id') IS NULL
-           AND (p.metadata->>'credits_bought') IS NOT NULL
-           AND (p.metadata->>'credits_bought')::int > 0
-       ),
-       instr_credits AS (
-         SELECT student_id, instrument_id, SUM(credits) AS credits
-         FROM raw_credits GROUP BY student_id, instrument_id
-       ),
-       instr_attended AS (
-         SELECT ar.student_id, b.instrument_id, COUNT(*) AS attended
-         FROM attendance_records ar
-         JOIN batches b ON ar.batch_id = b.id
-         WHERE ar.status = 'present'
-         GROUP BY ar.student_id, b.instrument_id
-       ),
-       student_instr_remaining AS (
-         SELECT DISTINCT s.id, s.name, s.phone, i.name AS instrument,
-           GREATEST(0, COALESCE(ic.credits, 0) - COALESCE(ia.attended, 0)) AS classes_remaining
-         FROM students s
-         JOIN enrollments e ON s.id = e.student_id AND e.status = 'active'
-         JOIN enrollment_batches eb ON e.id = eb.enrollment_id
-         JOIN batches b ON eb.batch_id = b.id
-         JOIN instruments i ON b.instrument_id = i.id
-         LEFT JOIN instr_credits ic ON ic.student_id = s.id AND ic.instrument_id = i.id
-         LEFT JOIN instr_attended ia ON ia.student_id = s.id AND ia.instrument_id = i.id
-       )
-       SELECT name, phone, instrument, classes_remaining
-       FROM student_instr_remaining
-       WHERE classes_remaining <= $1
-       ORDER BY classes_remaining ASC, name
-       LIMIT 20`,
-      [threshold]
-    )).rows;
+    const n = Number(params.threshold);
+    const threshold = Number.isFinite(n) && params.threshold !== '' && params.threshold != null ? n : 2;
+    const rows = await fetchDues({ maxRemaining: threshold });
     if (!rows.length) return makeResponse('text', 'No students with overdue or low classes right now.', ['Check all students', 'View batches']);
-    return makeResponse('list', `${rows.length} student(s) with ${threshold} or fewer classes remaining.`,
-      ['Send reminder email', 'Export list'], { students: rows });
+    return makeResponse('list', `${rows.length} student(s) with ${threshold} or fewer classes remaining. Tap one for the amount and date.`,
+      ['Send reminder email', 'Export list'], { students: duesItems(rows) });
+  },
+
+  // Writes the payment reminder for a family and hands back a WhatsApp link the staff member taps
+  // to send it. Covers every instrument the student owes on unless one is named.
+  'payment.followup': async ({ params }) => {
+    const { student, response } = await resolveStudent(params.student_id ?? params.student_name ?? params.name,
+      n => `Payment reminder for ${n}`);
+    if (!student) return response;
+    const instrument = params.instrument ? String(params.instrument) : null;
+    const all = await fetchDues({ maxRemaining: 100000, studentId: student.id, instrument });
+    const dues = all.filter(d => d.overdue_classes > 0 || d.classes_remaining <= 2);
+    if (!all.length) return makeResponse('text', `${student.name} has no active enrollment${instrument ? ' in ' + instrument : ''}.`, []);
+    if (!dues.length) {
+      return makeResponse('text', `Nothing to follow up: ${student.name} is paid up (${all.map(d => `${d.instrument}: ${d.classes_remaining} left`).join(', ')}).`, []);
+    }
+    const msg = await prepareMessage({ studentId: student.id, studentName: student.name, kind: 'payment_followup', data: { dues } });
+    return whatsappResponse(msg, `Payment reminder for ${student.name}`);
+  },
+
+  // One student's dues for one instrument: what is owed, since when, and what they last paid
+  'payment.dues_detail': async ({ params, userId, userRole }) => {
+    const instrument = params.instrument ? String(params.instrument) : null;
+    const studentId = isUUID(params.student_id) ? params.student_id : await resolveStudentId(params, userId, userRole);
+    if (!studentId) return makeResponse('text', 'Which student? Please provide their name.', ['Search for a student']);
+    const rows = await fetchDues({ maxRemaining: 100000, studentId, instrument });
+    if (!rows.length) return makeResponse('text', 'No active enrollment found for that student and instrument.', ['Check credits']);
+    const cards = rows.map(r => {
+      const f = {};
+      f.student = r.name;
+      f.instrument = r.instrument;
+      f.payment_due = r.pending_amount ? money(r.pending_amount) : 'unknown (no package price)';
+      if (r.has_payment) {
+        f.last_payment = `${money(r.last_paid_amount)} on ${fmtDate(r.last_paid_on)}`;
+        f.classes_used = `${r.used} of ${r.allowance} since then`;
+        if (r.overdue_classes > 0) f.package_ran_out = fmtDate(r.overdue_since) || 'unknown';
+        else f.classes_left = r.classes_remaining;
+      } else {
+        f.last_payment = 'none on record';
+        f.classes_attended = r.used;
+      }
+      if (r.package_name) f.renewal = `${r.package_name}: ${money(r.package_price)} for ${r.package_classes} classes`;
+      if (r.phone) f.phone = r.phone;
+      return f;
+    });
+    const r0 = rows[0];
+    const amt = r0.pending_amount ? money(r0.pending_amount) : 'a payment';
+    const text = !r0.has_payment
+      ? `${r0.name} has no ${r0.instrument} payment on record; ${amt} is due.`
+      : r0.overdue_classes > 0
+        ? `${r0.name}'s ${r0.instrument} package ran out${r0.overdue_since ? ' on ' + fmtDate(r0.overdue_since) : ''}; ${amt} is due.`
+        : `${r0.name} has ${r0.classes_remaining} ${r0.instrument} class${r0.classes_remaining === 1 ? '' : 'es'} left; ${amt} is due soon.`;
+    const actions = [{ label: 'Send WhatsApp reminder', skill: 'payment.followup', params: { student_id: r0.student_id, instrument: r0.instrument } }];
+    return makeResponse('card', text, ['Record payment', 'Payment history'], { student: cards[0], actions });
   },
 
   'report.attendance': async ({ params }) => {
@@ -580,71 +576,10 @@ const skills = {
   },
 
   'stats.unpaid': async () => {
-    const rows = (await pool.query(
-      `WITH raw_credits AS (
-         SELECT p.student_id, pkg.instrument_id,
-           CASE
-             WHEN (p.metadata->>'credits_bought') IS NOT NULL AND (p.metadata->>'credits_bought')::int > 0
-               THEN (p.metadata->>'credits_bought')::int
-             WHEN pkg.classes_count IS NOT NULL THEN pkg.classes_count
-             ELSE 0 END AS credits
-         FROM payments p
-         JOIN packages pkg ON p.package_id = pkg.id
-         UNION ALL
-         SELECT p.student_id,
-           (p.metadata->>'instrument_id')::uuid AS instrument_id,
-           (p.metadata->>'credits_bought')::int AS credits
-         FROM payments p
-         WHERE p.package_id IS NULL
-           AND (p.metadata->>'instrument_id') IS NOT NULL
-           AND (p.metadata->>'credits_bought') IS NOT NULL
-           AND (p.metadata->>'credits_bought')::int > 0
-         UNION ALL
-         SELECT p.student_id, si.instrument_id,
-           (p.metadata->>'credits_bought')::int AS credits
-         FROM payments p
-         JOIN (
-           SELECT e2.student_id, MAX(b2.instrument_id::text)::uuid AS instrument_id
-           FROM enrollment_batches eb2
-           JOIN enrollments e2 ON e2.id = eb2.enrollment_id AND e2.status = 'active'
-           JOIN batches b2 ON b2.id = eb2.batch_id
-           WHERE b2.is_makeup = false
-           GROUP BY e2.student_id
-           HAVING COUNT(DISTINCT b2.instrument_id) = 1
-         ) si ON si.student_id = p.student_id
-         WHERE p.package_id IS NULL
-           AND (p.metadata->>'instrument_id') IS NULL
-           AND (p.metadata->>'credits_bought') IS NOT NULL
-           AND (p.metadata->>'credits_bought')::int > 0
-       ),
-       instr_credits AS (
-         SELECT student_id, instrument_id, SUM(credits) AS credits
-         FROM raw_credits GROUP BY student_id, instrument_id
-       ),
-       instr_attended AS (
-         SELECT ar.student_id, b.instrument_id, COUNT(*) AS attended
-         FROM attendance_records ar
-         JOIN batches b ON ar.batch_id = b.id
-         WHERE ar.status = 'present'
-         GROUP BY ar.student_id, b.instrument_id
-       )
-       SELECT DISTINCT ON (s.id) s.name, s.phone,
-         i.name AS instrument,
-         GREATEST(0, COALESCE(ic.credits, 0) - COALESCE(ia.attended, 0)) AS classes_remaining
-       FROM students s
-       JOIN enrollments e ON e.student_id = s.id AND e.status = 'active'
-       JOIN enrollment_batches eb ON eb.enrollment_id = e.id
-       JOIN batches b ON eb.batch_id = b.id
-       JOIN instruments i ON b.instrument_id = i.id
-       LEFT JOIN instr_credits ic ON ic.student_id = s.id AND ic.instrument_id = i.id
-       LEFT JOIN instr_attended ia ON ia.student_id = s.id AND ia.instrument_id = i.id
-       WHERE s.is_active = true
-         AND GREATEST(0, COALESCE(ic.credits, 0) - COALESCE(ia.attended, 0)) <= 0
-       ORDER BY s.id, s.name`
-    )).rows;
+    const rows = await fetchDues({ maxRemaining: 0 });
     if (!rows.length) return makeResponse('text', 'No students with zero classes — everyone is paid up.', ['Check low credits']);
-    return makeResponse('list', `${rows.length} student(s) with zero classes remaining (need to pay).`,
-      ['Send reminders', 'Record payment'], { students: rows });
+    return makeResponse('list', `${rows.length} student(s) out of classes (need to pay). Tap one for the amount and date.`,
+      ['Send reminders', 'Record payment'], { students: duesItems(rows) });
   },
 
   'stats.attendance': async ({ params }) => {
@@ -1796,6 +1731,7 @@ const TOOL_DEFINITIONS = [
   T('batch.roster', 'Students enrolled in a batch', { batch_id: S('instrument name or UUID') }),
   T('batch.schedule', 'Schedule and timings for a batch', { batch_id: S('instrument name or UUID') }),
   T('payment.status', 'Recent payment history for a specific student', { student_id: S('name or UUID') }),
+  T('payment.followup', 'Write a WhatsApp payment reminder for one student who owes or is nearly out of classes, ready for staff to send', { student_id: S('student name or UUID'), instrument: S('only this instrument (optional)') }, ['student_id']),
   T('fee.query', 'Fee packages and prices for an instrument', { instrument: S('instrument name') }, ['instrument']),
   T('reminder.payment', 'All students with low/zero classes (overdue/renewal list)', { threshold: I('max classes remaining, default 2') }),
   T('report.attendance', 'Attendance report for a batch over a date range', { batch_id: S('UUID'), from_date: S('YYYY-MM-DD'), to_date: S('YYYY-MM-DD') }, ['from_date', 'to_date']),
@@ -1855,7 +1791,7 @@ const TOOL_DEFINITIONS = [
 ];
 
 // ACTION_SKILLS results are never cached; roll-calls and histories change as attendance is saved.
-const ACTION_SKILLS = new Set(['attendance.rollcall', 'attendance.student_history', 'attendance.mark', 'attendance.mark_batch', 'payment.record', 'enroll.student', 'student.update', 'batch.move', 'batch.create', 'batch.update', 'payout.record']);
+const ACTION_SKILLS = new Set(['payment.followup', 'payment.dues_detail', 'attendance.rollcall', 'attendance.student_history', 'attendance.mark', 'attendance.mark_batch', 'payment.record', 'enroll.student', 'student.update', 'batch.move', 'batch.create', 'batch.update', 'payout.record']);
 const LOOKUP_SKILLS = new Set(['school.locations', 'student.lookup', 'student.credits', 'student.profile', 'student.list', 'teacher.list', 'teacher.profile', 'teacher.students', 'teacher.payout', 'batch.roster', 'batch.find', 'student.batches','batch.schedule', 'payment.status', 'fee.query', 'stats.students', 'stats.unpaid', 'stats.attendance', 'report.lowcredits', 'reminder.payment', 'chart.attendance', 'chart.students', 'chart.revenue', 'prospect.summary', 'prospect.list', 'prospect.aging', 'prospect.followup', 'chart.prospects', 'finance.summary', 'finance.revenue', 'finance.expenses', 'finance.pnl', 'finance.payouts', 'chart.finance', 'stats.turnover', 'stats.turnover_by_stream', 'stats.turnover_by_teacher', 'chart.turnover']);
 
 module.exports = { skills, TOOL_DEFINITIONS, ACTION_SKILLS, LOOKUP_SKILLS };

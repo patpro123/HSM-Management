@@ -3,6 +3,7 @@ import { ChatMessageUnion, AttendancePickerResult } from './chatTypes';
 import { MessageCard } from './MessageCard';
 import { MessageChart } from './MessageChart';
 import { MessageConfirm } from './MessageConfirm';
+import { MessageWhatsApp } from './MessageWhatsApp';
 import { AttendancePicker } from './AttendancePicker';
 import { AttendanceSummary } from './AttendanceSummary';
 import { CleffAvatar } from './CleffAvatar';
@@ -13,6 +14,8 @@ interface ChatMessageProps {
   onAttendanceSave?: (result: AttendancePickerResult) => void;
   /** Opens the full-height attendance layer for a roll-call / history message */
   onOpenWork?: (messageId: string) => void;
+  /** Runs a skill directly, for list rows that carry an action */
+  onRunAction?: (label: string, skill: string, params: Record<string, string>) => void;
   /** Phone layout: no avatar or per-message time, so bubbles get the full width */
   compact?: boolean;
 }
@@ -56,12 +59,15 @@ function toWhatsAppText(message: ChatMessageUnion): string | null {
     case 'nudge':
       return message.text;
 
+    case 'whatsapp':
+      return message.text;
+
     default:
       return null;
   }
 }
 
-export function ChatMessage({ message, onChipSelect, onAttendanceSave, onOpenWork, compact }: ChatMessageProps) {
+export function ChatMessage({ message, onChipSelect, onAttendanceSave, onOpenWork, onRunAction, compact }: ChatMessageProps) {
   const ref = useRef<HTMLDivElement>(null);
   const isUser = message.sender === 'user';
   const [copied, setCopied] = useState(false);
@@ -130,6 +136,7 @@ export function ChatMessage({ message, onChipSelect, onAttendanceSave, onOpenWor
             fields={message.fields}
             actions={message.actions}
             onActionSelect={onChipSelect}
+            onRunAction={onRunAction}
           />
         );
 
@@ -139,25 +146,45 @@ export function ChatMessage({ message, onChipSelect, onAttendanceSave, onOpenWor
             {message.heading && (
               <div style={{ padding: '10px 14px 6px', fontWeight: 700, fontSize: 13 }}>{message.heading}</div>
             )}
-            {message.items.map((item, i) => (
-              <div
-                key={i}
-                onClick={() => onChipSelect?.(item.value)}
-                style={{
-                  padding: '8px 14px',
-                  borderBottom: i < message.items.length - 1 ? '1px solid var(--border, #e5e0d5)' : 'none',
-                  cursor: 'pointer',
-                  background: '#fff',
-                }}
-                onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.background = 'var(--bg, #fffdf4)'; }}
-                onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.background = '#fff'; }}
-              >
-                <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text, #1b1307)' }}>{item.primary}</div>
-                {item.secondary && <div style={{ fontSize: 11, color: 'var(--muted, #8a7d65)' }}>{item.secondary}</div>}
-              </div>
-            ))}
+            {message.items.map((item, i) => {
+              const header = item.group && item.group !== message.items[i - 1]?.group
+                ? `${item.group} · ${message.items.filter(x => x.group === item.group).length}`
+                : null;
+              const action = item.action;
+              return (
+                <div key={i}>
+                  {header && (
+                    <div style={{
+                      padding: '5px 14px', fontSize: 11, fontWeight: 700, letterSpacing: 0.3,
+                      textTransform: 'uppercase', background: 'var(--bg, #fffdf4)', color: 'var(--muted, #8a7d65)',
+                      borderTop: i > 0 ? '1px solid var(--border, #e5e0d5)' : 'none',
+                      borderBottom: '1px solid var(--border, #e5e0d5)',
+                    }}>{header}</div>
+                  )}
+                  <div
+                    onClick={() => action && onRunAction
+                      ? onRunAction(action.label, action.skill, action.params)
+                      : onChipSelect?.(item.value)}
+                    style={{
+                      padding: '8px 14px',
+                      borderBottom: i < message.items.length - 1 ? '1px solid var(--border, #e5e0d5)' : 'none',
+                      cursor: 'pointer',
+                      background: '#fff',
+                    }}
+                    onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.background = 'var(--bg, #fffdf4)'; }}
+                    onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.background = '#fff'; }}
+                  >
+                    <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text, #1b1307)' }}>{item.primary}</div>
+                    {item.secondary && <div style={{ fontSize: 11, color: 'var(--muted, #8a7d65)' }}>{item.secondary}</div>}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         );
+
+      case 'whatsapp':
+        return <MessageWhatsApp message={message} />;
 
       case 'chart':
         return (

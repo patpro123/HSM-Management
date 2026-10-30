@@ -69,13 +69,24 @@ export interface CardMessage extends BaseMessage {
   title: string;
   subtitle?: string;
   fields: Array<{ label: string; value: string | number; highlight?: boolean }>;
-  actions?: QuickReplyChip[];
+  actions?: Array<QuickReplyChip & { action?: ListAction }>;
 }
+
+/** A skill a tap runs directly, without the language model */
+export interface ListAction { skill: string; params: Record<string, string>; label: string }
 
 export interface ListMessage extends BaseMessage {
   type: 'list';
   heading: string;
-  items: Array<{ primary: string; secondary?: string; value: string }>;
+  items: Array<{
+    primary: string;
+    secondary?: string;
+    value: string;
+    /** Section the row belongs to; a header is drawn whenever it changes (e.g. the instrument) */
+    group?: string;
+    /** A tap runs this skill directly instead of sending the row's text */
+    action?: { skill: string; params: Record<string, string>; label: string };
+  }>;
 }
 
 export interface ConfirmMessage extends BaseMessage {
@@ -91,6 +102,19 @@ export interface AttendancePickerMessage extends BaseMessage {
   batchLabel: string;
   sessionDate: string;
   students: AttendancePickerStudent[];
+}
+
+/** A message composed for a family, sent by the user tapping the WhatsApp link */
+export interface WhatsAppMessage extends BaseMessage {
+  type: 'whatsapp';
+  heading: string;
+  studentId: string;
+  studentName: string;
+  kind: string;
+  /** Recipient digits with country code, or '' when none is on file */
+  to: string;
+  text: string;
+  link: string;
 }
 
 export interface NudgeMessage extends BaseMessage {
@@ -147,6 +171,7 @@ export type ChatMessageUnion =
   | ConfirmMessage
   | AttendancePickerMessage
   | NudgeMessage
+  | WhatsAppMessage
   | ChartMessage;
 
 export interface AttendancePickerStudent {
@@ -179,7 +204,7 @@ export interface ChatRequest {
 
 export interface BotApiResponse {
   session_id: string;
-  type: 'text' | 'card' | 'list' | 'chart' | 'error' | 'attendance_roll' | 'attendance_history';
+  type: 'text' | 'card' | 'list' | 'chart' | 'error' | 'attendance_roll' | 'attendance_history' | 'whatsapp';
   text: string;
   suggestions: string[];
   card: Record<string, unknown> | null;

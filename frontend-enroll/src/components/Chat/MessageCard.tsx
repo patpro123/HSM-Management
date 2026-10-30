@@ -1,14 +1,16 @@
-import { QuickReplyChip } from './chatTypes';
+import { ListAction, QuickReplyChip } from './chatTypes';
 
 interface MessageCardProps {
   title: string;
   subtitle?: string;
   fields?: Array<{ label: string; value: string | number; highlight?: boolean }>;
-  actions?: QuickReplyChip[];
+  actions?: Array<QuickReplyChip & { action?: ListAction }>;
   onActionSelect?: (value: string) => void;
+  /** Runs a skill for actions that carry one */
+  onRunAction?: (label: string, skill: string, params: Record<string, string>) => void;
 }
 
-export function MessageCard({ title, subtitle, fields, actions, onActionSelect }: MessageCardProps) {
+export function MessageCard({ title, subtitle, fields, actions, onActionSelect, onRunAction }: MessageCardProps) {
   return (
     <div style={{
       background: '#fff',
@@ -46,7 +48,9 @@ export function MessageCard({ title, subtitle, fields, actions, onActionSelect }
           {actions.map((a, i) => (
             <button
               key={i}
-              onClick={() => onActionSelect?.(a.value)}
+              onClick={() => a.action && onRunAction
+                ? onRunAction(a.action.label, a.action.skill, a.action.params)
+                : onActionSelect?.(a.value)}
               type="button"
               style={{
                 background: 'rgba(243,193,58,0.15)',

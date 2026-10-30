@@ -14,6 +14,11 @@ interface BotApiResponse {
   card: Record<string, unknown> | null;
 }
 
+function isListAction(a: unknown): a is { skill: string; params: Record<string, string>; label: string } {
+  const x = a as { skill?: unknown; params?: unknown; label?: unknown } | null;
+  return !!x && typeof x.skill === 'string' && typeof x.label === 'string' && !!x.params && typeof x.params === 'object';
+}
+
 function botResponseToMessage(resp: BotApiResponse): ChatMessageUnion {
   const base = {
     id: newId(),
@@ -44,6 +49,8 @@ function botResponseToMessage(resp: BotApiResponse): ChatMessageUnion {
           ? `${item.present}/${item.total} present`
           : undefined,
         value: String(item.value ?? item.id ?? item.student_id ?? item.name ?? ''),
+        group: typeof item.group === 'string' ? item.group : undefined,
+        action: isListAction(item.action) ? item.action : undefined,
       }));
       return { ...base, type: 'list', heading: resp.text, items };
     }
@@ -65,7 +72,19 @@ function botResponseToMessage(resp: BotApiResponse): ChatMessageUnion {
             )
             .slice(0, 8)
             .map(([k, v]) => ({ label: k.replace(/_/g, ' '), value: String(v) }));
-      return { ...base, type: 'card', title: resp.text, fields };
+      const actions = Array.isArray(card.actions)
+        ? (card.actions as unknown[]).filter(isListAction).map(a => ({ label: a.label, value: a.label, action: a }))
+        : undefined;
+      return { ...base, type: 'card', title: resp.text, fields, actions };
+    }
+
+    case 'whatsapp': {
+      const w = (card.whatsapp ?? {}) as Record<string, unknown>;
+      return {
+        ...base, type: 'whatsapp', heading: resp.text,
+        studentId: String(w.student_id ?? ''), studentName: String(w.student_name ?? ''), kind: String(w.kind ?? ''),
+        to: String(w.to ?? ''), text: String(w.text ?? ''), link: String(w.link ?? ''),
+      };
     }
 
     case 'attendance_roll': {
@@ -141,6 +160,7 @@ function isRenderable(m: ChatMessageUnion): boolean {
   if (m.type === 'attendance_history') return Array.isArray(m.rows);
   if (m.type === 'list') return Array.isArray(m.items);
   if (m.type === 'card') return Array.isArray(m.fields);
+  if (m.type === 'whatsapp') return typeof m.text === 'string' && typeof m.link === 'string';
   return true;
 }
 
