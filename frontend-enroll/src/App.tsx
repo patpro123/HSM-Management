@@ -33,11 +33,12 @@ import ImpersonatePanel, { ImpersonateTarget } from './components/ImpersonatePan
 import PTMModule from './components/PTMModule';
 import MarketingDashboard from './components/marketing/MarketingDashboard';
 import MaterialLibrary from './components/MaterialLibrary';
+import ApprovalsQueue from './components/ApprovalsQueue';
 
 const App: React.FC = () => {
   const [chatOpen, setChatOpen] = useState(false);
   // Add new profile page states
-  const [activeTab, setActiveTab] = useState<'stats' | 'students' | 'attendance' | 'payments' | 'finance' | 'teachers' | 'homework' | 'batch-manager' | 'users' | 'migration' | 'student-profile' | 'teacher-profile' | 'enrollment' | 'ptm' | 'marketing' | 'materials'>(
+  const [activeTab, setActiveTab] = useState<'stats' | 'students' | 'attendance' | 'payments' | 'finance' | 'teachers' | 'homework' | 'batch-manager' | 'users' | 'migration' | 'student-profile' | 'teacher-profile' | 'enrollment' | 'ptm' | 'marketing' | 'materials' | 'approvals'>(
     getCurrentUser()?.roles?.includes('admin') ? 'stats' : getCurrentUser()?.roles?.includes('head_of_school') ? 'attendance' : getCurrentUser()?.roles?.includes('teacher') ? 'teacher-profile' : 'student-profile'
   );
   const [students, setStudents] = useState<Student[]>([]);
@@ -281,10 +282,12 @@ const App: React.FC = () => {
       { key: 'ptm', label: 'PTM', icon: 'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z' },
       { key: 'marketing', label: 'Marketing', icon: 'M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z' },
       { key: 'materials', label: 'Material Library', icon: 'M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10' },
+      { key: 'approvals', label: 'Approvals', icon: 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z' },
     ]
     : isHeadOfSchool
       ? [
         { key: 'attendance', label: 'Attendance', icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4' },
+        { key: 'approvals', label: 'Approvals', icon: 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z' },
       ]
     : isTeacherOnly
       ? [
@@ -502,6 +505,9 @@ const App: React.FC = () => {
               {activeTab === 'materials' && (
                 <MaterialLibrary instruments={instruments} />
               )}
+              {activeTab === 'approvals' && (
+                <ApprovalsQueue />
+              )}
               {activeTab === 'enrollment' && (
                 <EnrollmentForm
                   students={students}
@@ -510,6 +516,10 @@ const App: React.FC = () => {
                   onRefresh={fetchData}
                 />
               )}
+            </div>
+          ) : isHeadOfSchool ? (
+            <div className="bg-white rounded-xl p-8 shadow-sm border border-slate-100">
+              {activeTab === 'approvals' && <ApprovalsQueue />}
             </div>
           ) : isTeacherOnly ? (
             <div className="bg-white rounded-xl p-8 shadow-sm border border-slate-100">

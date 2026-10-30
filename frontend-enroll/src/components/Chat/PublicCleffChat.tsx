@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { API_BASE_URL } from '../../config';
 import { CleffAvatar } from './CleffAvatar';
+import { newId } from './newId';
 
 interface PublicMessage {
   id: string;
@@ -84,7 +85,7 @@ export function PublicCleffChat({ onBookDemo }: PublicCleffChatProps) {
     if (!text.trim() || isTyping) return;
     const trimmed = text.trim();
 
-    const userMsg: PublicMessage = { id: crypto.randomUUID(), sender: 'user', text: trimmed };
+    const userMsg: PublicMessage = { id: newId(), sender: 'user', text: trimmed };
     setMessages(prev => [...prev, userMsg]);
     setChips([]);
     setIsTyping(true);
@@ -101,7 +102,7 @@ export function PublicCleffChat({ onBookDemo }: PublicCleffChatProps) {
       const data = await res.json();
 
       const botMsg: PublicMessage = {
-        id:     crypto.randomUUID(),
+        id:     newId(),
         sender: 'bot',
         text:   data.text || "I didn't quite catch that — could you rephrase?",
         cta:    data.cta ?? null,
@@ -112,7 +113,7 @@ export function PublicCleffChat({ onBookDemo }: PublicCleffChatProps) {
       setChips(Array.isArray(data.suggestions) ? data.suggestions : []);
     } catch {
       setMessages(prev => [...prev, {
-        id: crypto.randomUUID(), sender: 'bot',
+        id: newId(), sender: 'bot',
         text: "Oops, something went off-key! Please try again.",
         cta: null,
       }]);

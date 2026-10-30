@@ -22,7 +22,9 @@ const ATTENDANCE_STAFF = [ADMIN, HOS, TEACHER];
 const END_USERS = [PARENT, STUDENT];
 
 const read = (roles) => ({ roles, write: false, money: false });
-const write = (roles, extra = {}) => ({ roles, write: true, money: false, ...extra });
+// `roles` may propose; `approvers` may approve. Money actions are Admin-only to approve and
+// can never be given a wider list.
+const write = (roles, extra = {}) => ({ roles, write: true, money: false, approvers: [ADMIN], ...extra });
 
 const ACTIONS = {
   // Open to everyone, including parents and students (public information)
@@ -37,6 +39,11 @@ const ACTIONS = {
 
   // Roster lookups needed to mark attendance
   'batch.roster': read(ATTENDANCE_STAFF),
+  'batch.find': read(ATTENDANCE_STAFF),
+  // Read-only views; saving goes through POST /api/chat/attendance, which re-checks the rules.
+  'attendance.rollcall': read(ATTENDANCE_STAFF),
+  'attendance.student_history': read(ATTENDANCE_STAFF),
+  'student.batches': read(ATTENDANCE_STAFF),
 
   // Operations and academic reads
   'student.lookup': read(OPERATIONS_STAFF),
@@ -76,14 +83,22 @@ const ACTIONS = {
   'teacher.payout': read([ADMIN]),
 
   // Writes
-  'attendance.mark': write(ATTENDANCE_STAFF),
-  'attendance.mark_batch': write(ATTENDANCE_STAFF),
-  'batch.move': write(OPERATIONS_STAFF),
+  'attendance.mark': write(ATTENDANCE_STAFF, { approvers: OPERATIONS_STAFF }),
+  'attendance.mark_batch': write(ATTENDANCE_STAFF, { approvers: OPERATIONS_STAFF }),
+  // Teachers may request a move for their own batches (the executor checks ownership).
+  'batch.move': write(ATTENDANCE_STAFF, { approvers: OPERATIONS_STAFF }),
+  'batch.create': write(OPERATIONS_STAFF, { approvers: OPERATIONS_STAFF }),
+  'batch.update': write(OPERATIONS_STAFF, { approvers: OPERATIONS_STAFF }),
   'student.update': write([ADMIN]),
   'enroll.student': write([ADMIN]),
   'notify.parent': write([ADMIN]),
   'notify.batch': read(OPERATIONS_STAFF),
   'payment.record': write([ADMIN], { money: true }),
+  // Proposal-only (not a chat tool). A payment that matches the student's expected fee runs
+  // at once for the roles in `autoApprove`; any other amount waits for Admin.
+  'payment.submit': write([ADMIN, HOS], { money: true, autoApprove: [ADMIN, HOS] }),
+  // Raised by Head of School (or Admin) against an existing payment; only Admin decides.
+  'payment.dispute': write([ADMIN, HOS], { money: true }),
   'payout.record': write([ADMIN], { money: true }),
 };
 
@@ -100,6 +115,28 @@ function canUseTool(persona, toolName) {
 
 function getAction(toolName) {
   return ACTIONS[toolName] || null;
+}
+
+// A write the persona may propose.
+function canPropose(persona, toolName) {
+  const action = ACTIONS[toolName];
+  return !!action && action.write && action.roles.includes(persona);
+}
+
+// Whether the persona's own proposals of this action may skip approval. Still needs the
+// executor to confirm the specific request qualifies (e.g. amount equals the expected fee).
+function canAutoApprove(persona, toolName) {
+  const action = ACTIONS[toolName];
+  return !!action && action.write && (action.autoApprove || []).includes(persona);
+}
+
+// Approval is judged on every role the approver holds, not only their top persona, and a
+// money-flagged action only ever accepts Admin.
+function canApprove(roles, toolName) {
+  const action = ACTIONS[toolName];
+  if (!action || !action.write) return false;
+  const allowed = action.money ? [ADMIN] : action.approvers;
+  return (roles || []).some(r => allowed.includes(r));
 }
 
 // Tool definitions (OpenAI function format) the persona is allowed to see.
@@ -123,6 +160,9 @@ module.exports = {
   resolvePersona,
   canUseTool,
   getAction,
+  canPropose,
+  canApprove,
+  canAutoApprove,
   toolsForPersona,
   isOperationsStaff,
   canMarkAttendanceOn,

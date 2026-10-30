@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { apiPost } from '../../api';
+import { newId } from './newId';
 import {
   ChatMessageUnion, ChatUserRole, QuickReplyChip, AttendancePickerResult,
   getRoleDefaultChips, TextMessage,
@@ -15,7 +16,7 @@ interface BotApiResponse {
 
 function botResponseToMessage(resp: BotApiResponse): ChatMessageUnion {
   const base = {
-    id: crypto.randomUUID(),
+    id: newId(),
     sender: 'bot' as const,
     timestamp: new Date().toISOString(),
     sessionId: resp.session_id,
@@ -67,6 +68,18 @@ function botResponseToMessage(resp: BotApiResponse): ChatMessageUnion {
       return { ...base, type: 'card', title: resp.text, fields };
     }
 
+    case 'attendance_roll': {
+      const groups = (card.groups ?? []) as Extract<ChatMessageUnion, { type: 'attendance_roll' }>['groups'];
+      if (!groups.length) return { ...base, type: 'text', text: resp.text || 'No classes found.' };
+      return { ...base, type: 'attendance_roll', title: resp.text, date: String(card.date ?? ''), editable: card.editable === true, groups };
+    }
+
+    case 'attendance_history': {
+      const rows = (card.rows ?? []) as Extract<ChatMessageUnion, { type: 'attendance_history' }>['rows'];
+      const student = (card.student ?? {}) as { id?: string };
+      return { ...base, type: 'attendance_history', title: resp.text, studentId: String(student.id ?? ''), rows };
+    }
+
     case 'chart': {
       const chartData = (resp.card?.chart ?? {}) as Record<string, unknown>;
       return {
@@ -92,6 +105,8 @@ interface ChatSessionState {
   isTyping: boolean;
   inputValue: string;
   error: string | null;
+  /** The menu area the conversation is in (limits the tools Cleff uses); null means no area */
+  area: string | null;
 }
 
 interface UseChatSessionReturn {
@@ -99,6 +114,19 @@ interface UseChatSessionReturn {
   sendMessage: (text: string) => Promise<void>;
   sendChip: (chip: QuickReplyChip) => Promise<void>;
   saveAttendance: (result: AttendancePickerResult) => Promise<void>;
+  /** Run a skill chosen from the menu (no LLM). `label` is shown as the user's message. */
+  runAction: (label: string, skill: string, params: Record<string, string>) => Promise<void>;
+  /** Append a local user line (e.g. an answer typed to a menu question) */
+  addUserText: (text: string) => string;
+  /** Remove messages by id (a finished menu flow takes its questions with it) */
+  removeMessages: (ids: string[]) => void;
+  setArea: (area: string | null) => void;
+  /** Replace the quick-reply chips */
+  setChips: (chips: QuickReplyChip[]) => void;
+  /** Replace fields of an existing message (e.g. a roll-call's statuses after saving) */
+  patchMessage: (id: string, patch: Record<string, unknown>) => void;
+  /** Append a local bot line, e.g. the "Saved" confirmation after the attendance layer closes */
+  addBotText: (text: string, chips?: QuickReplyChip[]) => string;
   dismissError: () => void;
   setInputValue: (value: string) => void;
   resetSession: () => void;
@@ -106,6 +134,15 @@ interface UseChatSessionReturn {
 
 const STORAGE_KEY = 'hsm_chat_session_v1';
 const SESSION_TTL_MS = 24 * 60 * 60 * 1000;
+
+function isRenderable(m: ChatMessageUnion): boolean {
+  if (!m || typeof m !== 'object' || typeof m.id !== 'string' || typeof m.type !== 'string') return false;
+  if (m.type === 'attendance_roll') return Array.isArray(m.groups) && m.groups.every(g => Array.isArray(g?.students));
+  if (m.type === 'attendance_history') return Array.isArray(m.rows);
+  if (m.type === 'list') return Array.isArray(m.items);
+  if (m.type === 'card') return Array.isArray(m.fields);
+  return true;
+}
 
 function loadPersistedSession() {
   try {
@@ -116,7 +153,14 @@ function loadPersistedSession() {
       localStorage.removeItem(STORAGE_KEY);
       return null;
     }
-    return parsed as { sessionId: string; messages: ChatMessageUnion[] };
+    if (!parsed || !Array.isArray(parsed.messages)) {
+      localStorage.removeItem(STORAGE_KEY);
+      return null;
+    }
+    // Drop anything the current UI can't draw (older versions saved other shapes); one bad
+    // message must not take the whole app down.
+    const messages = (parsed.messages as ChatMessageUnion[]).filter(isRenderable);
+    return { sessionId: parsed.sessionId, messages };
   } catch {
     return null;
   }
@@ -138,7 +182,7 @@ function makeBotMessage(
   partial: Omit<ChatMessageUnion, 'id' | 'sender' | 'timestamp' | 'sessionId' | 'type'>
 ): ChatMessageUnion {
   return {
-    id: crypto.randomUUID(),
+    id: newId(),
     sender: 'bot',
     timestamp: new Date().toISOString(),
     sessionId,
@@ -158,7 +202,7 @@ function makeWelcomeMessage(userRole: ChatUserRole, userName?: string): TextMess
     parent:  "I'm Cleff — your child's musical diary. Ask me about classes remaining, attendance, or payments.",
   };
   return {
-    id: crypto.randomUUID(),
+    id: newId(),
     sender: 'bot',
     timestamp: new Date().toISOString(),
     sessionId: '',
@@ -181,6 +225,7 @@ export function useChatSession(userRole: ChatUserRole, userName?: string): UseCh
     isTyping:   false,
     inputValue: '',
     error:      null,
+    area:       null,
   });
 
   const persistDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -193,21 +238,20 @@ export function useChatSession(userRole: ChatUserRole, userName?: string): UseCh
     }, 500);
   }, [state.sessionId, state.messages]);
 
-  const sendMessage = useCallback(async (text: string) => {
-    if (!text.trim()) return;
-
+  // One round trip: show the user's line, call the server, show the reply and its chips.
+  const exchange = useCallback(async (userText: string, call: () => Promise<BotApiResponse>, retry: () => void) => {
     const userMsg: TextMessage = {
-      id: crypto.randomUUID(),
+      id: newId(),
       sender: 'user',
       timestamp: new Date().toISOString(),
-      sessionId: state.sessionId ?? '',
+      sessionId: '',
       type: 'text',
-      text: text.trim(),
+      text: userText,
     };
 
     setState(prev => ({
       ...prev,
-      messages: [...prev.messages, userMsg],
+      messages: [...prev.messages, { ...userMsg, sessionId: prev.sessionId ?? '' }],
       chips: [],
       isTyping: true,
       error: null,
@@ -215,18 +259,9 @@ export function useChatSession(userRole: ChatUserRole, userName?: string): UseCh
     }));
 
     try {
-      const resp: BotApiResponse = await apiPost('/api/chat', {
-        session_id: state.sessionId,
-        message: text.trim(),
-      });
-
+      const resp = await call();
       const botMsg = botResponseToMessage(resp);
-
-      const chips: QuickReplyChip[] = (resp.suggestions ?? []).map((s: string) => ({
-        label: s,
-        value: s,
-      }));
-
+      const chips: QuickReplyChip[] = (resp.suggestions ?? []).map((s: string) => ({ label: s, value: s }));
       setState(prev => ({
         ...prev,
         sessionId: resp.session_id,
@@ -240,15 +275,50 @@ export function useChatSession(userRole: ChatUserRole, userName?: string): UseCh
         ...prev,
         isTyping: false,
         error: message,
-        chips: [{ label: 'Try again', value: text.trim() }],
+        chips: [{ label: 'Try again', value: userText, onSelect: retry }],
       }));
     }
-  }, [state.sessionId]);
+  }, []);
+
+  const sendMessage = useCallback(async (text: string) => {
+    const trimmed = text.trim();
+    if (!trimmed) return;
+    await exchange(
+      trimmed,
+      () => apiPost('/api/chat', { session_id: state.sessionId, message: trimmed, area: state.area ?? undefined }),
+      () => { void sendMessage(trimmed); },
+    );
+  }, [exchange, state.sessionId, state.area]);
+
+  const runAction = useCallback(async (label: string, skill: string, params: Record<string, string>) => {
+    await exchange(
+      label,
+      () => apiPost('/api/chat/action', { session_id: state.sessionId, skill, params, label }),
+      () => { void runAction(label, skill, params); },
+    );
+  }, [exchange, state.sessionId]);
 
   const sendChip = useCallback(async (chip: QuickReplyChip) => {
     setState(prev => ({ ...prev, chips: [] }));
+    // A chip can run local code instead of sending its text (menu questions, retries)
+    if (chip.onSelect) { chip.onSelect(); return; }
     await sendMessage(chip.value);
   }, [sendMessage]);
+
+  const addUserText = useCallback((text: string): string => {
+    const id = newId();
+    setState(prev => ({
+      ...prev,
+      messages: [...prev.messages, {
+        id, sender: 'user', timestamp: new Date().toISOString(), sessionId: prev.sessionId ?? '', type: 'text', text,
+      } as TextMessage],
+      inputValue: '',
+    }));
+    return id;
+  }, []);
+
+  const setArea = useCallback((area: string | null) => setState(prev => ({ ...prev, area })), []);
+  const setChips = useCallback((chips: QuickReplyChip[]) => setState(prev => ({ ...prev, chips })), []);
 
   const saveAttendance = useCallback(async (result: AttendancePickerResult) => {
     try {
@@ -274,6 +344,24 @@ export function useChatSession(userRole: ChatUserRole, userName?: string): UseCh
     }
   }, [state.sessionId]);
 
+  const patchMessage = useCallback((id: string, patch: Record<string, unknown>) => {
+    setState(prev => ({
+      ...prev,
+      messages: prev.messages.map(m => (m.id === id ? ({ ...m, ...patch } as ChatMessageUnion) : m)),
+    }));
+  }, []);
+
+  const addBotText = useCallback((text: string, chips: QuickReplyChip[] = []): string => {
+    const msg = makeBotMessage('text', '', { text } as Omit<TextMessage, 'id' | 'sender' | 'timestamp' | 'sessionId' | 'type'>);
+    setState(prev => ({ ...prev, messages: [...prev.messages, { ...msg, sessionId: prev.sessionId ?? '' }], chips }));
+    return msg.id;
+  }, []);
+
+  const removeMessages = useCallback((ids: string[]) => {
+    if (!ids.length) return;
+    setState(prev => ({ ...prev, messages: prev.messages.filter(m => !ids.includes(m.id)) }));
+  }, []);
+
   const dismissError = useCallback(() => {
     setState(prev => ({ ...prev, error: null }));
   }, []);
@@ -291,8 +379,9 @@ export function useChatSession(userRole: ChatUserRole, userName?: string): UseCh
       isTyping:   false,
       inputValue: '',
       error:      null,
+      area:       null,
     });
   }, [userRole, userName]);
 
-  return { state, sendMessage, sendChip, saveAttendance, dismissError, setInputValue, resetSession };
+  return { state, sendMessage, sendChip, saveAttendance, runAction, addUserText, removeMessages, setArea, setChips, patchMessage, addBotText, dismissError, setInputValue, resetSession };
 }

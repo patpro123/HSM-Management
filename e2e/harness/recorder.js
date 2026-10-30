@@ -41,7 +41,9 @@ function prepareFfmpeg() {
   if (!rev) return;
   const dest = path.join(root, `ffmpeg-${rev}`, 'ffmpeg-win64.exe');
   fs.mkdirSync(path.dirname(dest), { recursive: true });
-  fs.copyFileSync(source, dest);
+  // A later session in the same run finds the copy in use by the previous browser; keep it.
+  const sameFile = fs.existsSync(dest) && fs.statSync(dest).size === fs.statSync(source).size;
+  if (!sameFile) fs.copyFileSync(source, dest);
   process.env.PLAYWRIGHT_BROWSERS_PATH = root;
 }
 
@@ -107,6 +109,16 @@ async function openSession({ outDir, name, api, app, profile, token }) {
       const body = await res.json().catch(() => ({}));
       await page.waitForTimeout(900);
       return { status: res.status(), ...body };
+    },
+    // Calls the backend directly as this persona (the dev backend resolves identity from the
+    // active profile, so this is the same user the browser is signed in as).
+    async call(method, route, body, headers = {}) {
+      const res = await fetch(`${api}${route}`, {
+        method,
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, ...headers },
+        body: body === undefined ? undefined : JSON.stringify(body),
+      });
+      return { status: res.status, ...(await res.json().catch(() => ({}))) };
     },
     async close() {
       await context.close();

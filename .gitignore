@@ -8,6 +8,10 @@ node_modules/
 .env.test.local
 .env.production.local
 .env.render-drive
+# Any other env file (e.g. HSM-Management.env) holds credentials; keep the examples
+*.env
+!.env.example
+!*.env.example
 
 # IDEs and Editors
 .idea/

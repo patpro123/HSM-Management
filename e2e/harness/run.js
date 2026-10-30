@@ -32,13 +32,14 @@ async function main() {
     console.log(`Stack up. Schema: ${stack.schema.applied} files applied, ${stack.schema.failed.length} skipped.\n`);
 
     // The dev backend holds one active profile, so personas run one after another.
-    const session = async (profile) => {
+    // `label` names the video and screenshots when one persona has more than one session.
+    const session = async (profile, label) => {
       await fetch(`${API}/api/dev/switch-profile`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ profile }),
       }).then(r => { if (!r.ok) throw new Error(`switch-profile ${profile} failed: ${r.status}`); });
       const { token } = await (await fetch(`${API}/api/auth/dev-login`, { method: 'POST' })).json();
       console.log(`\n[${profile}]`);
-      return openSession({ outDir, name: profile, api: API, app: stack.app, profile, token });
+      return openSession({ outDir, name: label || profile, api: API, app: stack.app, profile, token });
     };
 
     const { results, extra, evidence } = await scenario.run({ session, outDir, llmLog, seeded: stack.seeded });

@@ -11,7 +11,7 @@ export function ChatFAB({ isOpen, unreadNudgeCount, onClick }: ChatFABProps) {
     <button
       onClick={onClick}
       type="button"
-      className={`chat-fab${unreadNudgeCount > 0 && !isOpen ? ' chat-fab--nudge' : ''}`}
+      className={`chat-fab${unreadNudgeCount > 0 && !isOpen ? ' chat-fab--nudge' : ''}${isOpen ? ' chat-fab--open' : ''}`}
       style={{
         position: 'fixed',
         bottom: 16,

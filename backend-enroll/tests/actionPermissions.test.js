@@ -1,5 +1,6 @@
 const {
   ACTIONS, resolvePersona, canUseTool, toolsForPersona, isOperationsStaff, canMarkAttendanceOn,
+  canPropose, canApprove, canAutoApprove,
 } = require('../auth/actionPermissions');
 
 jest.mock('../db', () => ({ query: jest.fn(), connect: jest.fn() }));
@@ -21,13 +22,14 @@ describe('tool registry', () => {
 describe('teacher', () => {
   it('is limited to attendance, rosters and schedules on day one', () => {
     expect(names('teacher').sort()).toEqual([
-      'attendance.mark', 'attendance.mark_batch', 'batch.roster', 'batch.schedule',
-      'fee.query', 'school.locations',
+      'attendance.mark', 'attendance.mark_batch', 'attendance.rollcall', 'attendance.student_history',
+      'batch.find', 'batch.move', 'batch.roster',
+      'batch.schedule', 'fee.query', 'school.locations', 'student.batches',
     ]);
   });
 
   it.each(['payment.record', 'payout.record', 'finance.pnl', 'finance.summary', 'report.revenue',
-    'teacher.payout', 'student.update', 'batch.move', 'stats.unpaid', 'payment.status'])(
+    'teacher.payout', 'student.update', 'batch.create', 'batch.update', 'stats.unpaid', 'payment.status'])(
     'cannot use %s', (tool) => expect(canUseTool('teacher', tool)).toBe(false));
 });
 
@@ -62,10 +64,17 @@ describe('parent and student', () => {
 });
 
 describe('money-flagged tools', () => {
-  it('are admin only', () => {
-    const money = Object.entries(ACTIONS).filter(([, a]) => a.money);
+  // Proposal-only actions: Head of School may raise them, but only Admin can approve them.
+  const PROPOSAL_ONLY = ['payment.submit', 'payment.dispute'];
+
+  it('are admin only, except the proposal-only payment actions', () => {
+    const money = Object.entries(ACTIONS).filter(([n, a]) => a.money && !PROPOSAL_ONLY.includes(n));
     expect(money.length).toBeGreaterThan(0);
     for (const [, a] of money) expect(a.roles).toEqual(['admin']);
+  });
+
+  it('are always approved by Admin alone, including the proposal-only ones', () => {
+    for (const [, a] of Object.entries(ACTIONS).filter(([, x]) => x.money)) expect(a.approvers).toEqual(['admin']);
   });
 });
 
@@ -96,5 +105,77 @@ describe('attendance dates', () => {
 
   it('treats a user who is both teacher and head of school as operations staff', () => {
     expect(isOperationsStaff(['teacher', 'head_of_school'])).toBe(true);
+  });
+});
+
+describe('proposals: who may propose and approve', () => {
+  it('lets a teacher propose attendance but not approve it', () => {
+    expect(canPropose('teacher', 'attendance.mark_batch')).toBe(true);
+    expect(canApprove(['teacher'], 'attendance.mark_batch')).toBe(false);
+  });
+
+  it('lets Head of School approve operational actions', () => {
+    expect(canApprove(['head_of_school'], 'attendance.mark_batch')).toBe(true);
+    expect(canApprove(['head_of_school'], 'batch.move')).toBe(true);
+  });
+
+  it('never lets Head of School approve or propose money actions', () => {
+    expect(canApprove(['head_of_school'], 'payment.record')).toBe(false);
+    expect(canApprove(['head_of_school'], 'payout.record')).toBe(false);
+    expect(canPropose('head_of_school', 'payment.record')).toBe(false);
+  });
+
+  it('lets Admin approve everything that writes, including money', () => {
+    for (const [name, action] of Object.entries(ACTIONS).filter(([, a]) => a.write)) {
+      expect([name, canApprove(['admin'], name)]).toEqual([name, true]);
+    }
+  });
+
+  it('judges approval on every role held, not only the first', () => {
+    expect(canApprove(['teacher', 'head_of_school'], 'batch.move')).toBe(true);
+    expect(canApprove(['teacher', 'head_of_school'], 'payment.record')).toBe(false);
+  });
+
+  it('cannot approve reads or unknown actions', () => {
+    expect(canApprove(['admin'], 'fee.query')).toBe(false);
+    expect(canApprove(['admin'], 'does.not.exist')).toBe(false);
+  });
+
+  it('flags every money action as Admin-only to approve', () => {
+    for (const [name, action] of Object.entries(ACTIONS).filter(([, a]) => a.money)) {
+      expect([name, canApprove(['head_of_school'], name)]).toEqual([name, false]);
+    }
+  });
+});
+describe('payments: auto-approval and disputes', () => {
+  it('lets Admin and Head of School submit payments, but not a teacher', () => {
+    expect(canPropose('admin', 'payment.submit')).toBe(true);
+    expect(canPropose('head_of_school', 'payment.submit')).toBe(true);
+    expect(canPropose('teacher', 'payment.submit')).toBe(false);
+  });
+
+  it('allows auto-approval only for the submit action, and only for Admin and Head of School', () => {
+    expect(canAutoApprove('admin', 'payment.submit')).toBe(true);
+    expect(canAutoApprove('head_of_school', 'payment.submit')).toBe(true);
+    expect(canAutoApprove('teacher', 'payment.submit')).toBe(false);
+    for (const [name] of Object.entries(ACTIONS).filter(([n]) => n !== 'payment.submit')) {
+      expect([name, canAutoApprove('admin', name)]).toEqual([name, false]);
+    }
+  });
+
+  it('keeps a Head of School from approving any money action, including the new ones', () => {
+    expect(canApprove(['head_of_school'], 'payment.submit')).toBe(false);
+    expect(canApprove(['head_of_school'], 'payment.dispute')).toBe(false);
+    expect(canApprove(['admin'], 'payment.dispute')).toBe(true);
+  });
+
+  it('lets Head of School raise a dispute', () => {
+    expect(canPropose('head_of_school', 'payment.dispute')).toBe(true);
+    expect(canPropose('teacher', 'payment.dispute')).toBe(false);
+  });
+
+  it('does not hand Head of School the direct payment chat tool', () => {
+    expect(canUseTool('head_of_school', 'payment.record')).toBe(false);
+    expect(canUseTool('head_of_school', 'payment.submit')).toBe(true);
   });
 });
