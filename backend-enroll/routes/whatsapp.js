@@ -2,6 +2,7 @@ const express = require('express');
 const crypto = require('crypto');
 const pool = require('../db');
 const { normalizePhone, logMessage } = require('../services/whatsappService');
+const { logInitiated, COMPOSERS } = require('../services/whatsappMessages');
 const { authenticateJWT } = require('../auth/jwtMiddleware');
 const { authorizeRole } = require('../auth/rbacMiddleware');
 
@@ -127,6 +128,25 @@ async function handleWebhookPayload(payload) {
     }
   }
 }
+
+// POST /api/whatsapp/initiated — the user tapped send on a prepared message (audit trail)
+router.post('/initiated', authenticateJWT, authorizeRole(['admin', 'head_of_school']), async (req, res) => {
+  const { student_id, kind, text, phone } = req.body || {};
+  if (typeof text !== 'string' || !text || typeof kind !== 'string' || !(kind in COMPOSERS)) {
+    return res.status(400).json({ error: 'kind and text are required' });
+  }
+  try {
+    await logInitiated({
+      studentId: /^[0-9a-f-]{36}$/i.test(student_id || '') ? student_id : null,
+      phone: typeof phone === 'string' ? phone.replace(/\D/g, '').slice(0, 15) : '',
+      kind, text: text.slice(0, 2000), userId: req.user.id,
+    });
+    res.json({ success: true });
+  } catch (err) {
+    console.error('WhatsApp initiated log error:', err.message);
+    res.status(500).json({ error: 'Failed to log message' });
+  }
+});
 
 // GET /api/whatsapp/contacts — list opted-in contacts (admin)
 router.get('/contacts', authenticateJWT, authorizeRole(['admin']), async (req, res) => {

@@ -11,6 +11,8 @@ interface MessageListProps {
   onAttendanceSave: (result: AttendancePickerResult) => void;
   onDefaultChipSelect: (value: string) => void;
   onOpenWork?: (messageId: string) => void;
+  /** A list row that carries an action runs its skill directly */
+  onRunAction?: (label: string, skill: string, params: Record<string, string>) => void;
   compact?: boolean;
   /** Changing this value scrolls to the latest message */
   bottomSignal?: number;
@@ -24,7 +26,7 @@ const TALL_TYPES = new Set(['list', 'card', 'chart', 'attendance_roll', 'attenda
 const prefersReducedMotion = () =>
   typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 
-export function MessageList({ messages, isTyping, userRole, onChipSelect, onAttendanceSave, onDefaultChipSelect, onOpenWork, compact, bottomSignal }: MessageListProps) {
+export function MessageList({ messages, isTyping, userRole, onChipSelect, onAttendanceSave, onDefaultChipSelect, onOpenWork, onRunAction, compact, bottomSignal }: MessageListProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const stickRef = useRef(true);
   const lastIdRef = useRef<string | null>(messages[messages.length - 1]?.id ?? null);
@@ -129,6 +131,7 @@ export function MessageList({ messages, isTyping, userRole, onChipSelect, onAtte
               onChipSelect={onChipSelect}
               onAttendanceSave={onAttendanceSave}
               onOpenWork={onOpenWork}
+              onRunAction={onRunAction}
               compact={compact}
             />
           ))

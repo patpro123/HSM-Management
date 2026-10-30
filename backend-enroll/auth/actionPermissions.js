@@ -68,6 +68,9 @@ const ACTIONS = {
 
   // Fee visibility: Head of School may see what is owed, never revenue or payouts
   'reminder.payment': read(OPERATIONS_STAFF),
+  'payment.dues_detail': read(OPERATIONS_STAFF),
+  // Only prepares the message; the person sends it themselves from WhatsApp
+  'payment.followup': read(OPERATIONS_STAFF),
   'report.lowcredits': read(OPERATIONS_STAFF),
   'stats.unpaid': read(OPERATIONS_STAFF),
 

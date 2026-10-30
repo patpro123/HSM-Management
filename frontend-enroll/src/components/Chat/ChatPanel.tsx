@@ -207,6 +207,7 @@ function ChatPanelInner({ userRole, userName, onClose }: ChatPanelProps) {
         onAttendanceSave={saveAttendance}
         onDefaultChipSelect={(value) => sendMessage(value)}
         onOpenWork={(id) => { dirty.current = 0; setWorkId(id); }}
+        onRunAction={(label, skill, params) => { void runAction(label, skill, params); }}
         compact={isMobile}
         bottomSignal={bottomSignal}
       />
