@@ -7,7 +7,9 @@ const { authenticateJWT } = require('../auth/jwtMiddleware');
 const { callLLM } = require('../llm/client');
 const { skills, TOOL_DEFINITIONS, ACTION_SKILLS } = require('../llm/skills');
 const { getPrompt } = require('../llm/prompts');
-const { resolvePersona, canUseTool, toolsForPersona } = require('../auth/actionPermissions');
+const { resolvePersona, canUseTool, toolsForPersona, canMarkAttendanceOn, isOperationsStaff } = require('../auth/actionPermissions');
+const attendanceService = require('../services/attendanceService');
+const { buildMenu, toolsForAreaId } = require('../llm/menu');
 const { checkRateLimit, getCached, setCached } = require('../llm/rateLimit');
 
 const { tryAttendanceCommand, parseSummaryCommand } = require('../llm/attendanceCommands');
@@ -30,6 +32,7 @@ function withoutAttendanceContext(msg) {
 // POST /api/chat
 router.post('/', authenticateJWT, async (req, res) => {
   const { message, session_id } = req.body;
+  const area = typeof req.body.area === 'string' ? req.body.area : null;
 
   if (!message || typeof message !== 'string' || message.trim().length === 0) {
     return res.status(400).json({ error: 'message is required' });
@@ -115,7 +118,9 @@ router.post('/', authenticateJWT, async (req, res) => {
       });
     }
 
-    const systemPrompt = getPrompt(userRole, new Date(), userName);
+    const areaNote = area ? `
+The user is working in the "${area}" area of the menu; prefer tools for that area.` : '';
+    const systemPrompt = getPrompt(userRole, new Date(), userName) + areaNote;
     const llmMessages = [
       { role: 'system', content: systemPrompt },
       ...trimmed.map(withoutAttendanceContext),
@@ -130,7 +135,15 @@ router.post('/', authenticateJWT, async (req, res) => {
     }
 
     // First LLM call
-    let llmResponse = await callLLM({ messages: llmMessages, tools: toolsForPersona(TOOL_DEFINITIONS, userRole), provider });
+    // While an area is active the model sees only that area's tools (fewer, so fewer wrong
+    // picks and fewer tokens). If none of them fit it gets one more try with every tool.
+    const allTools = toolsForPersona(TOOL_DEFINITIONS, userRole);
+    const areaNames = area ? toolsForAreaId(area, userRole) : null;
+    const tools = areaNames ? allTools.filter(t => areaNames.has(t.function.name)) : allTools;
+    let llmResponse = await callLLM({ messages: llmMessages, tools, provider });
+    if (areaNames && !llmResponse.tool_calls?.length) {
+      llmResponse = await callLLM({ messages: llmMessages, tools: allTools, provider });
+    }
     let botResponse = null;
 
     if (llmResponse.tool_calls && llmResponse.tool_calls.length > 0) {
@@ -191,6 +204,137 @@ router.post('/', authenticateJWT, async (req, res) => {
       suggestions: ['Try again'],
       card: null,
     });
+  }
+});
+
+// GET /api/chat/menu — the areas and options this user may use, plus the pick-lists the
+// option questions need. Filtered from the permissions registry, never by the client.
+router.get('/menu', authenticateJWT, async (req, res) => {
+  const persona = resolvePersona(req.user.roles);
+  if (!persona) return res.status(403).json({ error: 'No chat access' });
+  try {
+    const areas = buildMenu(persona);
+    const kinds = new Set(areas.flatMap(a => a.items.flatMap(i => (i.ask || []).map(st => st.kind))));
+    const options = { instruments: [], teachers: [] };
+    if (kinds.has('instrument')) options.instruments = (await pool.query('SELECT name FROM instruments ORDER BY name')).rows.map(r => r.name);
+    if (kinds.has('teacher')) options.teachers = (await pool.query('SELECT name FROM teachers ORDER BY name')).rows.map(r => r.name);
+    res.json({ areas, options });
+  } catch (err) {
+    console.error('[GET /api/chat/menu] Error:', err.message);
+    res.status(500).json({ error: 'Could not load the menu' });
+  }
+});
+
+// POST /api/chat/action — runs one skill chosen from the menu, without the LLM. The skill and
+// the user's right to it are checked here, exactly as for a skill the model picked.
+const MAX_ACTION_PARAMS = 12;
+const MAX_ACTION_VALUE = 200;
+
+router.post('/action', authenticateJWT, async (req, res) => {
+  const { skill, params, label, session_id } = req.body || {};
+  const userId = req.user.id;
+  const userRole = resolvePersona(req.user.roles) || 'parent';
+
+  if (typeof skill !== 'string' || !skills[skill]) return res.status(400).json({ error: 'Unknown action' });
+  if (!canUseTool(userRole, skill)) {
+    console.warn(`[chat] ${userRole} ${userId} attempted ${skill} from the menu`);
+    return res.json({ session_id: session_id || null, type: 'error', text: "You don't have access to that.", suggestions: ['What can you do?'], card: null });
+  }
+
+  // Only plain string/number parameters; keys starting with "_" are client bookkeeping
+  const clean = {};
+  const entries = Object.entries(params && typeof params === 'object' ? params : {});
+  if (entries.length > MAX_ACTION_PARAMS) return res.status(400).json({ error: 'Too many parameters' });
+  for (const [k, v] of entries) {
+    if (k.startsWith('_') || !/^[a-z_]{1,40}$/.test(k)) continue;
+    if (typeof v === 'string' || typeof v === 'number') clean[k] = String(v).slice(0, MAX_ACTION_VALUE);
+  }
+
+  try {
+    let session = null;
+    if (session_id) {
+      session = (await pool.query(
+        'SELECT * FROM chat_sessions WHERE session_id = $1 AND user_id = $2 AND expires_at > NOW()', [session_id, userId])).rows[0] || null;
+    }
+    if (!session) {
+      session = (await pool.query(
+        `INSERT INTO chat_sessions (user_id, role, messages, expires_at)
+         VALUES ($1, $2, '[]'::jsonb, NOW() + INTERVAL '${SESSION_TTL_DAYS} days') RETURNING *`, [userId, userRole])).rows[0];
+    }
+
+    const response = await skills[skill]({ params: clean, userId, userRole, user: req.user, pool });
+
+    const history = Array.isArray(session.messages) ? session.messages : [];
+    await pool.query(
+      'UPDATE chat_sessions SET messages = $1::jsonb, updated_at = NOW() WHERE session_id = $2',
+      [JSON.stringify([
+        ...history.slice(-MAX_HISTORY_MESSAGES),
+        { role: 'user', content: String(label || skill).slice(0, 200) },
+        { role: 'assistant', content: JSON.stringify(response) },
+      ].slice(-MAX_HISTORY_MESSAGES)), session.session_id]
+    );
+    res.json({ session_id: session.session_id, ...response });
+  } catch (err) {
+    console.error('[POST /api/chat/action] Error:', err.message);
+    res.status(500).json({ type: 'error', text: 'Something went wrong. Please try again.', suggestions: ['Try again'], card: null });
+  }
+});
+
+// POST /api/chat/attendance — saves a roll-call or student-history card submitted from the chat.
+// Same rules as typing the command: staff only, teachers may mark today only, every mark is
+// noted as made through Cleff. Body: { records: [{ batch_id, student_id, date, status }] }
+const ATTENDANCE_STATUSES = ['present', 'absent', 'excused'];
+const MAX_ATTENDANCE_RECORDS = 300;
+const ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+router.post('/attendance', authenticateJWT, async (req, res) => {
+  const persona = resolvePersona(req.user.roles);
+  if (!canUseTool(persona, 'attendance.mark_batch')) return res.status(403).json({ error: 'You cannot mark attendance' });
+
+  const records = req.body?.records;
+  if (!Array.isArray(records) || records.length === 0) return res.status(400).json({ error: 'No attendance records provided' });
+  if (records.length > MAX_ATTENDANCE_RECORDS) return res.status(400).json({ error: `At most ${MAX_ATTENDANCE_RECORDS} records at a time` });
+
+  const clean = [];
+  const seen = new Set();
+  for (const r of records) {
+    if (!r || !ID_RE.test(String(r.batch_id)) || !ID_RE.test(String(r.student_id)) || !DATE_RE.test(String(r.date))
+        || !ATTENDANCE_STATUSES.includes(r.status)) {
+      return res.status(400).json({ error: 'Each record needs batch_id, student_id, date and a status of present, absent or excused' });
+    }
+    const key = `${r.batch_id}|${r.student_id}|${r.date}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    clean.push({ batch_id: r.batch_id, student_id: r.student_id, date: r.date, status: r.status, is_extra: false });
+  }
+
+  const today = attendanceService.todayIST();
+  if (clean.some(r => !canMarkAttendanceOn(req.user.roles, r.date, today))) {
+    return res.status(403).json({ error: 'Teachers can only mark attendance for today. Please ask an admin to change a past date.' });
+  }
+
+  try {
+    let teacherId = null;
+    if (!isOperationsStaff(req.user.roles)) {
+      teacherId = await attendanceService.getLinkedTeacherId(pool, req.user.id);
+      if (!teacherId) return res.status(403).json({ error: "Your account isn't linked to a teacher profile yet" });
+    }
+    const notes = await attendanceService.buildAttendanceNotes(pool, {
+      batchIds: [...new Set(clean.map(r => r.batch_id))],
+      teacherId,
+      markerName: req.user.name || req.user.email,
+      via: 'Cleff',
+    });
+    if (!notes) return res.status(404).json({ error: 'One or more batches not found' });
+
+    await attendanceService.saveAttendanceTransaction(clean, notes);
+    const counts = { present: 0, absent: 0, excused: 0 };
+    clean.forEach(r => { counts[r.status]++; });
+    res.json({ saved: clean.length, ...counts });
+  } catch (err) {
+    console.error('[POST /api/chat/attendance] Error:', err.message);
+    res.status(500).json({ error: 'Failed to save attendance' });
   }
 });
 

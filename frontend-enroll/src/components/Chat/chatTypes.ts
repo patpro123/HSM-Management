@@ -4,6 +4,52 @@ export interface QuickReplyChip {
   label: string;
   value: string;
   icon?: string;
+  /** Run this instead of sending `value` as a message (menu questions, retries) */
+  onSelect?: () => void;
+}
+
+// ── Menu (served by GET /api/chat/menu) ─────────────────────────────────────
+
+export interface MenuOption {
+  label: string;
+  value: string;
+  /** Extra skill parameters this answer sets */
+  params?: Record<string, string>;
+}
+
+export interface MenuStep {
+  id: string;
+  kind: 'choice' | 'date' | 'instrument' | 'teacher' | 'student' | 'text';
+  /** The skill parameter this answer fills; null for a step that only steers later steps */
+  param: string | null;
+  prompt: string;
+  options?: MenuOption[];
+  /** Ask only when earlier answers match, e.g. { scope: 'instrument' } */
+  when?: Record<string, string>;
+}
+
+export interface MenuItem {
+  id: string;
+  label: string;
+  skill: string;
+  type?: 'guide';
+  /** What to say for a guide option */
+  guide?: string;
+  group?: string;
+  params?: Record<string, string>;
+  ask?: MenuStep[];
+}
+
+export interface MenuArea {
+  id: string;
+  label: string;
+  icon: string;
+  items: MenuItem[];
+}
+
+export interface MenuData {
+  areas: MenuArea[];
+  options: { instruments: string[]; teachers: string[] };
 }
 
 interface BaseMessage {
@@ -70,7 +116,31 @@ export interface ChartMessage extends BaseMessage {
   series: ChartSeries[];
 }
 
+export interface AttendanceRollMessage extends BaseMessage {
+  type: 'attendance_roll';
+  title: string;
+  date: string;
+  editable: boolean;
+  groups: Array<{
+    batch_id: string;
+    label: string;
+    students: Array<{ student_id: string; name: string; status: 'present' | 'absent' | 'excused' | null; is_guest?: boolean }>;
+  }>;
+}
+
+export interface AttendanceHistoryMessage extends BaseMessage {
+  type: 'attendance_history';
+  title: string;
+  studentId: string;
+  rows: Array<{
+    batch_id: string; date: string; day: string; label: string;
+    status: 'present' | 'absent' | 'excused' | null; editable: boolean;
+  }>;
+}
+
 export type ChatMessageUnion =
+  | AttendanceRollMessage
+  | AttendanceHistoryMessage
   | TextMessage
   | CardMessage
   | ListMessage
@@ -109,7 +179,7 @@ export interface ChatRequest {
 
 export interface BotApiResponse {
   session_id: string;
-  type: 'text' | 'card' | 'list' | 'chart' | 'error';
+  type: 'text' | 'card' | 'list' | 'chart' | 'error' | 'attendance_roll' | 'attendance_history';
   text: string;
   suggestions: string[];
   card: Record<string, unknown> | null;

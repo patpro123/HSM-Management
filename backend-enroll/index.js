@@ -37,6 +37,32 @@ const DEV_DEFAULTS = {
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
+// Make sure each DEV_DEFAULTS user exists, so FK-bound writes (chat_sessions, etc.) work
+// against any DB the local backend points at. Insert-only: existing rows are left as-is.
+async function ensureDevUsers() {
+  for (const u of Object.values(DEV_DEFAULTS)) {
+    try {
+      const inserted = await pool.query(
+        `INSERT INTO users (id, email, name, google_id, email_verified)
+         VALUES ($1, $2, $3, $4, true)
+         ON CONFLICT DO NOTHING
+         RETURNING id`,
+        [u.id, u.email, u.name, `dev-${u.id}`]
+      )
+      if (inserted.rows.length === 0) continue
+      for (const role of u.roles) {
+        await pool.query(
+          `INSERT INTO user_roles (user_id, role) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+          [u.id, role]
+        )
+      }
+      console.log(`[DEV] Created dev user ${u.email} (${u.roles.join(', ')})`)
+    } catch (e) {
+      console.warn(`[DEV] Could not ensure dev user ${u.email}:`, e.message)
+    }
+  }
+}
+
 // Resolve a userRef (UUID or email) to a user object from the DB.
 // Returns null if not found anywhere.
 async function resolveDevUser(userRef) {
@@ -242,6 +268,7 @@ app.use('/api/batches', require('./routes/batches'));
 app.use('/api/attendance', require('./routes/attendance'));
 app.use('/api', require('./routes/enrollment'));
 app.use('/api/agent', require('./routes/agent'));
+app.use('/api/proposals', require('./routes/proposals'));
 app.use('/api/portal', require('./routes/portal'));
 app.use('/api/students', require('./routes/students'));
 const { router: student360Router } = require('./routes/student360');
@@ -351,8 +378,16 @@ const PORT = process.env.PORT || 3000
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Enroll API listening on http://localhost:${PORT}`)
   console.log(`Environment: ${process.env.NODE_ENV || 'development'}`)
-  console.log(`Database: ${process.env.DB_HOST || 'localhost'}:${process.env.DB_PORT || 5432}/${process.env.DB_NAME || 'hsm_dev'}`)
-  if (DISABLE_AUTH) console.log('⚠️  Authentication: DISABLED (Local Dev Mode)')
+  if (process.env.DATABASE_URL) {
+    const dbUrl = new URL(process.env.DATABASE_URL)
+    console.log(`Database: ${dbUrl.hostname}${dbUrl.pathname} (DATABASE_URL)`)
+  } else {
+    console.log(`Database: ${process.env.DB_HOST || 'localhost'}:${process.env.DB_PORT || 5432}/${process.env.DB_NAME || 'hsm_dev'}`)
+  }
+  if (DISABLE_AUTH) {
+    console.log('⚠️  Authentication: DISABLED (Local Dev Mode)')
+    ensureDevUsers()
+  }
 
   // Register background schedulers
   const { registerPayoutScheduler } = require('./scheduler/payoutScheduler')

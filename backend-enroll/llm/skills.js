@@ -6,6 +6,8 @@ const { computeClassesRemaining } = require('../utils/credits');
 const attendanceService = require('../services/attendanceService');
 const attendanceCommands = require('./attendanceCommands');
 const { isOperationsStaff, canMarkAttendanceOn } = require('../auth/actionPermissions');
+const { batchSkills, BATCH_TOOLS, recurrenceMatches, findBatches, batchChoices } = require('./batchSkills');
+const { attendanceSkills, ATTENDANCE_TOOLS } = require('./attendanceSkills');
 
 const makeResponse = (type, text, suggestions = [], card = null) =>
   ({ type, text, suggestions, card });
@@ -45,22 +47,22 @@ async function resolveStudentId(params, userId, userRole) {
   return res.rows[0]?.id ?? null;
 }
 
-// Resolve batch_id — accepts UUID or partial name match via instruments/recurrence
+// Resolve batch_id: a UUID, or an instrument name optionally with a day/time ("Guitar Tuesday 5pm").
+// Returns null unless exactly one batch matches, so an ambiguous request asks instead of guessing.
 async function resolveBatchId(params) {
   const raw = params.batch_id ?? params.batch_name;
   if (!raw) return null;
   if (isUUID(raw)) return raw;
-  const res = await pool.query(
-    `SELECT b.id FROM batches b
-     JOIN instruments i ON b.instrument_id = i.id
-     WHERE i.name ILIKE $1 OR b.recurrence ILIKE $1
-     LIMIT 1`,
-    [`%${raw}%`]
-  );
-  return res.rows[0]?.id ?? null;
+  const text = String(raw).toLowerCase();
+  const hasWhen = /\d|\b(mon|tue|wed|thu|fri|sat|sun)/.test(text);
+  const byInstrument = (await findBatches({})).filter(b => text.includes(b.instrument.toLowerCase()));
+  const matches = hasWhen ? byInstrument.filter(b => recurrenceMatches(b.recurrence, text)) : byInstrument;
+  return matches.length === 1 ? matches[0].id : null;
 }
 
 const skills = {
+  ...batchSkills,
+  ...attendanceSkills,
 
   'student.lookup': async ({ params }) => {
     const { query } = params;
@@ -110,7 +112,10 @@ const skills = {
 
   'batch.roster': async ({ params }) => {
     const batch_id = await resolveBatchId(params);
-    if (!batch_id) return makeResponse('text', 'Which batch? Please specify the instrument and time, e.g. "Guitar Tuesday 5pm".', ['List all batches']);
+    if (!batch_id) {
+      const c = await batchChoices(params.batch_id ?? params.batch_name, 'Students in');
+      return makeResponse('text', c.text, c.suggestions);
+    }
     const rows = (await pool.query(
       `WITH batch_instrument AS (
          SELECT instrument_id FROM batches WHERE id = $1
@@ -178,6 +183,10 @@ const skills = {
 
   'batch.schedule': async ({ params }) => {
     const batch_id = await resolveBatchId(params);
+    if (!batch_id) {
+      const c = await batchChoices(params.batch_id ?? params.batch_name, 'Schedule of');
+      return makeResponse('text', c.text, c.suggestions);
+    }
     const row = (await pool.query(
       `SELECT b.recurrence, b.capacity,
               i.name AS instrument,
@@ -255,29 +264,35 @@ const skills = {
     const studentId = await resolveStudentId(params, userId, userRole);
     if (!studentId) return makeResponse('text', 'Which student? Please provide their name.', ['Search for a student']);
     const rows = (await pool.query(
-      `SELECT p.amount, p.method, p.created_at, pkg.name AS package
+      `SELECT p.amount::float AS amount, p.method, p.timestamp, pkg.name AS package
        FROM payments p
-       JOIN packages pkg ON p.package_id = pkg.id
+       LEFT JOIN packages pkg ON p.package_id = pkg.id
        WHERE p.student_id = $1
-       ORDER BY p.created_at DESC LIMIT 10`,
+       ORDER BY p.timestamp DESC LIMIT 10`,
       [studentId]
     )).rows;
-    return makeResponse('list', `Last ${rows.length} payment(s).`, ['Record payment', 'Check credits'], { payments: rows });
+    if (!rows.length) return makeResponse('text', 'No payments recorded for this student yet.', ['Check credits']);
+    const when = (t) => new Date(t).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', timeZone: 'Asia/Kolkata' });
+    const payments = rows.map(r => ({
+      name: r.package || 'Payment',
+      secondary: [`₹${r.amount}`, r.method, when(r.timestamp)].filter(Boolean).join(' · '),
+    }));
+    return makeResponse('list', `Last ${rows.length} payment${rows.length === 1 ? '' : 's'}.`, ['Check credits'], { payments });
   },
 
   'fee.query': async ({ params }) => {
     const { instrument } = params;
     const rows = (await pool.query(
-      `SELECT pkg.name, pkg.classes_count, pkg.price, pkg.payment_frequency
+      `SELECT pkg.name, pkg.classes_count, pkg.price::float AS price
        FROM packages pkg
        JOIN instruments i ON pkg.instrument_id = i.id
        WHERE i.name ILIKE $1
-       ORDER BY pkg.payment_frequency, pkg.price`,
+       ORDER BY pkg.classes_count, pkg.price`,
       [`%${instrument}%`]
     )).rows;
     if (!rows.length) return makeResponse('text', `No packages found for "${instrument}".`, ['List all instruments']);
-    const lines = rows.map(r => `${r.name}: ₹${r.price} for ${r.classes_count} classes (${r.payment_frequency})`).join('; ');
-    return makeResponse('card', lines, ['Enroll now', 'Compare packages'], { packages: rows });
+    const lines = rows.map(r => `${r.name}: ₹${r.price} for ${r.classes_count} classes`).join('; ');
+    return makeResponse('card', lines, ['Enroll now'], { packages: rows });
   },
 
   // Covers every class of the instrument on that date; shares code with the
@@ -360,15 +375,6 @@ const skills = {
     values.push(student_id);
     await pool.query(`UPDATE students SET ${updates.join(', ')} WHERE id = $${idx}`, values);
     return makeResponse('text', 'Student details updated.', ['View profile']);
-  },
-
-  'batch.move': async ({ params }) => {
-    const { enrollment_id, from_batch_id, to_batch_id } = params;
-    await pool.query(
-      `UPDATE enrollment_batches SET batch_id = $1 WHERE enrollment_id = $2 AND batch_id = $3`,
-      [to_batch_id, enrollment_id, from_batch_id]
-    );
-    return makeResponse('text', 'Student moved to new batch.', ['View new batch roster']);
   },
 
   'payout.record': async ({ params }) => {
@@ -1826,6 +1832,7 @@ const TOOL_DEFINITIONS = [
   T('chart.turnover', 'Grouped bar chart of student turnover. group_by=month compares this vs last month; group_by=stream breaks down by instrument; group_by=teacher breaks down by teacher', { group_by: S('month | stream | teacher'), period: S('this_month | last_month'), chart_type: S('bar | line') }),
   // Actions
   T('attendance.mark_batch',
+    'Use ONLY when the message already says who is present/absent ("mark all present except John"); otherwise call attendance.rollcall so the user can review names first. ' +
     'Mark attendance for ALL students of an instrument on a date (every class of that instrument that day). ' +
     'Set default_status (usually present) then list exceptions by name to mark them the opposite. ' +
     '"Mark all present except John and Mary" → default_status=present, exceptions=["John","Mary"].',
@@ -1840,13 +1847,15 @@ const TOOL_DEFINITIONS = [
   T('payment.record', 'Record a fee payment from a student', { student_id: S('name or UUID'), package_id: S('UUID'), amount: { type: 'number' }, method: S('cash/UPI/bank') }, ['amount', 'method']),
   T('enroll.student', 'Start new student enrollment', { name: S('student name'), instrument: S('instrument name') }),
   T('student.update', 'Update student contact details', { student_id: S('name or UUID'), phone: S(''), guardian_contact: S(''), email: S('') }),
-  T('batch.move', 'Move student from one batch to another', { enrollment_id: S('UUID'), from_batch_id: S('UUID'), to_batch_id: S('UUID') }, ['enrollment_id', 'from_batch_id', 'to_batch_id']),
+  ...[...BATCH_TOOLS, ...ATTENDANCE_TOOLS].map(([name, desc, props, req]) =>
+    T(name, desc, Object.fromEntries(Object.entries(props).map(([k, d]) => [k, typeof d !== 'string' ? d : (k === 'capacity' || k === 'days') ? I(d) : S(d)])), req)),
   T('payout.record', 'Record teacher salary payout', { teacher_id: S('name or UUID'), amount: { type: 'number' }, method: S(''), period_start: S('YYYY-MM-DD'), period_end: S('YYYY-MM-DD') }, ['amount', 'method', 'period_start', 'period_end']),
   T('notify.parent', 'Send absence notification to student guardian', { student_id: S('name or UUID'), session_date: S('YYYY-MM-DD'), batch_name: S('') }, ['session_date', 'batch_name']),
   T('notify.batch', 'Get WhatsApp group link for a batch', { batch_id: S('UUID') }),
 ];
 
-const ACTION_SKILLS = new Set(['attendance.mark', 'attendance.mark_batch', 'payment.record', 'enroll.student', 'student.update', 'batch.move', 'payout.record']);
-const LOOKUP_SKILLS = new Set(['school.locations', 'student.lookup', 'student.credits', 'student.profile', 'student.list', 'teacher.list', 'teacher.profile', 'teacher.students', 'teacher.payout', 'batch.roster', 'batch.schedule', 'payment.status', 'fee.query', 'stats.students', 'stats.unpaid', 'stats.attendance', 'report.lowcredits', 'reminder.payment', 'chart.attendance', 'chart.students', 'chart.revenue', 'prospect.summary', 'prospect.list', 'prospect.aging', 'prospect.followup', 'chart.prospects', 'finance.summary', 'finance.revenue', 'finance.expenses', 'finance.pnl', 'finance.payouts', 'chart.finance', 'stats.turnover', 'stats.turnover_by_stream', 'stats.turnover_by_teacher', 'chart.turnover']);
+// ACTION_SKILLS results are never cached; roll-calls and histories change as attendance is saved.
+const ACTION_SKILLS = new Set(['attendance.rollcall', 'attendance.student_history', 'attendance.mark', 'attendance.mark_batch', 'payment.record', 'enroll.student', 'student.update', 'batch.move', 'batch.create', 'batch.update', 'payout.record']);
+const LOOKUP_SKILLS = new Set(['school.locations', 'student.lookup', 'student.credits', 'student.profile', 'student.list', 'teacher.list', 'teacher.profile', 'teacher.students', 'teacher.payout', 'batch.roster', 'batch.find', 'student.batches','batch.schedule', 'payment.status', 'fee.query', 'stats.students', 'stats.unpaid', 'stats.attendance', 'report.lowcredits', 'reminder.payment', 'chart.attendance', 'chart.students', 'chart.revenue', 'prospect.summary', 'prospect.list', 'prospect.aging', 'prospect.followup', 'chart.prospects', 'finance.summary', 'finance.revenue', 'finance.expenses', 'finance.pnl', 'finance.payouts', 'chart.finance', 'stats.turnover', 'stats.turnover_by_stream', 'stats.turnover_by_teacher', 'chart.turnover']);
 
 module.exports = { skills, TOOL_DEFINITIONS, ACTION_SKILLS, LOOKUP_SKILLS };

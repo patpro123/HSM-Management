@@ -3,7 +3,8 @@ const router = express.Router();
 const pool = require('../db');
 const { authenticateJWT } = require('../auth/jwtMiddleware');
 const { authorizeRole } = require('../auth/rbacMiddleware');
-const { assignReceiptNumber } = require('../services/receiptService');
+const { recordPayment } = require('../services/paymentService');
+const { ServiceError } = require('../services/serviceError');
 
 // GET /api/payments - List all payments
 router.get('/', async (req, res) => {
@@ -160,107 +161,16 @@ router.get('/status/:studentId', async (req, res) => {
 
 // POST /api/payments - Record a new payment
 router.post('/', authenticateJWT, authorizeRole(['admin']), async (req, res) => {
-  const { student_id, batch_id, amount, payment_method, payment_for, notes, class_credits, payment_frequency, payment_date, package_id, location } = req.body;
-
-  if (!student_id || !amount) {
-    return res.status(400).json({ error: 'Student and amount are required' });
-  }
-
-  const creditsToAdd = class_credits ? parseInt(class_credits) : 0;
-  let targetBatchId = batch_id;
-
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-
-    // 1. Insert Payment Record
-    const metadata = {
-      payment_for,
-      notes,
-      payment_frequency,
-      credits_bought: creditsToAdd,
-      ...(location ? { location } : {}),
-    };
-
-    // Auto-detect batch if not provided and we have credits to add
-    if (creditsToAdd !== 0 && !targetBatchId) {
-      const batchRes = await client.query(`
-        SELECT eb.batch_id 
-        FROM enrollment_batches eb
-        JOIN enrollments e ON eb.enrollment_id = e.id
-        WHERE e.student_id = $1 AND e.status = 'active'
-      `, [student_id]);
-      
-      if (batchRes.rows.length === 1) {
-        targetBatchId = batchRes.rows[0].batch_id;
-        console.log(`[Payment] Auto-detected batch ${targetBatchId} for student ${student_id}`);
-      }
-    }
-
-    // Record which batch this payment was for, so receipts can show instrument + teacher later
-    if (targetBatchId) {
-      metadata.batch_id = targetBatchId;
-    }
-
-    // package_id may be a fee_structures.id (from the modern packages endpoint) rather than
-    // a packages.id. The payments FK only references packages, so we must verify before inserting.
-    let resolvedPackageId = null;
-    if (package_id) {
-      const pkgCheck = await client.query('SELECT id FROM packages WHERE id = $1', [package_id]);
-      if (pkgCheck.rows.length > 0) {
-        resolvedPackageId = package_id;
-      } else {
-        // It came from fee_structures — store the reference in metadata so it isn't lost
-        metadata.fee_structure_id = package_id;
-      }
-    }
-
-    const paymentRes = await client.query(
-      `INSERT INTO payments (student_id, package_id, amount, method, metadata, timestamp, recorded_by)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
-       RETURNING *`,
-      [student_id, resolvedPackageId, amount, payment_method, JSON.stringify(metadata), payment_date || new Date(), req.user?.id || null]
-    );
-
-    // Auto-assign a financial-year-scoped receipt number right away
-    const receiptNumber = await assignReceiptNumber(client, paymentRes.rows[0].id, paymentRes.rows[0].timestamp);
-
-    // 2. Update Student Credits (add purchased credits to total)
-    if (creditsToAdd !== 0) {
-      await client.query(
-        `UPDATE students 
-         SET metadata = jsonb_set(
-           COALESCE(metadata, '{}'::jsonb), 
-           '{total_credits}', 
-           (COALESCE((metadata->>'total_credits')::int, 0) + $1)::text::jsonb
-         )
-         WHERE id = $2`,
-        [creditsToAdd, student_id]
-      );
-    }
-
-    // 3. Update Batch Credits (if batch_id is provided)
-    if (creditsToAdd !== 0 && targetBatchId) {
-      const updateRes = await client.query(
-        `UPDATE enrollment_batches eb
-         SET classes_remaining = COALESCE(eb.classes_remaining, 0) + $1
-         FROM enrollments e
-         WHERE eb.enrollment_id = e.id AND e.student_id = $2 AND eb.batch_id = $3
-         RETURNING eb.classes_remaining`,
-        [creditsToAdd, student_id, targetBatchId]
-      );
-      console.log(`[Payment] Updated batch ${targetBatchId} credits. New balance:`, updateRes.rows[0]?.classes_remaining);
-    }
-
+    const { payment } = await recordPayment(client, req.body, req.user?.id);
     await client.query('COMMIT');
-    res.status(201).json({
-      payment: { ...paymentRes.rows[0], receipt_number: receiptNumber, recorded_by: req.user?.id || null },
-      message: 'Payment recorded successfully'
-    });
-
+    res.status(201).json({ payment, message: 'Payment recorded successfully' });
   } catch (err) {
     await client.query('ROLLBACK');
-    console.error('[Payment] Error recording payment for student', student_id, ':', err.message, err.detail || '');
+    if (err instanceof ServiceError) return res.status(err.status).json({ error: err.message });
+    console.error('[Payment] Error recording payment for student', req.body?.student_id, ':', err.message, err.detail || '');
     res.status(500).json({ error: err.message || 'Failed to record payment' });
   } finally {
     client.release();

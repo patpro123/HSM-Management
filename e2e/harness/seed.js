@@ -74,6 +74,12 @@ async function seed() {
      VALUES ($1, $2, $3, '18:00', '19:00', 8) RETURNING id`,
     [instr.Guitar, anita, `${yDow} 18:00-19:00, ${dow} 18:00-19:00`])).rows[0].id;
 
+  // A second, empty Keyboard class so a student can be moved between classes.
+  const keyboardBatch2 = (await query(
+    `INSERT INTO batches (instrument_id, teacher_id, recurrence, start_time, end_time, capacity)
+     VALUES ($1, $2, $3, '19:00', '20:00', 8) RETURNING id`,
+    [instr.Keyboard, anita, `${dow} 19:00-20:00`])).rows[0].id;
+
   // name, instrument, batch, package, classes remaining
   const roster = [
     ['Priya Singh', 'Keyboard', keyboardBatch, keyboardPkg, 10],
@@ -98,7 +104,7 @@ async function seed() {
     }
   }
 
-  return { today: todayIST(), yesterday: yesterdayIST(), dow, students, batches: { keyboardBatch, guitarBatch } };
+  return { today: todayIST(), yesterday: yesterdayIST(), dow, students, batches: { keyboardBatch, keyboardBatch2, guitarBatch }, packages: { keyboardPkg, guitarPkg } };
 }
 
 module.exports = { seed, ID, todayIST, yesterdayIST };

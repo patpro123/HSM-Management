@@ -1,16 +1,24 @@
-import { useState } from 'react';
+import { ReactNode, useEffect, useState } from 'react';
 import { QuickReplyChip } from './chatTypes';
 
 interface QuickReplyChipsProps {
   chips: QuickReplyChip[];
   onSelect: (chip: QuickReplyChip) => void;
   disabled?: boolean;
+  /** Always shown first in the row, e.g. the area pill */
+  leading?: ReactNode;
 }
 
-export function QuickReplyChips({ chips, onSelect, disabled }: QuickReplyChipsProps) {
+// A scrollable row; the bot may offer up to a handful of options (batches, days, students).
+const MAX_CHIPS = 8;
+
+export function QuickReplyChips({ chips, onSelect, disabled, leading }: QuickReplyChipsProps) {
   const [usedIndex, setUsedIndex] = useState<number | null>(null);
 
-  if (!chips.length) return null;
+  // A new set of chips starts fresh; without this the previous tap would hide every later chip.
+  useEffect(() => { setUsedIndex(null); }, [chips]);
+
+  if (!chips.length && !leading) return null;
 
   const handleSelect = (chip: QuickReplyChip, index: number) => {
     if (disabled || usedIndex !== null) return;
@@ -27,15 +35,21 @@ export function QuickReplyChips({ chips, onSelect, disabled }: QuickReplyChipsPr
         overflowX: 'auto',
         gap: 8,
         padding: '8px 12px',
+        flexShrink: 0,
+        background: '#fff',
+        // fade the right edge to hint that the row scrolls
+        WebkitMaskImage: 'linear-gradient(to right, #000 calc(100% - 24px), transparent)',
+        maskImage: 'linear-gradient(to right, #000 calc(100% - 24px), transparent)',
       }}
     >
-      {chips.slice(0, 4).map((chip, i) => (
+      {leading}
+      {chips.slice(0, MAX_CHIPS).map((chip, i) => (
         <button
           key={i}
           className={[
             'chat-chip',
             disabled ? 'chat-chip--disabled' : '',
-            usedIndex !== null ? 'chat-chip--used' : '',
+            usedIndex === i ? 'chat-chip--used' : '',
           ].join(' ')}
           onClick={() => handleSelect(chip, i)}
           type="button"

@@ -385,6 +385,31 @@ function buildListResponse({ heading, instrument, date, batches }) {
   );
 }
 
+const firstName = (name) => String(name || '').split(' ')[0];
+const startOf = (slot) => String(slot || '').split('-')[0];
+
+// The interactive roll-call the chat UI renders: one group per class, one row per student.
+// Statuses start as saved (or unmarked); the UI defaults unmarked students to present and
+// posts the result to POST /api/chat/attendance. `attendance_context` keeps typed follow-ups
+// ("Set students X as absent...") working and keeps this card out of the LLM's context.
+function buildRollResponse({ date, batches, user, heading }) {
+  const editable = canMarkAttendanceOn(user.roles || [], date, svc.todayIST());
+  const manyTeachers = new Set(batches.map(b => b.teacher_id)).size > 1;
+  const groups = batches.map(b => ({
+    batch_id: b.batch_id,
+    label: [b.instrument_name, startOf(b.time_slot), manyTeachers ? firstName(b.teacher_name) : null].filter(Boolean).join(' · '),
+    students: b.students.map(s => ({ student_id: s.student_id, name: s.student_name, status: s.status, is_guest: !!s.is_guest })),
+  }));
+  const total = groups.reduce((n, g) => n + g.students.length, 0);
+  const text = `${heading ? heading + ' · ' : ''}${formatDate(date)} · ${total} student${total === 1 ? '' : 's'}${editable ? '' : ' · view only'}`;
+  return makeResponse('attendance_roll', text, [], {
+    date,
+    editable,
+    groups,
+    attendance_context: { date, instrument_id: null, instrument_name: 'All classes', batch_ids: batches.map(b => b.batch_id) },
+  });
+}
+
 // Most recent attendance_context saved in this chat's history, or null
 function findContext(history) {
   for (let i = history.length - 1; i >= 0; i--) {
@@ -454,7 +479,7 @@ async function applyMarks({ user, date, instrument, batches, plan }) {
 
 // ── Command handlers ─────────────────────────────────────────────────────────
 
-async function runList(cmd) {
+async function runList(cmd, user) {
   const date = parseDate(cmd.dateText);
   if (!date) {
     return makeResponse('text', `I couldn't read the date "${cmd.dateText}". Try today, yesterday, 28/10, 28 Oct or 2026-10-28.`, []);
@@ -488,7 +513,7 @@ async function runList(cmd) {
     const what = instrument.id ? `${instrument.name} classes` : 'classes';
     return makeResponse('text', `No ${what} on ${formatDate(date)}${filters.length ? ' ' + filters.join(' ') : ''}.`, []);
   }
-  return buildListResponse({ instrument, date, batches });
+  return buildRollResponse({ date, batches, user, heading: instrument.id ? instrument.name : null });
 }
 
 async function runMark(cmd, user, history) {
@@ -519,7 +544,7 @@ async function tryAttendanceCommand({ message, user, history }) {
 
   const list = parseListCommand(message);
   if (list) {
-    const listResponse = await runList(list);
+    const listResponse = await runList(list, user);
     if (listResponse) return listResponse;
   }
 
@@ -575,4 +600,8 @@ module.exports = {
   matchNames,
   planChanges,
   findContext,
+  buildRollResponse,
+  resolveInstrument,
+  norm,
+  formatDate,
 };

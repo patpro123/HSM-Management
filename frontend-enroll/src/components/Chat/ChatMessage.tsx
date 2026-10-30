@@ -4,12 +4,24 @@ import { MessageCard } from './MessageCard';
 import { MessageChart } from './MessageChart';
 import { MessageConfirm } from './MessageConfirm';
 import { AttendancePicker } from './AttendancePicker';
+import { AttendanceSummary } from './AttendanceSummary';
 import { CleffAvatar } from './CleffAvatar';
 
 interface ChatMessageProps {
   message: ChatMessageUnion;
   onChipSelect?: (value: string) => void;
   onAttendanceSave?: (result: AttendancePickerResult) => void;
+  /** Opens the full-height attendance layer for a roll-call / history message */
+  onOpenWork?: (messageId: string) => void;
+  /** Phone layout: no avatar or per-message time, so bubbles get the full width */
+  compact?: boolean;
+}
+
+type AttendanceStatusValue = 'present' | 'absent' | 'excused' | null;
+function tallyStatuses(statuses: AttendanceStatusValue[]) {
+  const t = { present: 0, absent: 0, excused: 0 };
+  statuses.forEach(s => { if (s) t[s]++; });
+  return t;
 }
 
 function toWhatsAppText(message: ChatMessageUnion): string | null {
@@ -49,7 +61,7 @@ function toWhatsAppText(message: ChatMessageUnion): string | null {
   }
 }
 
-export function ChatMessage({ message, onChipSelect, onAttendanceSave }: ChatMessageProps) {
+export function ChatMessage({ message, onChipSelect, onAttendanceSave, onOpenWork, compact }: ChatMessageProps) {
   const ref = useRef<HTMLDivElement>(null);
   const isUser = message.sender === 'user';
   const [copied, setCopied] = useState(false);
@@ -73,8 +85,11 @@ export function ChatMessage({ message, onChipSelect, onAttendanceSave }: ChatMes
     });
   }, [message]);
 
+  // The WhatsApp copy chip is for lists, cards and charts; on a phone it would only add a row
+  // under every short text reply.
   const copyable = !isUser && toWhatsAppText(message) !== null &&
-    !['confirm', 'attendance-picker'].includes(message.type);
+    !['confirm', 'attendance-picker'].includes(message.type) &&
+    !(compact && message.type === 'text');
 
   const timestamp = new Date(message.timestamp).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
 
@@ -165,6 +180,27 @@ export function ChatMessage({ message, onChipSelect, onAttendanceSave }: ChatMes
           />
         );
 
+      case 'attendance_roll': {
+        const t = tallyStatuses((message.groups ?? []).flatMap(g => (g.students ?? []).map(s => s.status)));
+        return (
+          <AttendanceSummary
+            title={message.title} editable={message.editable} {...t}
+            onOpen={() => onOpenWork?.(message.id)}
+          />
+        );
+      }
+
+      case 'attendance_history': {
+        const rows = message.rows ?? [];
+        const t = tallyStatuses(rows.map(r => r.status));
+        return (
+          <AttendanceSummary
+            title={message.title} editable={rows.some(r => r.editable)} {...t}
+            onOpen={() => onOpenWork?.(message.id)}
+          />
+        );
+      }
+
       case 'attendance-picker':
         return (
           <AttendancePicker
@@ -206,18 +242,19 @@ export function ChatMessage({ message, onChipSelect, onAttendanceSave }: ChatMes
     }
   };
 
-  const isStructured = ['list', 'card', 'chart'].includes(message.type);
+  const isStructured = ['list', 'card', 'chart', 'attendance_roll', 'attendance_history'].includes(message.type);
 
   return (
     <div
       ref={ref}
-      style={{ display: 'flex', flexDirection: 'column', alignItems: isUser ? 'flex-end' : 'flex-start' }}
+      data-msg-id={message.id}
+      style={{ display: 'flex', flexDirection: 'column', alignItems: isUser ? 'flex-end' : 'flex-start', marginBottom: compact && copyable ? 20 : 0 }}
     >
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, width: isStructured && !isUser ? '100%' : undefined }}>
-        {/* Cleff avatar for bot messages */}
-        {!isUser && <div style={{ flexShrink: 0, marginTop: 2 }}><CleffAvatar size={28} /></div>}
+        {/* Cleff avatar for bot messages (the phone header already shows Cleff) */}
+        {!isUser && !compact && <div style={{ flexShrink: 0, marginTop: 2 }}><CleffAvatar size={28} /></div>}
 
-        <div style={{ position: 'relative', flex: isStructured ? 1 : undefined, maxWidth: isUser ? '80%' : isStructured ? undefined : '85%' }}>
+        <div style={{ position: 'relative', flex: isStructured ? 1 : undefined, maxWidth: isUser ? '80%' : isStructured ? undefined : compact ? '94%' : '85%' }}>
           {renderContent()}
           {copyable && (
             <button
@@ -249,9 +286,11 @@ export function ChatMessage({ message, onChipSelect, onAttendanceSave }: ChatMes
           )}
         </div>
       </div>
-      <span style={{ fontSize: 10, color: '#999', marginTop: copyable && !isUser ? 28 : 4, marginLeft: isUser ? 0 : 36 }}>
-        {timestamp}
-      </span>
+      {!compact && (
+        <span style={{ fontSize: 10, color: '#999', marginTop: copyable && !isUser ? 28 : 4, marginLeft: isUser ? 0 : 36 }}>
+          {timestamp}
+        </span>
+      )}
     </div>
   );
 }
