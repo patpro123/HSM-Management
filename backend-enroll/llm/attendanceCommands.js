@@ -389,7 +389,7 @@ const firstName = (name) => String(name || '').split(' ')[0];
 const startOf = (slot) => String(slot || '').split('-')[0];
 
 // The interactive roll-call the chat UI renders: one group per class, one row per student.
-// Statuses start as saved (or unmarked); the UI defaults unmarked students to present and
+// Statuses start as saved (or unmarked); the UI defaults unmarked students to absent and
 // posts the result to POST /api/chat/attendance. `attendance_context` keeps typed follow-ups
 // ("Set students X as absent...") working and keeps this card out of the LLM's context.
 function buildRollResponse({ date, batches, user, heading }) {

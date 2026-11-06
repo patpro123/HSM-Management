@@ -16,8 +16,8 @@ export interface AttendanceSaveResult {
   excused: number;
 }
 
-// Tap order: Present -> Absent -> Excused -> Present
-const NEXT: Record<AttendanceStatus, AttendanceStatus> = { present: 'absent', absent: 'excused', excused: 'present' };
+// Tap order: Absent -> Present -> Excused -> Absent (unmarked students start as Absent)
+const NEXT: Record<AttendanceStatus, AttendanceStatus> = { absent: 'present', present: 'excused', excused: 'absent' };
 export const nextStatus = (s: AttendanceStatus | null): AttendanceStatus => (s ? NEXT[s] : 'present');
 
 const LOOK: Record<AttendanceStatus, { label: string; bg: string; fg: string }> = {
