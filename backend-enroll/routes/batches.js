@@ -5,6 +5,7 @@ const rbac = require('../auth/rbacMiddleware');
 const { authenticateJWT } = require('../auth/jwtMiddleware');
 const { moveStudent } = require('../services/batchService');
 const { ServiceError } = require('../services/serviceError');
+const { CLASSES_ATTENDED_BY_DAY } = require('../utils/credits');
 
 // GET /api/batches - fetch all batches with instrument and teacher details
 router.get('/', rbac.filterTeacherData, async (req, res) => {
@@ -105,12 +106,10 @@ router.get('/:batchId/students', async (req, res) => {
         SELECT student_id, SUM(credits) AS credits FROM raw_credits GROUP BY student_id
       ),
       instr_attended AS (
-        SELECT ar.student_id, COUNT(*) AS attended
-        FROM attendance_records ar
-        JOIN batches b ON ar.batch_id = b.id
-        WHERE b.instrument_id = (SELECT instrument_id FROM batch_instrument)
-          AND ar.status = 'present'
-        GROUP BY ar.student_id
+        SELECT d.student_id, SUM(d.classes) AS attended
+        FROM ${CLASSES_ATTENDED_BY_DAY} d
+        WHERE d.instrument_id = (SELECT instrument_id FROM batch_instrument)
+        GROUP BY d.student_id
       )
     `;
 
@@ -205,11 +204,10 @@ router.get('/instrument/:instrumentId/board', authenticateJWT, rbac.authorizeRol
         SELECT student_id, SUM(credits) AS credits FROM raw_credits GROUP BY student_id
       ),
       instr_attended AS (
-        SELECT ar.student_id, COUNT(*) AS attended
-        FROM attendance_records ar
-        JOIN batches b2 ON ar.batch_id = b2.id
-        WHERE b2.instrument_id = $1 AND ar.status = 'present'
-        GROUP BY ar.student_id
+        SELECT d.student_id, SUM(d.classes) AS attended
+        FROM ${CLASSES_ATTENDED_BY_DAY} d
+        WHERE d.instrument_id = $1
+        GROUP BY d.student_id
       )
       SELECT
         b.id AS batch_id,

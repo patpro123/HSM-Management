@@ -4,7 +4,7 @@ const pool = require('../db');
 const { fetchDues, duesItems, fmtDate, money } = require('./dues');
 const { prepareMessage } = require('../services/whatsappMessages');
 const emailService = require('../services/emailService');
-const { computeClassesRemaining } = require('../utils/credits');
+const { computeClassesRemaining, CLASSES_ATTENDED_BY_DAY } = require('../utils/credits');
 const attendanceService = require('../services/attendanceService');
 const attendanceCommands = require('./attendanceCommands');
 const { isOperationsStaff, canMarkAttendanceOn } = require('../auth/actionPermissions');
@@ -166,12 +166,10 @@ const skills = {
          SELECT student_id, SUM(credits) AS credits FROM raw_credits GROUP BY student_id
        ),
        instr_attended AS (
-         SELECT ar.student_id, COUNT(*) AS attended
-         FROM attendance_records ar
-         JOIN batches b ON ar.batch_id = b.id
-         WHERE b.instrument_id = (SELECT instrument_id FROM batch_instrument)
-           AND ar.status = 'present'
-         GROUP BY ar.student_id
+         SELECT d.student_id, SUM(d.classes) AS attended
+         FROM ${CLASSES_ATTENDED_BY_DAY} d
+         WHERE d.instrument_id = (SELECT instrument_id FROM batch_instrument)
+         GROUP BY d.student_id
        )
        SELECT s.id, s.name, s.phone,
          GREATEST(0, COALESCE(ic.credits, 0) - COALESCE(ia.attended, 0)) AS classes_remaining
@@ -541,8 +539,8 @@ const skills = {
          GROUP BY p.student_id
        ),
        student_attended AS (
-         SELECT student_id, COUNT(*) AS total
-         FROM attendance_records WHERE status = 'present'
+         SELECT student_id, SUM(classes) AS total
+         FROM ${CLASSES_ATTENDED_BY_DAY} d
          GROUP BY student_id
        ),
        student_remaining AS (
@@ -669,11 +667,9 @@ const skills = {
          FROM raw_credits GROUP BY student_id, instrument_id
        ),
        instr_attended AS (
-         SELECT ar.student_id, b2.instrument_id, COUNT(*) AS attended
-         FROM attendance_records ar
-         JOIN batches b2 ON ar.batch_id = b2.id
-         WHERE ar.status = 'present'
-         GROUP BY ar.student_id, b2.instrument_id
+         SELECT d.student_id, d.instrument_id, SUM(d.classes) AS attended
+         FROM ${CLASSES_ATTENDED_BY_DAY} d
+         GROUP BY d.student_id, d.instrument_id
        )
        SELECT DISTINCT ON (s.id) s.name, s.phone,
          i.name AS instrument,

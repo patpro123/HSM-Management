@@ -1,6 +1,9 @@
 // Dynamic classes_remaining calculation.
-// Formula: SUM(credits from all payments) - COUNT(present attendances)
+// Formula: SUM(credits from all payments) - classes attended
 // No carryforward — lifetime totals only.
+//
+// A class attended is a present mark, except that a student marked present in two different
+// batches of the same instrument on the same date counts once (see CLASSES_ATTENDED_BY_DAY).
 //
 // Credit sources:
 //  1. Package-based payments  (p.package_id IS NOT NULL)
@@ -12,6 +15,24 @@
 //     → attributed to the student's single actively enrolled instrument, whether or not
 //       they have attended a class yet. With several instruments the split can't be
 //       determined, so they count toward the total only.
+
+// One row per student, instrument and date: how many classes were attended that day. Present
+// marks are counted per batch, and the busiest batch of the day wins, so:
+//   - two regular marks in different batches of one instrument on one date count once;
+//   - a regular mark plus an extra-class mark in the same batch count twice;
+//   - the migrated history (many present rows in one batch on one date) counts in full.
+// Embed as a derived table: `FROM ${CLASSES_ATTENDED_BY_DAY} d`, then SUM(d.classes).
+const CLASSES_ATTENDED_BY_DAY = `(
+  SELECT x.student_id, x.instrument_id, x.session_date, MAX(x.marks) AS classes
+  FROM (
+    SELECT ar.student_id, b.instrument_id, ar.batch_id, ar.session_date, COUNT(*) AS marks
+    FROM attendance_records ar
+    JOIN batches b ON b.id = ar.batch_id
+    WHERE ar.status = 'present'
+    GROUP BY ar.student_id, b.instrument_id, ar.batch_id, ar.session_date
+  ) x
+  GROUP BY x.student_id, x.instrument_id, x.session_date
+)`;
 
 async function computeClassesRemaining(pool, studentId) {
   const [pkgCreditsRes, instrAttrRes, attendedRes, enrolledRes] = await Promise.all([
@@ -56,13 +77,12 @@ async function computeClassesRemaining(pool, studentId) {
       GROUP BY i.id, i.name
     `, [studentId]),
 
-    // 3. Present attendances per instrument
+    // 3. Classes attended per instrument, one per day
     pool.query(`
-      SELECT i.id AS instrument_id, i.name AS instrument, COUNT(*) AS attended
-      FROM attendance_records ar
-      JOIN batches b ON ar.batch_id = b.id
-      JOIN instruments i ON b.instrument_id = i.id
-      WHERE ar.student_id = $1 AND ar.status = 'present'
+      SELECT i.id AS instrument_id, i.name AS instrument, SUM(d.classes) AS attended
+      FROM ${CLASSES_ATTENDED_BY_DAY} d
+      JOIN instruments i ON i.id = d.instrument_id
+      WHERE d.student_id = $1
       GROUP BY i.id, i.name
     `, [studentId]),
 
@@ -139,4 +159,4 @@ async function computeClassesRemaining(pool, studentId) {
   };
 }
 
-module.exports = { computeClassesRemaining };
+module.exports = { computeClassesRemaining, CLASSES_ATTENDED_BY_DAY };
