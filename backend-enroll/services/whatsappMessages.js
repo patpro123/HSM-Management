@@ -55,8 +55,12 @@ async function recipientFor(studentId) {
     `SELECT NULLIF(TRIM(guardian_contact), '') AS guardian, NULLIF(TRIM(phone), '') AS phone FROM students WHERE id = $1`,
     [studentId]
   );
-  const phone = rows[0]?.guardian || rows[0]?.phone || null;
-  return phone && normalizePhone(phone).length >= 10 ? normalizePhone(phone) : null;
+  // A valid number is 10-15 digits; skip malformed ones (e.g. two numbers run together)
+  for (const candidate of [rows[0]?.guardian, rows[0]?.phone]) {
+    const n = candidate ? normalizePhone(candidate) : '';
+    if (n.length >= 10 && n.length <= 15) return n;
+  }
+  return null;
 }
 
 // Compose a message for a student and build what the UI needs to send it. Does not log; the
