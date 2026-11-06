@@ -128,7 +128,7 @@ const App: React.FC = () => {
   const fetchData = async () => {
     try {
       const currentUser = getCurrentUser();
-      const isAdminOrTeacher = currentUser && (currentUser.roles.includes('admin') || currentUser.roles.includes('teacher'));
+      const isAdminOrTeacher = currentUser && ['admin', 'head_of_school', 'teacher'].some(r => currentUser.roles.includes(r));
 
       // For admin/teacher: fetch all data
       // For student/parent: fetch only essential data they have access to
@@ -519,6 +519,12 @@ const App: React.FC = () => {
             </div>
           ) : isHeadOfSchool ? (
             <div className="bg-white rounded-xl p-8 shadow-sm border border-slate-100">
+              {activeTab === 'attendance' && (
+                <AttendanceDashboard
+                  batches={batches}
+                  onRefresh={fetchData}
+                />
+              )}
               {activeTab === 'approvals' && <ApprovalsQueue />}
             </div>
           ) : isTeacherOnly ? (
