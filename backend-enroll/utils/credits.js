@@ -2,14 +2,19 @@
 // Formula: SUM(credits from all payments) - COUNT(present attendances)
 // No carryforward — lifetime totals only.
 //
-// Three credit sources:
+// Credit sources:
 //  1. Package-based payments  (p.package_id IS NOT NULL)
-//  2. Package-less payments with metadata.instrument_id  (migration tool corrections)
-//  3. Package-less payments with no instrument_id  (old payments — unattributed)
-//     → attributed to the single enrolled instrument when unambiguous
+//  2. Package-less payments, attributed to an instrument by the first of:
+//       metadata.instrument_id  (migration tool corrections)
+//       metadata.batch_id       (payment form: the batch the payment was made for)
+//       metadata.fee_structure_id → fee_structures.instrument_id
+//  3. Package-less payments that still have no instrument
+//     → attributed to the student's single actively enrolled instrument, whether or not
+//       they have attended a class yet. With several instruments the split can't be
+//       determined, so they count toward the total only.
 
 async function computeClassesRemaining(pool, studentId) {
-  const [pkgCreditsRes, instrAttrRes, unattributedRes, attendedRes] = await Promise.all([
+  const [pkgCreditsRes, instrAttrRes, attendedRes, enrolledRes] = await Promise.all([
     // 1. Package-based payments grouped by instrument
     pool.query(`
       SELECT i.id AS instrument_id, i.name AS instrument,
@@ -30,32 +35,28 @@ async function computeClassesRemaining(pool, studentId) {
       GROUP BY i.id, i.name
     `, [studentId]),
 
-    // 2. Package-less payments with metadata.instrument_id (migration corrections)
+    // 2. Package-less payments grouped by the instrument they can be traced to.
+    //    instrument_id is NULL for payments that can't be traced (unattributed).
+    //    Ids are compared as text so a malformed metadata value can't fail the query.
     pool.query(`
-      SELECT i.id AS instrument_id, i.name AS instrument,
-        SUM((p.metadata->>'credits_bought')::int) AS credits
-      FROM payments p
-      JOIN instruments i ON i.id = (p.metadata->>'instrument_id')::uuid
-      WHERE p.student_id = $1
-        AND p.package_id IS NULL
-        AND (p.metadata->>'instrument_id') IS NOT NULL
-        AND (p.metadata->>'credits_bought') IS NOT NULL
-        AND (p.metadata->>'credits_bought')::int > 0
+      SELECT i.id AS instrument_id, i.name AS instrument, SUM(r.credits) AS credits
+      FROM (
+        SELECT COALESCE(mi.id, b.instrument_id, f.instrument_id) AS instrument_id,
+               (p.metadata->>'credits_bought')::int AS credits
+        FROM payments p
+        LEFT JOIN instruments mi ON mi.id::text = p.metadata->>'instrument_id'
+        LEFT JOIN batches b ON b.id::text = p.metadata->>'batch_id'
+        LEFT JOIN fee_structures f ON f.id::text = p.metadata->>'fee_structure_id'
+        WHERE p.student_id = $1
+          AND p.package_id IS NULL
+          AND (p.metadata->>'credits_bought') IS NOT NULL
+          AND (p.metadata->>'credits_bought')::int > 0
+      ) r
+      LEFT JOIN instruments i ON i.id = r.instrument_id
       GROUP BY i.id, i.name
     `, [studentId]),
 
-    // 3. Package-less payments with no instrument_id (old unattributed payments)
-    pool.query(`
-      SELECT COALESCE(SUM((p.metadata->>'credits_bought')::int), 0) AS credits
-      FROM payments p
-      WHERE p.student_id = $1
-        AND p.package_id IS NULL
-        AND (p.metadata->>'instrument_id') IS NULL
-        AND (p.metadata->>'credits_bought') IS NOT NULL
-        AND (p.metadata->>'credits_bought')::int > 0
-    `, [studentId]),
-
-    // 4. Present attendances per instrument
+    // 3. Present attendances per instrument
     pool.query(`
       SELECT i.id AS instrument_id, i.name AS instrument, COUNT(*) AS attended
       FROM attendance_records ar
@@ -64,31 +65,59 @@ async function computeClassesRemaining(pool, studentId) {
       WHERE ar.student_id = $1 AND ar.status = 'present'
       GROUP BY i.id, i.name
     `, [studentId]),
+
+    // 4. Instruments the student is actively enrolled in
+    pool.query(`
+      SELECT DISTINCT i.id AS instrument_id, i.name AS instrument
+      FROM enrollments e
+      JOIN enrollment_batches eb ON eb.enrollment_id = e.id
+      JOIN batches b ON b.id = eb.batch_id
+      JOIN instruments i ON i.id = b.instrument_id
+      WHERE e.student_id = $1 AND e.status = 'active'
+    `, [studentId]),
   ]);
 
   // Merge package-based and instrument-attributed credits into one map
   const creditsByInstr = {};
+  let unattributed = 0;
   pkgCreditsRes.rows.forEach(r => {
     creditsByInstr[r.instrument_id] = { name: r.instrument, credits: parseInt(r.credits) || 0 };
   });
   instrAttrRes.rows.forEach(r => {
+    if (!r.instrument_id) {
+      unattributed += parseInt(r.credits) || 0;
+      return;
+    }
     if (!creditsByInstr[r.instrument_id]) {
       creditsByInstr[r.instrument_id] = { name: r.instrument, credits: 0 };
     }
     creditsByInstr[r.instrument_id].credits += parseInt(r.credits) || 0;
   });
 
-  const unattributed = parseInt(unattributedRes.rows[0]?.credits) || 0;
-
   const attendedByInstr = {};
   attendedRes.rows.forEach(r => {
     attendedByInstr[r.instrument_id] = { name: r.instrument, attended: parseInt(r.attended) || 0 };
   });
 
+  // Unattributed credits go to the one instrument the student is involved in, if there is one.
+  // Enrollment counts as involvement, so a new student who hasn't attended yet still gets them.
+  const knownInstr = {};
+  enrolledRes.rows.forEach(r => { knownInstr[r.instrument_id] = r.instrument; });
+  Object.entries(creditsByInstr).forEach(([id, v]) => { knownInstr[id] = v.name; });
+  Object.entries(attendedByInstr).forEach(([id, v]) => { knownInstr[id] = v.name; });
+  const knownIds = Object.keys(knownInstr);
+
+  if (unattributed > 0 && knownIds.length === 1) {
+    const id = knownIds[0];
+    if (!creditsByInstr[id]) creditsByInstr[id] = { name: knownInstr[id], credits: 0 };
+    creditsByInstr[id].credits += unattributed;
+    unattributed = 0;
+  }
+
   const allIds = new Set([...Object.keys(creditsByInstr), ...Object.keys(attendedByInstr)]);
 
   const byInstrument = {};
-  let totalCredits = 0;
+  let totalCredits = unattributed;
   let totalAttended = 0;
 
   allIds.forEach(instrId => {
@@ -103,25 +132,6 @@ async function computeClassesRemaining(pool, studentId) {
     totalAttended += attended;
     byInstrument[name] = Math.max(0, credits - attended);
   });
-
-  // Distribute unattributed credits
-  if (unattributed > 0) {
-    totalCredits += unattributed;
-    const instrNames = Object.keys(byInstrument);
-    const allInstrNames = [...new Set([...instrNames, ...attendedRes.rows.map(r => r.instrument)])];
-
-    if (allInstrNames.length === 1) {
-      // Single instrument — attribute there
-      const name = allInstrNames[0];
-      const instrId = [...allIds].find(id =>
-        (creditsByInstr[id]?.name || attendedByInstr[id]?.name) === name
-      );
-      const existingCredits = instrId ? (creditsByInstr[instrId]?.credits || 0) : 0;
-      const attended = instrId ? (attendedByInstr[instrId]?.attended || 0) : 0;
-      byInstrument[name] = Math.max(0, existingCredits + unattributed - attended);
-    }
-    // Multiple instruments — unattributed goes into total only; can't determine split
-  }
 
   return {
     total: Math.max(0, totalCredits - totalAttended),

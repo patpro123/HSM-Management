@@ -4,6 +4,7 @@ const pool = require('../db');
 const { authenticateJWT } = require('../auth/jwtMiddleware');
 const { authorizeRole } = require('../auth/rbacMiddleware');
 const { recordPayment } = require('../services/paymentService');
+const { computeClassesRemaining } = require('../utils/credits');
 const { ServiceError } = require('../services/serviceError');
 
 // GET /api/payments - List all payments
@@ -50,71 +51,7 @@ router.get('/status/:studentId', async (req, res) => {
     const lastPayment = lastPaymentRes.rows[0] || null;
 
     // 2. Fetch Classes Remaining — computed dynamically: credits_bought - present_attendances
-    const [creditsRes, attendedRes, unattributedRes] = await Promise.all([
-      pool.query(`
-        WITH raw_credits AS (
-          SELECT i.name AS instrument,
-            CASE
-              WHEN (p.metadata->>'credits_bought') IS NOT NULL
-                   AND (p.metadata->>'credits_bought')::int > 0
-                THEN (p.metadata->>'credits_bought')::int
-              WHEN pkg.classes_count IS NOT NULL THEN pkg.classes_count
-              ELSE 0
-            END AS credits
-          FROM payments p
-          JOIN packages pkg ON p.package_id = pkg.id
-          JOIN instruments i ON pkg.instrument_id = i.id
-          WHERE p.student_id = $1
-          UNION ALL
-          SELECT i.name AS instrument,
-            (p.metadata->>'credits_bought')::int AS credits
-          FROM payments p
-          JOIN instruments i ON i.id = (p.metadata->>'instrument_id')::uuid
-          WHERE p.student_id = $1
-            AND p.package_id IS NULL
-            AND (p.metadata->>'instrument_id') IS NOT NULL
-            AND (p.metadata->>'credits_bought') IS NOT NULL
-            AND (p.metadata->>'credits_bought')::int > 0
-        )
-        SELECT instrument, SUM(credits) AS credits
-        FROM raw_credits
-        GROUP BY instrument
-        ORDER BY instrument
-      `, [studentId]),
-      pool.query(`
-        SELECT i.name AS instrument, COUNT(*) AS attended
-        FROM attendance_records ar
-        JOIN batches b ON ar.batch_id = b.id
-        JOIN instruments i ON b.instrument_id = i.id
-        WHERE ar.student_id = $1 AND ar.status = 'present'
-        GROUP BY i.name
-      `, [studentId]),
-      pool.query(`
-        SELECT COALESCE(SUM((p.metadata->>'credits_bought')::int), 0) AS credits
-        FROM payments p
-        WHERE p.student_id = $1
-          AND p.package_id IS NULL
-          AND (p.metadata->>'instrument_id') IS NULL
-          AND (p.metadata->>'credits_bought') IS NOT NULL
-          AND (p.metadata->>'credits_bought')::int > 0
-      `, [studentId]),
-    ]);
-
-    const creditsMap = Object.fromEntries(creditsRes.rows.map(r => [r.instrument, parseInt(r.credits) || 0]));
-    const attendedMap = Object.fromEntries(attendedRes.rows.map(r => [r.instrument, parseInt(r.attended) || 0]));
-    const unattributed = parseInt(unattributedRes.rows[0]?.credits) || 0;
-
-    if (unattributed > 0) {
-      const allNames = [...new Set([...Object.keys(creditsMap), ...Object.keys(attendedMap)])];
-      if (allNames.length === 1) {
-        creditsMap[allNames[0]] = (creditsMap[allNames[0]] || 0) + unattributed;
-      }
-    }
-
-    const allInstrNames = [...new Set([...Object.keys(creditsMap), ...Object.keys(attendedMap)])];
-    const instrumentBreakdown = Object.fromEntries(
-      allInstrNames.map(name => [name, Math.max(0, (creditsMap[name] || 0) - (attendedMap[name] || 0))])
-    );
+    const { byInstrument: instrumentBreakdown } = await computeClassesRemaining(pool, studentId);
     const classesRemaining = Object.values(instrumentBreakdown).reduce((sum, v) => sum + v, 0);
 
     // 3. Calculate Dates
@@ -312,73 +249,7 @@ router.get('/credit-report', async (req, res) => {
       const classesMissed = parseInt(attendanceRes.rows[0]?.missed || 0);
 
       // 3. Classes remaining per instrument — dynamic: credits_bought - present_attendances
-      const [dynCreditsRes, dynAttendedRes, dynUnattributedRes] = await Promise.all([
-        pool.query(
-          `WITH raw_credits AS (
-             SELECT i.name AS instrument,
-               CASE
-                 WHEN (p.metadata->>'credits_bought') IS NOT NULL
-                      AND (p.metadata->>'credits_bought')::int > 0
-                   THEN (p.metadata->>'credits_bought')::int
-                 WHEN pkg.classes_count IS NOT NULL THEN pkg.classes_count
-                 ELSE 0
-               END AS credits
-             FROM payments p
-             JOIN packages pkg ON p.package_id = pkg.id
-             JOIN instruments i ON pkg.instrument_id = i.id
-             WHERE p.student_id = $1
-             UNION ALL
-             SELECT i.name AS instrument,
-               (p.metadata->>'credits_bought')::int AS credits
-             FROM payments p
-             JOIN instruments i ON i.id = (p.metadata->>'instrument_id')::uuid
-             WHERE p.student_id = $1
-               AND p.package_id IS NULL
-               AND (p.metadata->>'instrument_id') IS NOT NULL
-               AND (p.metadata->>'credits_bought') IS NOT NULL
-               AND (p.metadata->>'credits_bought')::int > 0
-           )
-           SELECT instrument, SUM(credits) AS credits
-           FROM raw_credits
-           GROUP BY instrument
-           ORDER BY instrument`,
-          [sid]
-        ),
-        pool.query(
-          `SELECT i.name AS instrument, COUNT(*) AS attended
-           FROM attendance_records ar
-           JOIN batches b ON ar.batch_id = b.id
-           JOIN instruments i ON b.instrument_id = i.id
-           WHERE ar.student_id = $1 AND ar.status = 'present'
-           GROUP BY i.name`,
-          [sid]
-        ),
-        pool.query(
-          `SELECT COALESCE(SUM((p.metadata->>'credits_bought')::int), 0) AS credits
-           FROM payments p
-           WHERE p.student_id = $1
-             AND p.package_id IS NULL
-             AND (p.metadata->>'instrument_id') IS NULL
-             AND (p.metadata->>'credits_bought') IS NOT NULL
-             AND (p.metadata->>'credits_bought')::int > 0`,
-          [sid]
-        ),
-      ]);
-      const dynCreditsMap = Object.fromEntries(dynCreditsRes.rows.map(r => [r.instrument, parseInt(r.credits) || 0]));
-      const dynAttendedMap = Object.fromEntries(dynAttendedRes.rows.map(r => [r.instrument, parseInt(r.attended) || 0]));
-      const dynUnattributed = parseInt(dynUnattributedRes.rows[0]?.credits) || 0;
-
-      if (dynUnattributed > 0) {
-        const allNames = [...new Set([...Object.keys(dynCreditsMap), ...Object.keys(dynAttendedMap)])];
-        if (allNames.length === 1) {
-          dynCreditsMap[allNames[0]] = (dynCreditsMap[allNames[0]] || 0) + dynUnattributed;
-        }
-      }
-
-      const dynAllNames = [...new Set([...Object.keys(dynCreditsMap), ...Object.keys(dynAttendedMap)])];
-      const instrumentCredits = Object.fromEntries(
-        dynAllNames.map(name => [name, Math.max(0, (dynCreditsMap[name] || 0) - (dynAttendedMap[name] || 0))])
-      );
+      const { byInstrument: instrumentCredits } = await computeClassesRemaining(pool, sid);
       const creditsRemaining = Object.values(instrumentCredits).reduce((sum, v) => sum + v, 0);
 
       // 4. Next payment date
