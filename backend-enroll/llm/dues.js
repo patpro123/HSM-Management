@@ -1,4 +1,5 @@
 const pool = require('../db');
+const { CLASSES_ATTENDED_BY_DAY } = require('../utils/credits');
 
 // For each active student and instrument: the last tuition payment, the size of the package it
 // bought (its credits_bought, else the package: Monthly 8, Quarterly 24), and the classes attended
@@ -54,9 +55,9 @@ const DUES_SQL = `
       to_char(lp.timestamp AT TIME ZONE 'Asia/Kolkata', 'YYYY-MM-DD') AS last_paid_on,
       lp.amount AS last_paid_amount,
       -- classes attended since the last payment (all of them when there is no payment on record)
-      (SELECT COUNT(*) FROM attendance_records ar JOIN batches b3 ON b3.id = ar.batch_id
-        WHERE ar.student_id = base.student_id AND b3.instrument_id = base.instrument_id AND ar.status = 'present'
-          AND (lp.timestamp IS NULL OR ar.session_date >= (lp.timestamp AT TIME ZONE 'Asia/Kolkata')::date))::int AS used,
+      (SELECT COALESCE(SUM(d.classes), 0) FROM ${CLASSES_ATTENDED_BY_DAY} d
+        WHERE d.student_id = base.student_id AND d.instrument_id = base.instrument_id
+          AND (lp.timestamp IS NULL OR d.session_date >= (lp.timestamp AT TIME ZONE 'Asia/Kolkata')::date))::int AS used,
       lp.timestamp AS paid_ts
     FROM base
     LEFT JOIN last_pay lp ON lp.student_id = base.student_id AND lp.instrument_id = base.instrument_id
@@ -67,11 +68,11 @@ const DUES_SQL = `
     calc.last_paid_on, calc.last_paid_amount,
     rn.name AS package_name, rn.price AS package_price, rn.classes AS package_classes,
     -- the first class beyond what the last payment covered
-    (SELECT to_char(ar.session_date, 'YYYY-MM-DD')
-       FROM attendance_records ar JOIN batches b4 ON b4.id = ar.batch_id
-       WHERE ar.student_id = calc.student_id AND b4.instrument_id = calc.instrument_id AND ar.status = 'present'
-         AND (calc.paid_ts IS NULL OR ar.session_date >= (calc.paid_ts AT TIME ZONE 'Asia/Kolkata')::date)
-       ORDER BY ar.session_date, ar.id
+    (SELECT to_char(d.session_date, 'YYYY-MM-DD')
+       FROM ${CLASSES_ATTENDED_BY_DAY} d CROSS JOIN LATERAL generate_series(1, d.classes::int) AS n
+       WHERE d.student_id = calc.student_id AND d.instrument_id = calc.instrument_id
+         AND (calc.paid_ts IS NULL OR d.session_date >= (calc.paid_ts AT TIME ZONE 'Asia/Kolkata')::date)
+       ORDER BY d.session_date, n
        OFFSET calc.allowance LIMIT 1) AS overdue_since
   FROM calc
   -- the package they would renew onto: the same kind as the last payment (quarterly or monthly)

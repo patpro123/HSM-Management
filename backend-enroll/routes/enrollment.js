@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../db');
 const rbac = require('../auth/rbacMiddleware');
+const { CLASSES_ATTENDED_BY_DAY } = require('../utils/credits');
 
 // POST /api/enroll - atomic enrollment (student + enrollment + batch assignments + payments)
 router.post('/enroll', async (req, res) => {
@@ -194,8 +195,8 @@ router.get('/enrollments', rbac.filterTeacherData, async (req, res) => {
         GROUP BY p.student_id
       ),
       student_attended AS (
-        SELECT student_id, COUNT(*) AS total
-        FROM attendance_records WHERE status = 'present'
+        SELECT student_id, SUM(classes) AS total
+        FROM ${CLASSES_ATTENDED_BY_DAY} d
         GROUP BY student_id
       )
       SELECT
