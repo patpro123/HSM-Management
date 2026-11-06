@@ -6,6 +6,8 @@ const { authorizeRole } = require('../auth/rbacMiddleware');
 const { recordPayment } = require('../services/paymentService');
 const { computeClassesRemaining } = require('../utils/credits');
 const { ServiceError } = require('../services/serviceError');
+const { fetchDues } = require('../llm/dues');
+const { prepareMessage } = require('../services/whatsappMessages');
 
 // GET /api/payments - List all payments
 router.get('/', async (req, res) => {
@@ -15,6 +17,40 @@ router.get('/', async (req, res) => {
   } catch (err) {
     console.error('Error fetching payments:', err);
     res.status(500).json({ error: 'Failed to fetch payments' });
+  }
+});
+
+// GET /api/payments/dues?max_remaining=5 - Students whose paid classes are used up or nearly so,
+// one row per student (all their low instruments), each with a prepared WhatsApp reminder
+router.get('/dues', authenticateJWT, authorizeRole(['admin', 'head_of_school']), async (req, res) => {
+  const n = parseInt(req.query.max_remaining, 10);
+  const maxRemaining = Number.isFinite(n) ? Math.min(Math.max(n, 0), 24) : 5;
+  try {
+    const rows = await fetchDues({ maxRemaining });
+    const byStudent = new Map();
+    for (const r of rows) {
+      if (!byStudent.has(r.student_id)) byStudent.set(r.student_id, { student_id: r.student_id, name: r.name, dues: [] });
+      byStudent.get(r.student_id).dues.push(r);
+    }
+    const students = await Promise.all([...byStudent.values()].map(async s => {
+      const msg = await prepareMessage({ studentId: s.student_id, studentName: s.name, kind: 'payment_followup', data: { dues: s.dues } });
+      return {
+        student_id: s.student_id,
+        name: s.name,
+        min_remaining: Math.min(...s.dues.map(d => d.classes_remaining)),
+        instruments: s.dues.map(d => ({
+          instrument: d.instrument, allowance: d.allowance, used: d.used,
+          classes_remaining: d.classes_remaining, overdue_classes: d.overdue_classes,
+          last_paid_on: d.last_paid_on, pending_amount: d.pending_amount,
+        })),
+        to: msg.to, text: msg.text, link: msg.link,
+      };
+    }));
+    students.sort((a, b) => a.min_remaining - b.min_remaining || a.name.localeCompare(b.name));
+    res.json({ students, max_remaining: maxRemaining });
+  } catch (err) {
+    console.error('Error fetching dues:', err);
+    res.status(500).json({ error: 'Failed to fetch pending payments' });
   }
 });
 

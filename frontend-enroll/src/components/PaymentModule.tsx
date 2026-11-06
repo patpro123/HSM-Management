@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { apiPost, apiPut, apiGet } from '../api';
 import { Student, PaymentRecord, Batch, Instrument } from '../types';
 import ReceiptPanel from './PaymentReceipt';
+import PendingDues from './PendingDues';
 
 interface Package {
   id: string;
@@ -23,6 +24,7 @@ interface PaymentModuleProps {
 }
 
 const PaymentModule: React.FC<PaymentModuleProps> = ({ students, payments, onRefresh }) => {
+  const [view, setView] = useState<'payments' | 'dues'>('payments');
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingPayment, setEditingPayment] = useState<PaymentRecord | null>(null);
   const [receiptPaymentId, setReceiptPaymentId] = useState<string | null>(null);
@@ -338,8 +340,27 @@ const PaymentModule: React.FC<PaymentModuleProps> = ({ students, payments, onRef
   const totalRevenue = payments.reduce((acc, p) => acc + parseFloat(String(p.amount || '0')), 0);
   const filteredRevenue = filteredPayments.reduce((acc, p) => acc + parseFloat(String(p.amount || '0')), 0);
 
+  const viewTabs = (
+    <div className="flex gap-2">
+      {([['payments', 'Payments'], ['dues', 'Pending Dues']] as const).map(([key, label]) => (
+        <button
+          key={key}
+          onClick={() => setView(key)}
+          className={`px-4 py-2 rounded-lg text-sm font-semibold transition ${view === key ? 'bg-indigo-600 text-white' : 'bg-white border border-slate-300 text-slate-600 hover:bg-slate-50'}`}
+        >
+          {label}
+        </button>
+      ))}
+    </div>
+  );
+
+  if (view === 'dues') {
+    return <div className="space-y-6">{viewTabs}<PendingDues /></div>;
+  }
+
   return (
     <div className="space-y-6">
+      {viewTabs}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="bg-gradient-to-br from-emerald-500 to-teal-600 p-6 rounded-xl text-white shadow-lg">
           <p className="text-sm font-semibold opacity-90">Total Revenue</p>

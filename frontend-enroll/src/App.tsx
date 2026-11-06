@@ -19,6 +19,7 @@ import TeacherManagement from './components/TeacherManagement';
 import UserManagement from './components/UserManagement';
 import EnrollmentForm from './components/EnrollmentForm';
 import PaymentModule from './components/PaymentModule';
+import PendingDues from './components/PendingDues';
 import FinanceModule from './components/FinanceModule';
 import Teacher360View from './components/Teacher360View';
 import Student360View from './components/Student360View';
@@ -38,7 +39,7 @@ import ApprovalsQueue from './components/ApprovalsQueue';
 const App: React.FC = () => {
   const [chatOpen, setChatOpen] = useState(false);
   // Add new profile page states
-  const [activeTab, setActiveTab] = useState<'stats' | 'students' | 'attendance' | 'payments' | 'finance' | 'teachers' | 'homework' | 'batch-manager' | 'users' | 'migration' | 'student-profile' | 'teacher-profile' | 'enrollment' | 'ptm' | 'marketing' | 'materials' | 'approvals'>(
+  const [activeTab, setActiveTab] = useState<'stats' | 'students' | 'attendance' | 'payments' | 'finance' | 'teachers' | 'homework' | 'batch-manager' | 'users' | 'migration' | 'student-profile' | 'teacher-profile' | 'enrollment' | 'ptm' | 'marketing' | 'materials' | 'approvals' | 'dues'>(
     getCurrentUser()?.roles?.includes('admin') ? 'stats' : getCurrentUser()?.roles?.includes('head_of_school') ? 'attendance' : getCurrentUser()?.roles?.includes('teacher') ? 'teacher-profile' : 'student-profile'
   );
   const [students, setStudents] = useState<Student[]>([]);
@@ -287,6 +288,7 @@ const App: React.FC = () => {
     : isHeadOfSchool
       ? [
         { key: 'attendance', label: 'Attendance', icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4' },
+        { key: 'dues', label: 'Pending Dues', icon: 'M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z' },
         { key: 'approvals', label: 'Approvals', icon: 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z' },
       ]
     : isTeacherOnly
@@ -525,6 +527,7 @@ const App: React.FC = () => {
                   onRefresh={fetchData}
                 />
               )}
+              {activeTab === 'dues' && <PendingDues />}
               {activeTab === 'approvals' && <ApprovalsQueue />}
             </div>
           ) : isTeacherOnly ? (
