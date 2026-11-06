@@ -31,7 +31,7 @@ const COLLAPSE_ABOVE = 14;
 const keyOf = (batchId: string, studentId: string) => `${batchId}|${studentId}`;
 
 // Full-height roll-call: strip with totals, scrolling list, sticky Submit. Unmarked students
-// start as Present; only new or changed rows are sent (re-sending "present" would message
+// start as Absent; only new or changed rows are sent (re-sending "present" would message
 // parents again).
 export function AttendanceRoll({ date, editable, groups, onDirtyChange, onSaved }: AttendanceRollProps) {
   const [saved, setSaved] = useState<Record<string, AttendanceStatus | null>>(() => {
@@ -41,12 +41,19 @@ export function AttendanceRoll({ date, editable, groups, onDirtyChange, onSaved 
   });
   const [current, setCurrent] = useState<Record<string, AttendanceStatus | null>>(() => {
     const map: Record<string, AttendanceStatus | null> = {};
-    groups.forEach(g => g.students.forEach(s => { map[keyOf(g.batch_id, s.student_id)] = s.status ?? (editable ? 'present' : null); }));
+    groups.forEach(g => g.students.forEach(s => { map[keyOf(g.batch_id, s.student_id)] = s.status ?? (editable ? 'absent' : null); }));
     return map;
   });
   // What the screen showed when it opened (defaults included): leaving is only "unsaved" if the
   // user changed something from here
   const initial = useRef(current);
+  // Read-first: a roll that already has saved records opens read-only; Edit unlocks it. A fresh
+  // roll (nothing saved yet) opens ready to mark.
+  const hasSaved = useMemo(() => groups.some(g => g.students.some(s => s.status)), [groups]);
+  const [editing, setEditing] = useState(editable && !hasSaved);
+  const canEdit = editable && editing;
+  // Read mode shows exactly what is stored; edit mode shows the working copy
+  const shown = canEdit ? current : saved;
   const total = groups.reduce((n, g) => n + g.students.length, 0);
   const [open, setOpen] = useState<Record<string, boolean>>(() =>
     Object.fromEntries(groups.map(g => [g.batch_id, total <= COLLAPSE_ABOVE])));
@@ -66,7 +73,7 @@ export function AttendanceRoll({ date, editable, groups, onDirtyChange, onSaved 
 
   const tally = (rows: RollStudent[], batchId: string) => {
     const t = { present: 0, absent: 0, excused: 0 };
-    rows.forEach(s => { const st = current[keyOf(batchId, s.student_id)]; if (st) t[st]++; });
+    rows.forEach(s => { const st = shown[keyOf(batchId, s.student_id)]; if (st) t[st]++; });
     return t;
   };
   const all = groups.reduce((acc, g) => {
@@ -75,10 +82,12 @@ export function AttendanceRoll({ date, editable, groups, onDirtyChange, onSaved 
   }, { present: 0, absent: 0, excused: 0 });
 
   const tap = (batchId: string, studentId: string) => {
-    if (!editable) return;
+    if (!canEdit) return;
     const k = keyOf(batchId, studentId);
     setCurrent(prev => ({ ...prev, [k]: nextStatus(prev[k]) }));
   };
+
+  const cancelEdit = () => { setCurrent(initial.current); setError(null); setEditing(false); };
 
   const allPresent = () => setCurrent(prev => Object.fromEntries(Object.keys(prev).map(k => [k, 'present'])));
 
@@ -91,6 +100,7 @@ export function AttendanceRoll({ date, editable, groups, onDirtyChange, onSaved 
       changed.forEach(c => { next[keyOf(c.batch_id, c.student_id)] = c.status; });
       setSaved(next);
       initial.current = current;
+      setEditing(false);
       const updated = groups.map(g => ({
         ...g,
         students: g.students.map(s => ({ ...s, status: next[keyOf(g.batch_id, s.student_id)] ?? s.status })),
@@ -107,7 +117,7 @@ export function AttendanceRoll({ date, editable, groups, onDirtyChange, onSaved 
     <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
       <div style={stripStyle}>
         <Counts {...all} />
-        {editable && <button type="button" style={smallButtonStyle} onClick={allPresent}>All present</button>}
+        {canEdit && <button type="button" style={smallButtonStyle} onClick={allPresent}>All present</button>}
       </div>
 
       <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', overscrollBehavior: 'contain' }}>
@@ -131,8 +141,8 @@ export function AttendanceRoll({ date, editable, groups, onDirtyChange, onSaved 
                   key={s.student_id}
                   name={s.name}
                   detail={s.is_guest ? '· guest' : undefined}
-                  status={current[keyOf(g.batch_id, s.student_id)]}
-                  disabled={!editable}
+                  status={shown[keyOf(g.batch_id, s.student_id)]}
+                  disabled={!canEdit}
                   onTap={() => tap(g.batch_id, s.student_id)}
                 />
               ))}
@@ -141,8 +151,27 @@ export function AttendanceRoll({ date, editable, groups, onDirtyChange, onSaved 
         })}
       </div>
 
-      {editable
-        ? <SubmitBar changes={changed.length} saving={saving} error={error} onSubmit={submit} />
+      {canEdit
+        ? (
+          <>
+            <SubmitBar changes={changed.length} saving={saving} error={error} onSubmit={submit} />
+            {hasSaved && (
+              <button type="button" onClick={cancelEdit} disabled={saving}
+                style={{ width: '100%', height: 36, border: 'none', background: '#fff', fontSize: 13, fontWeight: 600, color: 'var(--muted, #8a7d65)', paddingBottom: 'env(safe-area-inset-bottom)' }}>
+                Cancel editing
+              </button>
+            )}
+          </>
+        )
+        : editable
+        ? (
+          <div style={{ flexShrink: 0, padding: '8px 12px calc(8px + env(safe-area-inset-bottom))', borderTop: '1px solid var(--border, #e5e0d5)', background: '#fff' }}>
+            <button type="button" onClick={() => setEditing(true)}
+              style={{ width: '100%', height: 46, border: '1px solid var(--accent, #f3c13a)', borderRadius: 10, fontWeight: 700, fontSize: 15, background: '#fffbf0', color: '#1b1307', cursor: 'pointer' }}>
+              Edit attendance
+            </button>
+          </div>
+        )
         : <div style={{ padding: '10px 12px calc(10px + env(safe-area-inset-bottom))', fontSize: 12, color: 'var(--muted, #8a7d65)', borderTop: '1px solid var(--border, #e5e0d5)' }}>
             View only — teachers can mark today's classes.
           </div>}
