@@ -9,7 +9,7 @@
 
 const attendanceService = require('./attendanceService');
 const { moveStudent } = require('./batchService');
-const { recordPayment } = require('./paymentService');
+const { recordPayment, lookupPackage } = require('./paymentService');
 const { ServiceError } = require('./serviceError');
 const { canMarkAttendanceOn, isOperationsStaff } = require('../auth/actionPermissions');
 
@@ -249,7 +249,10 @@ const paymentRecord = {
     const res = await db.query('SELECT name FROM students WHERE id = $1', [params.student_id]);
     if (!res.rows[0]) throw new ServiceError(404, 'Student not found');
 
-    const credits = params.class_credits ? parseInt(params.class_credits) : 0;
+    // A package with no explicit credit count adds that package's classes, as recordPayment will.
+    const given = params.class_credits !== undefined && params.class_credits !== null && params.class_credits !== '';
+    const pkg = given || !UUID_RE.test(String(params.package_id)) ? null : await lookupPackage(db, params.package_id);
+    const credits = given ? parseInt(params.class_credits) || 0 : (pkg?.classes_count || 0);
     const method = params.payment_method || 'unspecified method';
     return {
       params: {

@@ -6,19 +6,64 @@
 const { assignReceiptNumber } = require('./receiptService');
 const { ServiceError } = require('./serviceError');
 
+// What a package id stands for. It may be a packages.id or a fee_structures.id (the modern
+// picker); the payments FK only references packages, so the caller needs to know which.
+async function lookupPackage(db, packageId) {
+  if (!packageId) return null;
+  const pkg = await db.query('SELECT id, classes_count, instrument_id FROM packages WHERE id = $1', [packageId]);
+  if (pkg.rows[0]) return { ...pkg.rows[0], isPackage: true };
+  const fs = await db.query('SELECT id, classes_count, instrument_id FROM fee_structures WHERE id = $1', [packageId]);
+  return fs.rows[0] ? { ...fs.rows[0], isPackage: false } : null;
+}
+
+// The instrument a payment is for, from the most specific hint down to the student's own
+// enrollment. Null when it can't be told, e.g. a student in several instruments paying with
+// no batch and no package.
+async function resolveInstrumentId(client, { student_id, batch_id, instrument_id, pkg }) {
+  if (batch_id) {
+    const b = await client.query('SELECT instrument_id FROM batches WHERE id = $1', [batch_id]);
+    if (b.rows[0]) return b.rows[0].instrument_id;
+  }
+  if (instrument_id) {
+    const i = await client.query('SELECT id FROM instruments WHERE id = $1', [instrument_id]);
+    if (i.rows[0]) return i.rows[0].id;
+  }
+  if (pkg?.instrument_id) return pkg.instrument_id;
+
+  const enrolled = await client.query(`
+    SELECT DISTINCT b.instrument_id
+    FROM enrollments e
+    JOIN enrollment_batches eb ON eb.enrollment_id = e.id
+    JOIN batches b ON b.id = eb.batch_id
+    WHERE e.student_id = $1 AND e.status = 'active'
+  `, [student_id]);
+  return enrolled.rows.length === 1 ? enrolled.rows[0].instrument_id : null;
+}
+
 async function recordPayment(client, body, recordedBy) {
-  const { student_id, batch_id, amount, payment_method, payment_for, notes, class_credits, payment_frequency, payment_date, package_id, location } = body;
+  const { student_id, batch_id, instrument_id, amount, payment_method, payment_for, notes, class_credits, payment_frequency, payment_date, package_id, location } = body;
 
   if (!student_id || !amount) throw new ServiceError(400, 'Student and amount are required');
 
-  const creditsToAdd = class_credits ? parseInt(class_credits) : 0;
+  const pkg = await lookupPackage(client, package_id);
+
+  // Callers that name a package but no credit count (the chat) get the package's own class count.
+  // An explicit count, including 0, is respected.
+  const creditsGiven = class_credits !== undefined && class_credits !== null && class_credits !== '';
+  const creditsToAdd = creditsGiven ? parseInt(class_credits) || 0 : (pkg?.classes_count || 0);
   let targetBatchId = batch_id;
+
+  const resolvedInstrumentId = await resolveInstrumentId(client, { student_id, batch_id, instrument_id, pkg });
+  if (creditsToAdd !== 0 && !resolvedInstrumentId) {
+    throw new ServiceError(400, 'Which instrument is this payment for? Select a batch or a package for it.');
+  }
 
   const metadata = {
     payment_for,
     notes,
     payment_frequency,
     credits_bought: creditsToAdd,
+    ...(resolvedInstrumentId ? { instrument_id: resolvedInstrumentId } : {}),
     ...(location ? { location } : {}),
   };
 
@@ -40,17 +85,12 @@ async function recordPayment(client, body, recordedBy) {
   // Record which batch this payment was for, so receipts can show instrument + teacher later
   if (targetBatchId) metadata.batch_id = targetBatchId;
 
-  // package_id may be a fee_structures.id (from the modern packages endpoint) rather than
-  // a packages.id. The payments FK only references packages, so we must verify before inserting.
+  // The payments FK only references packages. A fee_structures id is kept in metadata instead,
+  // so it isn't lost.
   let resolvedPackageId = null;
   if (package_id) {
-    const pkgCheck = await client.query('SELECT id FROM packages WHERE id = $1', [package_id]);
-    if (pkgCheck.rows.length > 0) {
-      resolvedPackageId = package_id;
-    } else {
-      // It came from fee_structures — store the reference in metadata so it isn't lost
-      metadata.fee_structure_id = package_id;
-    }
+    if (pkg?.isPackage) resolvedPackageId = package_id;
+    else metadata.fee_structure_id = package_id;
   }
 
   const paymentRes = await client.query(
@@ -93,4 +133,4 @@ async function recordPayment(client, body, recordedBy) {
   return { payment: { ...paymentRes.rows[0], receipt_number: receiptNumber, recorded_by: recordedBy || null } };
 }
 
-module.exports = { recordPayment };
+module.exports = { recordPayment, lookupPackage };
