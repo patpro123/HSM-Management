@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { apiGet, apiPost, apiDelete } from '../api';
 import { AttendanceStatus, DailyAttendanceBatch, DailyAttendanceResponse } from '../types';
+import { AbsenceMessageSheet, AbsenceTarget } from './Chat/AbsenceMessageSheet';
 
 interface DailyAttendanceViewProps {
   mode: 'admin' | 'teacher';
@@ -155,6 +156,9 @@ const DailyAttendanceView: React.FC<DailyAttendanceViewProps> = ({ mode, initial
     if (!window.confirm(`Mark ${targets.length} student${targets.length === 1 ? '' : 's'} in ${batch.instrument_name} as ${status}?`)) return;
     saveStatuses(targets.map(s => ({ batch_id: batch.batch_id, student_id: s.student_id, status, previous: s.status, is_guest: s.is_guest })));
   };
+
+  // The absent student whose WhatsApp message is open
+  const [messaging, setMessaging] = useState<AbsenceTarget | null>(null);
 
   const searchLower = search.trim().toLowerCase();
   const matchesSearch = (name: string) => !searchLower || name.toLowerCase().includes(searchLower);
@@ -330,8 +334,13 @@ const DailyAttendanceView: React.FC<DailyAttendanceViewProps> = ({ mode, initial
                             <span className="text-[10px] text-indigo-600">Saving…</span>
                           ) : justSaved.has(key) ? (
                             <span className="text-[10px] text-emerald-600 font-medium">✓ Saved</span>
-                          ) : !s.status && (
+                          ) : !s.status ? (
                             <span className="text-[10px] text-slate-400">Not marked</span>
+                          ) : s.status === 'absent' && (
+                            <button
+                              onClick={() => setMessaging({ studentId: s.student_id, studentName: s.student_name, batchId: batch.batch_id, date })}
+                              className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-2 py-0.5 hover:bg-emerald-100"
+                            >💬 Message family</button>
                           )}
                         </div>
                       </div>
@@ -360,6 +369,8 @@ const DailyAttendanceView: React.FC<DailyAttendanceViewProps> = ({ mode, initial
           ))}
         </div>
       )}
+
+      {messaging && <AbsenceMessageSheet target={messaging} onClose={() => setMessaging(null)} />}
 
       {/* ── Save error (sits above the admin mobile bottom nav so it's seen mid-list) ── */}
       {error && (

@@ -43,6 +43,8 @@ const ACTIONS = {
   // Read-only views; saving goes through POST /api/chat/attendance, which re-checks the rules.
   'attendance.rollcall': read(ATTENDANCE_STAFF),
   'attendance.student_history': read(ATTENDANCE_STAFF),
+  // Only prepares the message; the person sends it themselves from WhatsApp
+  'attendance.absence_message': read(ATTENDANCE_STAFF),
   'student.batches': read(ATTENDANCE_STAFF),
 
   // Operations and academic reads
@@ -92,8 +94,9 @@ const ACTIONS = {
   'batch.move': write(ATTENDANCE_STAFF, { approvers: OPERATIONS_STAFF }),
   'batch.create': write(OPERATIONS_STAFF, { approvers: OPERATIONS_STAFF }),
   'batch.update': write(OPERATIONS_STAFF, { approvers: OPERATIONS_STAFF }),
-  'student.update': write([ADMIN]),
-  'enroll.student': write([ADMIN]),
+  // Admin acts directly; Head of School's changes are always proposals that Admin decides.
+  'student.update': write(OPERATIONS_STAFF),
+  'enroll.student': write(OPERATIONS_STAFF),
   'notify.parent': write([ADMIN]),
   'notify.batch': read(OPERATIONS_STAFF),
   'payment.record': write([ADMIN], { money: true }),

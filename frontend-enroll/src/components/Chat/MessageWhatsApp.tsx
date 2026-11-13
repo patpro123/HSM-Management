@@ -4,7 +4,7 @@ import { WhatsAppMessage } from './chatTypes';
 
 // A composed message waiting to be sent: shows the text and opens WhatsApp with it prefilled.
 // Tapping Send also writes an audit row; the message itself is sent from the user's own WhatsApp.
-export function MessageWhatsApp({ message }: { message: WhatsAppMessage }) {
+export function MessageWhatsApp({ message }: { message: Pick<WhatsAppMessage, 'heading' | 'studentId' | 'kind' | 'to' | 'text' | 'link'> }) {
   const [copied, setCopied] = useState(false);
   const [sent, setSent] = useState(false);
 

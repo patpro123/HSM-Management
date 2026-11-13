@@ -13,6 +13,7 @@ interface MessageListProps {
   onOpenWork?: (messageId: string) => void;
   /** A list row that carries an action runs its skill directly */
   onRunAction?: (label: string, skill: string, params: Record<string, string>) => void;
+  onPatch?: (id: string, patch: Record<string, unknown>) => void;
   compact?: boolean;
   /** Changing this value scrolls to the latest message */
   bottomSignal?: number;
@@ -21,12 +22,12 @@ interface MessageListProps {
 // Within this distance of the bottom counts as "reading the latest message"
 const NEAR_BOTTOM_PX = 80;
 // Replies this tall are read from their top, not their bottom
-const TALL_TYPES = new Set(['list', 'card', 'chart', 'attendance_roll', 'attendance_history']);
+const TALL_TYPES = new Set(['list', 'card', 'chart', 'attendance_roll', 'attendance_history', 'enroll_form']);
 
 const prefersReducedMotion = () =>
   typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 
-export function MessageList({ messages, isTyping, userRole, onChipSelect, onAttendanceSave, onDefaultChipSelect, onOpenWork, onRunAction, compact, bottomSignal }: MessageListProps) {
+export function MessageList({ messages, isTyping, userRole, onChipSelect, onAttendanceSave, onDefaultChipSelect, onOpenWork, onRunAction, onPatch, compact, bottomSignal }: MessageListProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const stickRef = useRef(true);
   const lastIdRef = useRef<string | null>(messages[messages.length - 1]?.id ?? null);
@@ -132,6 +133,7 @@ export function MessageList({ messages, isTyping, userRole, onChipSelect, onAtte
               onAttendanceSave={onAttendanceSave}
               onOpenWork={onOpenWork}
               onRunAction={onRunAction}
+              onPatch={onPatch}
               compact={compact}
             />
           ))

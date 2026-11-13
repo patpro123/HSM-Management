@@ -96,6 +96,32 @@ export interface ConfirmMessage extends BaseMessage {
   actionId: string;
 }
 
+/** What the proposal queue holds about a change waiting for (or past) a decision */
+export interface ProposalSummary {
+  id: string;
+  action_type: string;
+  summary: string;
+  status: 'pending' | 'executed' | 'rejected' | 'cancelled' | 'failed';
+  is_money?: boolean;
+  /** Whether the signed-in user may approve or reject it (the server re-checks on every decision) */
+  can_decide: boolean;
+  error?: string | null;
+}
+
+/** A raised proposal, shown with Approve / Reject for whoever may decide it */
+export interface ProposalMessage extends BaseMessage {
+  type: 'proposal';
+  text: string;
+  proposal: ProposalSummary;
+}
+
+/** Head of School's new-student form; once submitted it holds the proposal it raised */
+export interface EnrollFormMessage extends BaseMessage {
+  type: 'enroll_form';
+  text: string;
+  proposal?: ProposalSummary;
+}
+
 export interface AttendancePickerMessage extends BaseMessage {
   type: 'attendance-picker';
   batchId: string;
@@ -156,6 +182,7 @@ export interface AttendanceHistoryMessage extends BaseMessage {
   type: 'attendance_history';
   title: string;
   studentId: string;
+  studentName?: string;
   rows: Array<{
     batch_id: string; date: string; day: string; label: string;
     status: 'present' | 'absent' | 'excused' | null; editable: boolean;
@@ -169,6 +196,8 @@ export type ChatMessageUnion =
   | CardMessage
   | ListMessage
   | ConfirmMessage
+  | ProposalMessage
+  | EnrollFormMessage
   | AttendancePickerMessage
   | NudgeMessage
   | WhatsAppMessage
@@ -204,7 +233,7 @@ export interface ChatRequest {
 
 export interface BotApiResponse {
   session_id: string;
-  type: 'text' | 'card' | 'list' | 'chart' | 'error' | 'attendance_roll' | 'attendance_history' | 'whatsapp';
+  type: 'text' | 'card' | 'list' | 'chart' | 'error' | 'attendance_roll' | 'attendance_history' | 'whatsapp' | 'proposal' | 'enroll_form';
   text: string;
   suggestions: string[];
   card: Record<string, unknown> | null;

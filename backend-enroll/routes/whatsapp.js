@@ -130,10 +130,15 @@ async function handleWebhookPayload(payload) {
 }
 
 // POST /api/whatsapp/initiated — the user tapped send on a prepared message (audit trail)
-router.post('/initiated', authenticateJWT, authorizeRole(['admin', 'head_of_school']), async (req, res) => {
+// Teachers may log only the absence nudge, the one message they can send.
+router.post('/initiated', authenticateJWT, authorizeRole(['admin', 'head_of_school', 'teacher']), async (req, res) => {
   const { student_id, kind, text, phone } = req.body || {};
   if (typeof text !== 'string' || !text || typeof kind !== 'string' || !(kind in COMPOSERS)) {
     return res.status(400).json({ error: 'kind and text are required' });
+  }
+  const roles = req.user.roles || [];
+  if (kind !== 'absence_nudge' && !roles.includes('admin') && !roles.includes('head_of_school')) {
+    return res.status(403).json({ error: 'Not allowed to send this message' });
   }
   try {
     await logInitiated({

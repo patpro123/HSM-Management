@@ -28,37 +28,50 @@ const LOOK: Record<AttendanceStatus, { label: string; bg: string; fg: string }> 
 
 // One student/class per row. The whole row is the tap target (44px tall, full width); the pill
 // on the right only shows the state.
-export function StatusRow({ name, detail, status, disabled, onTap }: {
-  name: string; detail?: string; status: AttendanceStatus | null; disabled?: boolean; onTap: () => void;
+// `onMessage` adds a WhatsApp button beside the pill; pass it only for a student saved as absent.
+export function StatusRow({ name, detail, status, disabled, onTap, onMessage }: {
+  name: string; detail?: string; status: AttendanceStatus | null; disabled?: boolean; onTap: () => void; onMessage?: () => void;
 }) {
   const look = status ? LOOK[status] : { label: '—', bg: '#eee9dd', fg: '#8a7d65' };
   return (
-    <button
-      type="button"
-      disabled={disabled}
-      onClick={() => {
-        if (typeof navigator !== 'undefined' && 'vibrate' in navigator) navigator.vibrate(8);
-        onTap();
-      }}
-      aria-label={`${name}: ${status ?? 'not marked'}${disabled ? '' : '. Tap to change'}`}
-      style={{
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, width: '100%',
-        minHeight: 44, padding: '0 12px', background: '#fff', border: 'none',
-        borderBottom: '1px solid var(--border, #e5e0d5)', textAlign: 'left',
-        cursor: disabled ? 'default' : 'pointer', WebkitTapHighlightColor: 'rgba(243,193,58,0.25)',
-      }}
-    >
-      <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 15, fontWeight: 600, color: 'var(--text, #1b1307)' }}>
-        {name}
-        {detail && <span style={{ fontWeight: 400, color: 'var(--muted, #8a7d65)' }}> {detail}</span>}
-      </span>
-      <span style={{
-        minWidth: 86, textAlign: 'center', padding: '5px 10px', borderRadius: 14, fontWeight: 700, fontSize: 12,
-        background: look.bg, color: look.fg, flexShrink: 0, opacity: disabled ? 0.7 : 1,
-      }}>
-        {look.label}
-      </span>
-    </button>
+    <div style={{ display: 'flex', alignItems: 'center', background: '#fff', borderBottom: '1px solid var(--border, #e5e0d5)' }}>
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => {
+          if (typeof navigator !== 'undefined' && 'vibrate' in navigator) navigator.vibrate(8);
+          onTap();
+        }}
+        aria-label={`${name}: ${status ?? 'not marked'}${disabled ? '' : '. Tap to change'}`}
+        style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flex: 1, minWidth: 0,
+          minHeight: 44, padding: onMessage ? '0 6px 0 12px' : '0 12px', background: 'transparent', border: 'none', textAlign: 'left',
+          cursor: disabled ? 'default' : 'pointer', WebkitTapHighlightColor: 'rgba(243,193,58,0.25)',
+        }}
+      >
+        <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 15, fontWeight: 600, color: 'var(--text, #1b1307)' }}>
+          {name}
+          {detail && <span style={{ fontWeight: 400, color: 'var(--muted, #8a7d65)' }}> {detail}</span>}
+        </span>
+        <span style={{
+          minWidth: 86, textAlign: 'center', padding: '5px 10px', borderRadius: 14, fontWeight: 700, fontSize: 12,
+          background: look.bg, color: look.fg, flexShrink: 0, opacity: disabled ? 0.7 : 1,
+        }}>
+          {look.label}
+        </span>
+      </button>
+      {onMessage && (
+        <button
+          type="button"
+          onClick={onMessage}
+          aria-label={`Message ${name}'s family on WhatsApp`}
+          style={{
+            flexShrink: 0, width: 44, height: 44, margin: '0 4px 0 0', border: 'none', background: 'transparent',
+            fontSize: 20, cursor: 'pointer', WebkitTapHighlightColor: 'rgba(37,211,102,0.25)',
+          }}
+        >💬</button>
+      )}
+    </div>
   );
 }
 

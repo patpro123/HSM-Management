@@ -12,6 +12,32 @@ const { fmtDate, money } = require('../llm/dues');
 const SIGN_OFF = '- HSM Team';
 const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 'es'}`;
 
+const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+const DAY_CODES = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
+
+// "Tuesday", "Tuesday and Thursday", "Tuesday, Thursday and Saturday"
+const joinList = (items) => items.length > 1 ? `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}` : items[0] || '';
+
+// 'YYYY-MM-DD' -> 'Tue, 11 Nov'
+function longDay(iso) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso || '');
+  if (!m) return '';
+  const d = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3]));
+  return `${WEEKDAYS[d.getUTCDay()].slice(0, 3)}, ${fmtDate(iso).replace(/ \d{4}$/, '')}`;
+}
+
+// Short weekday names (Tue, Thu), Monday first, from recurrence strings like "TUE 17:00-18:00, THU 17:00-18:00"
+function weekdaysFrom(recurrences) {
+  const found = new Set();
+  for (const r of recurrences) {
+    for (const part of String(r || '').split(',')) {
+      const i = DAY_CODES.indexOf(part.trim().split(/\s+/)[0].toUpperCase());
+      if (i >= 0) found.add(i);
+    }
+  }
+  return [...found].sort((a, b) => ((a + 6) % 7) - ((b + 6) % 7)).map(i => WEEKDAYS[i].slice(0, 3));
+}
+
 // One entry per message kind: data in, text out. Add new kinds here.
 const COMPOSERS = {
   // data: { studentName, dues: rows from fetchDues }
@@ -34,6 +60,32 @@ const COMPOSERS = {
       '',
       SIGN_OFF,
     ].join('\n');
+  },
+
+  // data: { date: 'YYYY-MM-DD', classes: [{ instrument, teacher, days: ['Tue', ...] }] }
+  // A warm nudge to attend regularly and catch up in the teacher's other sessions. It says,
+  // without dwelling on it, that no separate compensation class is arranged.
+  absence_nudge({ studentName, date, classes }) {
+    const first = studentName.split(/\s+/)[0];
+    const orList = (days) => days.length > 1 ? `${days.slice(0, -1).join(', ')} or ${days[days.length - 1]}` : days[0];
+    const missed = joinList(classes.map(c => c.instrument));
+    const when = date ? ` on ${longDay(date)}` : '';
+    const withDays = classes.filter(c => c.days.length);
+    const single = classes.length === 1;
+    const catchUp = !withDays.length
+      ? `To catch up, ${first} can join an extra session on any day the teacher is available. Do let us know.`
+      : single
+        ? `To catch up, ${first} can join an extra session${classes[0].teacher ? ` with ${classes[0].teacher}` : ''} on ${orList(classes[0].days)}. Do let us know.`
+        : [`To catch up, ${first} can join extra sessions:`,
+            ...withDays.map(c => `• ${c.instrument}${c.teacher ? ` (${c.teacher})` : ''}: ${orList(c.days)}`),
+            'Do let us know.'].join('\n');
+    return [
+      `Hi! We missed ${first} at ${missed} class${single ? '' : 'es'}${when}. Hope all is well! 🙂`,
+      `Regular attendance helps ${first} progress, so we hope to see them at every class.`,
+      catchUp,
+      "We can't arrange separate compensation classes, so a regular session is the best way to make up.",
+      SIGN_OFF,
+    ].join('\n\n');
   },
 };
 
@@ -71,6 +123,43 @@ async function prepareMessage({ studentId, studentName, kind, data }) {
   return { student_id: studentId, student_name: studentName, kind, to, text, link: waLink(to, text) };
 }
 
+// The nudge for a student marked absent on `date`: one class when `batchId` is given, else every
+// class they were absent from that day. Returns null when they were not marked absent.
+async function prepareAbsenceMessage({ studentId, batchId = null, date }) {
+  // Latest record per batch, as the attendance views show it
+  const { rows } = await pool.query(
+    `SELECT * FROM (
+       SELECT DISTINCT ON (ar.batch_id) ar.status, s.name AS student_name, i.name AS instrument,
+              b.instrument_id, b.teacher_id, t.name AS teacher_name
+         FROM attendance_records ar
+         JOIN students s ON s.id = ar.student_id
+         JOIN batches b ON b.id = ar.batch_id
+         JOIN instruments i ON i.id = b.instrument_id
+         LEFT JOIN teachers t ON t.id = b.teacher_id
+        WHERE ar.student_id = $1 AND ar.session_date = $2 AND ar.is_extra = FALSE
+          AND ($3::uuid IS NULL OR ar.batch_id = $3::uuid)
+        ORDER BY ar.batch_id, ar.finalized_at DESC NULLS LAST
+     ) latest WHERE status = 'absent' ORDER BY instrument`,
+    [studentId, date, batchId]
+  );
+  if (!rows.length) return null;
+
+  // The days the same teacher runs that instrument: where the student can join in to catch up
+  const sessions = await pool.query(
+    `SELECT teacher_id, instrument_id, recurrence FROM batches
+      WHERE is_makeup = FALSE AND teacher_id = ANY($1::uuid[]) AND instrument_id = ANY($2::uuid[])`,
+    [rows.map(r => r.teacher_id).filter(Boolean), rows.map(r => r.instrument_id)]
+  );
+  const classes = rows.map(r => ({
+    instrument: r.instrument,
+    teacher: r.teacher_name || null,
+    days: weekdaysFrom(sessions.rows
+      .filter(x => x.teacher_id === r.teacher_id && x.instrument_id === r.instrument_id)
+      .map(x => x.recurrence)),
+  }));
+  return prepareMessage({ studentId, studentName: rows[0].student_name, kind: 'absence_nudge', data: { date, classes } });
+}
+
 async function logInitiated({ studentId, phone, kind, text, userId }) {
   await pool.query(
     `INSERT INTO whatsapp_messages (direction, phone, template_name, body, status, student_id, metadata)
@@ -79,4 +168,4 @@ async function logInitiated({ studentId, phone, kind, text, userId }) {
   );
 }
 
-module.exports = { composeMessage, waLink, recipientFor, prepareMessage, logInitiated, COMPOSERS };
+module.exports = { composeMessage, waLink, recipientFor, prepareMessage, prepareAbsenceMessage, logInitiated, COMPOSERS };
