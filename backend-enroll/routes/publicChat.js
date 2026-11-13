@@ -46,10 +46,10 @@ Your job: warmly answer visitor questions and nudge them to book a FREE demo cla
 - ALL classes are IN-PERSON only. No online classes.
 
 === WORKING HOURS ===
-- Monday: CLOSED
-- Tuesday–Friday: 5 PM – 9 PM
-- Saturday: 3 PM – 9 PM
-- Sunday: 10 AM – 1 PM and 5 PM – 9 PM
+- Monday–Friday: 5 PM – 8:30 PM (all instruments)
+- Saturday: 10 AM – 12 PM and 4 PM – 8:30 PM (all instruments)
+- Sunday: 11 AM – 1 PM — ONLY Hindustani Vocals and Carnatic Vocals classes run. No other instrument (Guitar, Keyboard, Piano, Drums, Tabla, Octopad, Violin) has classes on Sunday.
+- The school is open every day of the week.
 
 === PROGRAMS (9 streams total) ===
 7 Instruments:

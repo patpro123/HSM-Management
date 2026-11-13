@@ -51,7 +51,7 @@ function definition(now) {
     {
       id: 'attendance', label: 'Attendance', icon: '📋',
       // The tools the LLM sees while this area is active, besides the options' own skills
-      tools: ['attendance.mark_batch', 'attendance.mark'],
+      tools: ['attendance.mark_batch', 'attendance.mark', 'attendance.absence_message'],
       items: [
         run('rollcall', 'Roll-call', 'attendance.rollcall', {
           ask: [
@@ -68,6 +68,9 @@ function definition(now) {
         }),
         run('history', "A student's history", 'attendance.student_history', {
           ask: [student(), choice('range', 'days', 'How far back?', [opt('Last 7 days', '7'), opt('Last 14 days', '14'), opt('Last 30 days', '30')])],
+        }),
+        run('absent_message', 'Message absent students', 'attendance.absence_message', {
+          ask: [choice('day', 'date', 'Which day?', [opt('Today', 'today'), opt('Yesterday', 'yesterday')])],
         }),
         run('summary', 'Summary', 'stats.attendance', {
           ask: [periods('period', [opt('Today', 'today'), opt('This week', 'week'), opt('This month', 'month')])],
@@ -109,6 +112,7 @@ function definition(now) {
         run('profile', 'Profile', 'student.profile', { ask: [student()] }),
         run('credits', 'Classes left', 'student.credits', { ask: [student()] }),
         run('list', 'All active students', 'student.list'),
+        run('enroll', 'Enroll a new student', 'enroll.student'),
         run('count', 'Counts', 'stats.students'),
         run('turnover', 'Turnover', 'stats.turnover'),
         run('turnover_stream', 'Turnover by instrument', 'stats.turnover_by_stream', {

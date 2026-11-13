@@ -22,7 +22,7 @@ describe('tool registry', () => {
 describe('teacher', () => {
   it('is limited to attendance, rosters and schedules on day one', () => {
     expect(names('teacher').sort()).toEqual([
-      'attendance.mark', 'attendance.mark_batch', 'attendance.rollcall', 'attendance.student_history',
+      'attendance.absence_message', 'attendance.mark', 'attendance.mark_batch', 'attendance.rollcall', 'attendance.student_history',
       'batch.find', 'batch.move', 'batch.roster',
       'batch.schedule', 'fee.query', 'school.locations', 'student.batches',
     ]);
@@ -35,11 +35,12 @@ describe('teacher', () => {
 
 describe('head_of_school', () => {
   it.each(['fee.query', 'reminder.payment', 'report.lowcredits', 'stats.unpaid', 'payment.status',
-    'attendance.mark', 'attendance.mark_batch', 'batch.move', 'student.list', 'prospect.summary'])(
+    'attendance.mark', 'attendance.mark_batch', 'batch.move', 'student.list', 'prospect.summary',
+    'student.update', 'enroll.student'])(
     'can use %s', (tool) => expect(canUseTool('head_of_school', tool)).toBe(true));
 
   it.each(['payment.record', 'payout.record', 'finance.summary', 'finance.pnl', 'finance.payouts',
-    'chart.finance', 'report.revenue', 'chart.revenue', 'teacher.payout', 'student.update', 'notify.parent'])(
+    'chart.finance', 'report.revenue', 'chart.revenue', 'teacher.payout', 'notify.parent'])(
     'cannot use %s', (tool) => expect(canUseTool('head_of_school', tool)).toBe(false));
 });
 
@@ -177,5 +178,14 @@ describe('payments: auto-approval and disputes', () => {
   it('does not hand Head of School the direct payment chat tool', () => {
     expect(canUseTool('head_of_school', 'payment.record')).toBe(false);
     expect(canUseTool('head_of_school', 'payment.submit')).toBe(true);
+  });
+});
+describe('student.update and enroll.student', () => {
+  it.each(['student.update', 'enroll.student'])('%s: Head of School proposes, only Admin decides', (tool) => {
+    expect(canPropose('head_of_school', tool)).toBe(true);
+    expect(canPropose('teacher', tool)).toBe(false);
+    expect(canApprove(['admin'], tool)).toBe(true);
+    expect(canApprove(['head_of_school'], tool)).toBe(false);
+    expect(canAutoApprove('head_of_school', tool)).toBe(false);
   });
 });

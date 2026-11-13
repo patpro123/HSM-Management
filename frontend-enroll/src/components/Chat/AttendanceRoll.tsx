@@ -3,6 +3,7 @@ import {
   AttendanceStatus, Counts, StatusRow, SubmitBar, groupHeaderStyle, stripStyle, smallButtonStyle,
   nextStatus, saveAttendanceRecords,
 } from './attendanceUi';
+import { AbsenceMessageSheet, AbsenceTarget } from './AbsenceMessageSheet';
 
 export interface RollStudent {
   student_id: string;
@@ -59,6 +60,7 @@ export function AttendanceRoll({ date, editable, groups, onDirtyChange, onSaved 
     Object.fromEntries(groups.map(g => [g.batch_id, total <= COLLAPSE_ABOVE])));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [messaging, setMessaging] = useState<AbsenceTarget | null>(null);
 
   const changed = useMemo(() => groups.flatMap(g => g.students
     .filter(s => {
@@ -144,6 +146,9 @@ export function AttendanceRoll({ date, editable, groups, onDirtyChange, onSaved 
                   status={shown[keyOf(g.batch_id, s.student_id)]}
                   disabled={!canEdit}
                   onTap={() => tap(g.batch_id, s.student_id)}
+                  onMessage={saved[keyOf(g.batch_id, s.student_id)] === 'absent' && shown[keyOf(g.batch_id, s.student_id)] === 'absent'
+                    ? () => setMessaging({ studentId: s.student_id, studentName: s.name, batchId: g.batch_id, date })
+                    : undefined}
                 />
               ))}
             </div>
@@ -175,6 +180,8 @@ export function AttendanceRoll({ date, editable, groups, onDirtyChange, onSaved 
         : <div style={{ padding: '10px 12px calc(10px + env(safe-area-inset-bottom))', fontSize: 12, color: 'var(--muted, #8a7d65)', borderTop: '1px solid var(--border, #e5e0d5)' }}>
             View only — teachers can mark today's classes.
           </div>}
+
+      {messaging && <AbsenceMessageSheet target={messaging} onClose={() => setMessaging(null)} />}
     </div>
   );
 }

@@ -10,6 +10,7 @@
 const attendanceService = require('./attendanceService');
 const { moveStudent } = require('./batchService');
 const { recordPayment, lookupPackage } = require('./paymentService');
+const { createStudentWithEnrollment } = require('./studentService');
 const { ServiceError } = require('./serviceError');
 const { canMarkAttendanceOn, isOperationsStaff } = require('../auth/actionPermissions');
 
@@ -348,6 +349,94 @@ const paymentDispute = {
   },
 };
 
+const STUDENT_FIELDS = ['phone', 'guardian_contact', 'email'];
+
+const studentUpdate = {
+  async validate(db, proposer, params) {
+    const p = params || {};
+    requireUuids(p, ['student_id']);
+    const changes = {};
+    for (const k of STUDENT_FIELDS) {
+      if (p.changes?.[k] !== undefined && p.changes[k] !== null && String(p.changes[k]).trim() !== '') changes[k] = String(p.changes[k]).trim();
+    }
+    if (!Object.keys(changes).length) throw new ServiceError(400, 'No changes given');
+    if (changes.email && !/^\S+@\S+\.\S+$/.test(changes.email)) throw new ServiceError(400, 'That email address does not look right');
+
+    const res = await db.query(`SELECT name, phone, guardian_contact, metadata->>'email' AS email FROM students WHERE id = $1`, [p.student_id]);
+    const row = res.rows[0];
+    if (!row) throw new ServiceError(404, 'Student not found');
+    const label = { phone: 'phone', guardian_contact: 'guardian contact', email: 'email' };
+    const parts = Object.entries(changes).map(([k, v]) => `${label[k]} ${row[k] || 'none'} -> ${v}`);
+    return { params: { student_id: p.student_id, changes }, summary: `Update ${row.name}: ${parts.join('; ')}` };
+  },
+
+  async execute(client, proposal) {
+    const { student_id, changes } = proposal.params;
+    const sets = [];
+    const values = [student_id];
+    if (changes.phone) { values.push(changes.phone); sets.push(`phone = $${values.length}`); }
+    if (changes.guardian_contact) { values.push(changes.guardian_contact); sets.push(`guardian_contact = $${values.length}`); }
+    if (changes.email) {
+      values.push(changes.email);
+      sets.push(`metadata = jsonb_set(COALESCE(metadata, '{}'::jsonb), '{email}', to_jsonb($${values.length}::text))`);
+    }
+    const res = await client.query(`UPDATE students SET ${sets.join(', ')}, updated_at = NOW() WHERE id = $1 RETURNING id`, values);
+    if (!res.rows[0]) throw new ServiceError(404, 'Student not found');
+    return { student_id };
+  },
+};
+
+const ENROLL_FREQUENCIES = ['monthly', 'quarterly', 'half_yearly', 'yearly', 'trial', 'pbel_4', 'pbel_8'];
+const clean = (v) => (typeof v === 'string' ? v.trim() : '');
+
+// A new student with their class assignments. No payment is taken here: fees are recorded
+// separately, so enrollment carries no money.
+const enrollStudent = {
+  async validate(db, proposer, params) {
+    const p = params || {};
+    const first = clean(p.first_name);
+    const last = clean(p.last_name);
+    if (!first || !last) throw new ServiceError(400, 'First and last name are required');
+    if (p.email && !/^\S+@\S+\.\S+$/.test(clean(p.email))) throw new ServiceError(400, 'That email address does not look right');
+    if (p.dob && !DATE_RE.test(String(p.dob))) throw new ServiceError(400, 'Date of birth must be YYYY-MM-DD');
+    const batches = Array.isArray(p.batches) ? p.batches : [];
+    if (batches.length < 1 || batches.length > 6) throw new ServiceError(400, 'Choose between one and six weekly classes');
+
+    const cleanBatches = batches.map((b) => {
+      requireUuids(b, ['batch_id']);
+      const freq = String(b.payment_frequency || 'monthly').toLowerCase();
+      if (!ENROLL_FREQUENCIES.includes(freq)) throw new ServiceError(400, `payment_frequency must be one of ${ENROLL_FREQUENCIES.join(', ')}`);
+      return { batch_id: b.batch_id, payment_frequency: freq };
+    });
+    if (new Set(cleanBatches.map(b => b.batch_id)).size !== cleanBatches.length) throw new ServiceError(400, 'The same class is listed twice');
+
+    const found = await db.query(
+      `SELECT b.id, b.instrument_id, b.recurrence, i.name AS instrument FROM batches b JOIN instruments i ON i.id = b.instrument_id
+        WHERE b.id = ANY($1)`, [cleanBatches.map(b => b.batch_id)]);
+    if (found.rows.length !== cleanBatches.length) throw new ServiceError(404, 'One or more classes not found');
+    const perInstrument = new Map();
+    for (const r of found.rows) perInstrument.set(r.instrument_id, (perInstrument.get(r.instrument_id) || 0) + 1);
+    if ([...perInstrument.values()].some(n => n > 2)) throw new ServiceError(400, 'A student can be assigned to at most 2 batches per instrument');
+
+    const dup = await db.query(`SELECT 1 FROM students WHERE LOWER(name) = LOWER($1) AND COALESCE(is_active, true) LIMIT 1`, [`${first} ${last}`]);
+    const label = found.rows.map(r => `${r.instrument} ${r.recurrence}`).join('; ');
+    return {
+      params: {
+        first_name: first, last_name: last, email: clean(p.email) || undefined, dob: p.dob || undefined,
+        phone: clean(p.phone) || undefined, guardian_name: clean(p.guardian_name) || undefined,
+        guardian_phone: clean(p.guardian_phone) || undefined, address: clean(p.address) || undefined,
+        batches: cleanBatches,
+      },
+      summary: `Enroll ${first} ${last} in ${label}${dup.rows[0] ? ' (a student with this name already exists)' : ''}`,
+    };
+  },
+
+  async execute(client, proposal) {
+    const { student, enrollment } = await createStudentWithEnrollment(client, proposal.params);
+    return { student_id: student.id, enrollment_id: enrollment.id };
+  },
+};
+
 const EXECUTORS = {
   'attendance.mark_batch': attendanceMarkBatch,
   'batch.move': batchMove,
@@ -356,6 +445,8 @@ const EXECUTORS = {
   'payment.record': paymentRecord,
   'payment.submit': paymentSubmit,
   'payment.dispute': paymentDispute,
+  'student.update': studentUpdate,
+  'enroll.student': enrollStudent,
 };
 
-module.exports = { EXECUTORS };
+module.exports = { EXECUTORS, expectedFee };

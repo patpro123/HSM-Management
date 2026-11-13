@@ -208,6 +208,7 @@ function ChatPanelInner({ userRole, userName, onClose }: ChatPanelProps) {
         onDefaultChipSelect={(value) => sendMessage(value)}
         onOpenWork={(id) => { dirty.current = 0; setWorkId(id); }}
         onRunAction={(label, skill, params) => { void runAction(label, skill, params); }}
+        onPatch={patchMessage}
         compact={isMobile}
         bottomSignal={bottomSignal}
       />
@@ -294,6 +295,7 @@ function ChatPanelInner({ userRole, userName, onClose }: ChatPanelProps) {
         <AttendanceHistory
           key={workMsg.id}
           studentId={workMsg.studentId}
+          studentName={workMsg.studentName}
           rows={workMsg.rows}
           onDirtyChange={(n) => { dirty.current = n; }}
           onSaved={(rows, text) => {

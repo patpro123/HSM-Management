@@ -6,8 +6,13 @@ const { prepareMessage } = require('../services/whatsappMessages');
 const emailService = require('../services/emailService');
 const { computeClassesRemaining, CLASSES_ATTENDED_BY_DAY } = require('../utils/credits');
 const attendanceService = require('../services/attendanceService');
+const proposalService = require('../services/proposalService');
+const { expectedFee } = require('../services/proposalExecutors');
+const { proposalResponse } = require('./proposalCard');
+const { recordPayment } = require('../services/paymentService');
+const { ServiceError } = require('../services/serviceError');
 const attendanceCommands = require('./attendanceCommands');
-const { isOperationsStaff, canMarkAttendanceOn } = require('../auth/actionPermissions');
+const { isOperationsStaff, canMarkAttendanceOn, resolvePersona } = require('../auth/actionPermissions');
 const { batchSkills, BATCH_TOOLS, recurrenceMatches, findBatches, batchChoices, resolveStudent } = require('./batchSkills');
 const { attendanceSkills, ATTENDANCE_TOOLS } = require('./attendanceSkills');
 
@@ -348,35 +353,74 @@ const skills = {
     return makeResponse('text', `Attendance marked: ${status} for ${date}.`, ['Mark another student', 'View roster']);
   },
 
-  'payment.record': async ({ params, userId, userRole }) => {
+  // A payment for exactly the expected fee is recorded at once, with no approval step. Anything
+  // else (a different amount) becomes a payment.submit proposal that Admin decides.
+  'payment.record': async ({ params, user, userId, userRole }) => {
     let { student_id, package_id, amount, method } = params;
     if (!isUUID(student_id)) student_id = await resolveStudentId(params, userId, userRole);
     if (!student_id) return makeResponse('text', 'Which student? Please provide their name.', []);
     if (!package_id || !isUUID(package_id)) return makeResponse('text', 'Which payment package? Please specify the plan (e.g. Monthly Guitar).', []);
-    await pool.query(
-      `INSERT INTO payments (student_id, package_id, amount, method) VALUES ($1, $2, $3, $4)`,
-      [student_id, package_id, amount, method]
-    );
-    return makeResponse('text', `Payment of ₹${amount} recorded via ${method}.`, ['View payment history', 'Update classes']);
+    amount = Number(amount);
+    if (!Number.isFinite(amount) || amount <= 0) return makeResponse('text', 'How much was paid?', []);
+
+    const body = { student_id, package_id, amount, payment_method: method || null };
+    try {
+      const fee = await expectedFee(pool, package_id);
+      if (fee !== null && fee === amount) {
+        const client = await pool.connect();
+        try {
+          await client.query('BEGIN');
+          await recordPayment(client, body, userId);
+          await client.query('COMMIT');
+        } catch (err) {
+          await client.query('ROLLBACK');
+          throw err;
+        } finally {
+          client.release();
+        }
+        return makeResponse('text', `Payment of ₹${amount} recorded${method ? ` via ${method}` : ''}.`, ['View payment history', 'Update classes']);
+      }
+      const { proposal } = await proposalService.create(user, { action_type: 'payment.submit', params: body, source_channel: 'chat' });
+      return proposalResponse(proposal, user, "That doesn't match the expected fee, so it needs Admin approval.");
+    } catch (err) {
+      if (err instanceof ServiceError) return makeResponse('error', err.message, []);
+      throw err;
+    }
   },
 
-  'enroll.student': async ({ params }) => {
-    return makeResponse('text',
-      'Starting enrollment. I will guide you through the student details.',
-      ['Continue enrollment'],
-      { action: 'START_ENROLLMENT_FLOW', prefill: params }
-    );
+  // Admin opens the enrollment form directly. Head of School gets a short form in chat whose
+  // submit raises an enroll.student proposal for Admin to decide.
+  'enroll.student': async ({ params, user }) => {
+    if (resolvePersona(user?.roles) === 'head_of_school') {
+      return makeResponse('enroll_form', 'Fill in the new student. Admin will approve before they are enrolled.', [], { prefill: params });
+    }
+    return makeResponse('text', 'Open the Enrollment tab to enroll a new student.', [], { action: 'START_ENROLLMENT_FLOW', prefill: params });
   },
 
-  'student.update': async ({ params }) => {
-    const { student_id, phone, guardian_contact, email } = params;
+  // Admin's change is saved at once; Head of School's becomes a proposal for Admin.
+  'student.update': async ({ params, user, userId, userRole }) => {
+    const { phone, guardian_contact, email } = params;
+    const changes = Object.fromEntries(Object.entries({ phone, guardian_contact, email }).filter(([, v]) => v));
+    if (!Object.keys(changes).length) return makeResponse('error', 'No fields provided to update.', []);
+    const student_id = isUUID(params.student_id) ? params.student_id : await resolveStudentId(params, userId, userRole);
+    if (!student_id) return makeResponse('text', 'Which student? Please provide their name.', []);
+
+    if (resolvePersona(user?.roles) === 'head_of_school') {
+      try {
+        const { proposal } = await proposalService.create(user, { action_type: 'student.update', params: { student_id, changes }, source_channel: 'chat' });
+        return proposalResponse(proposal, user, 'Raised an approval request.');
+      } catch (err) {
+        if (err instanceof ServiceError) return makeResponse('error', err.message, []);
+        throw err;
+      }
+    }
+
     const updates = [];
     const values = [];
     let idx = 1;
     if (phone) { updates.push(`phone = $${idx++}`); values.push(phone); }
     if (guardian_contact) { updates.push(`guardian_contact = $${idx++}`); values.push(guardian_contact); }
-    if (email) { updates.push(`metadata = jsonb_set(metadata, '{email}', to_jsonb($${idx++}::text))`); values.push(email); }
-    if (!updates.length) return makeResponse('error', 'No fields provided to update.', []);
+    if (email) { updates.push(`metadata = jsonb_set(COALESCE(metadata, '{}'::jsonb), '{email}', to_jsonb($${idx++}::text))`); values.push(email); }
     values.push(student_id);
     await pool.query(`UPDATE students SET ${updates.join(', ')} WHERE id = $${idx}`, values);
     return makeResponse('text', 'Student details updated.', ['View profile']);
@@ -1787,7 +1831,7 @@ const TOOL_DEFINITIONS = [
 ];
 
 // ACTION_SKILLS results are never cached; roll-calls and histories change as attendance is saved.
-const ACTION_SKILLS = new Set(['payment.followup', 'payment.dues_detail', 'attendance.rollcall', 'attendance.student_history', 'attendance.mark', 'attendance.mark_batch', 'payment.record', 'enroll.student', 'student.update', 'batch.move', 'batch.create', 'batch.update', 'payout.record']);
+const ACTION_SKILLS = new Set(['payment.followup', 'payment.dues_detail', 'attendance.rollcall', 'attendance.student_history', 'attendance.absence_message', 'attendance.mark', 'attendance.mark_batch', 'payment.record', 'enroll.student', 'student.update', 'batch.move', 'batch.create', 'batch.update', 'payout.record']);
 const LOOKUP_SKILLS = new Set(['school.locations', 'student.lookup', 'student.credits', 'student.profile', 'student.list', 'teacher.list', 'teacher.profile', 'teacher.students', 'teacher.payout', 'batch.roster', 'batch.find', 'student.batches','batch.schedule', 'payment.status', 'fee.query', 'stats.students', 'stats.unpaid', 'stats.attendance', 'report.lowcredits', 'reminder.payment', 'chart.attendance', 'chart.students', 'chart.revenue', 'prospect.summary', 'prospect.list', 'prospect.aging', 'prospect.followup', 'chart.prospects', 'finance.summary', 'finance.revenue', 'finance.expenses', 'finance.pnl', 'finance.payouts', 'chart.finance', 'stats.turnover', 'stats.turnover_by_stream', 'stats.turnover_by_teacher', 'chart.turnover']);
 
 module.exports = { skills, TOOL_DEFINITIONS, ACTION_SKILLS, LOOKUP_SKILLS };

@@ -11,6 +11,7 @@ const {
   parseDate, parseTime, buildRollResponse, resolveInstrument, norm, formatDate,
 } = require('./attendanceCommands');
 const { resolveStudent } = require('./batchSkills');
+const { prepareAbsenceMessage } = require('../services/whatsappMessages');
 
 const makeResponse = (type, text, suggestions = [], card = null) => ({ type, text, suggestions, card });
 
@@ -35,7 +36,47 @@ async function linkedTeacher(userId) {
   return row || null;
 }
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 const attendanceSkills = {
+  // The WhatsApp nudge for an absent student. With a student it writes the message; without one it
+  // lists who was absent on the date (a teacher sees their own classes) to pick from.
+  'attendance.absence_message': async ({ params, userId, userRole }) => {
+    const today = svc.todayIST();
+    const date = params.date ? parseDate(params.date) : today;
+    if (!date) return makeResponse('text', `I couldn't read the date "${params.date}".`, ['Absent students today']);
+    const batchId = UUID_RE.test(params.batch_id || '') ? params.batch_id : null;
+
+    const named = params.student_id ?? params.student_name;
+    if (named) {
+      const s = await resolveStudent(named, n => `Message ${n}'s family about the absence on ${date}`);
+      if (s.response) return s.response;
+      const msg = await prepareAbsenceMessage({ studentId: s.student.id, batchId, date });
+      if (!msg) return makeResponse('text', `${s.student.name} is not marked absent on ${formatDate(date)}.`, [`Attendance for ${date}`]);
+      const heading = `Absence message for ${s.student.name}`;
+      return makeResponse('whatsapp', msg.to ? heading : `${heading} (no phone number on file; you will pick the contact in WhatsApp)`, [], { whatsapp: msg });
+    }
+
+    let batches = await svc.getAttendanceByDate(pool, date);
+    if (userRole === 'teacher') {
+      const me = await linkedTeacher(userId);
+      if (!me) return makeResponse('text', 'Your account isn\'t linked to a teacher profile yet, so I can\'t tell which classes are yours. Please ask an admin.', []);
+      batches = batches.filter(b => b.teacher_id === me.id);
+    }
+    const items = batches.flatMap(b => b.students.filter(s => s.status === 'absent').map(s => ({
+      name: s.student_name,
+      secondary: [startOf(b.time_slot), b.teacher_name].filter(Boolean).join(' · '),
+      group: b.instrument_name,
+      action: {
+        skill: 'attendance.absence_message',
+        params: { student_id: s.student_id, batch_id: b.batch_id, date },
+        label: `${s.student_name} · ${b.instrument_name} absence message`,
+      },
+    })));
+    if (!items.length) return makeResponse('text', `No one was marked absent on ${formatDate(date)}.`, [`Attendance for ${addDays(date, -1)}`]);
+    return makeResponse('list', `${items.length} absent on ${formatDate(date)}. Tap a student to write the WhatsApp message to their family.`, [], { students: items });
+  },
+
   // Roll-call for a date: every class, an instrument, a time, one teacher's students ("my"
   // or by name). A teacher with no teacher given sees their own classes.
   'attendance.rollcall': async ({ params, user, userId, userRole }) => {
@@ -171,6 +212,10 @@ const ATTENDANCE_TOOLS = [
   ['attendance.student_history',
     'One student\'s attendance across several days (one row per class, editable). Use for "attendance of <student> last week / this month / from X to Y".',
     { student_id: 'student name', days: 'number of days back from today, default 7, max 31', from_date: 'YYYY-MM-DD', to_date: 'YYYY-MM-DD' }, ['student_id']],
+  ['attendance.absence_message',
+    'Write a cordial WhatsApp message to the family of a student who was absent, nudging regular attendance and inviting them to catch up in an extra session. ' +
+    'Give student_id (a name) to write it; with no student it lists who was absent on the date to pick from. Never send it: staff tap send themselves.',
+    { student_id: 'student name (optional)', date: 'YYYY-MM-DD, "today", "yesterday"; default today' }, []],
 ];
 
 module.exports = { attendanceSkills, ATTENDANCE_TOOLS };

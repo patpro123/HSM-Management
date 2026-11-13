@@ -6,6 +6,7 @@
 
 const pool = require('../db');
 const proposalService = require('../services/proposalService');
+const { proposalResponse } = require('./proposalCard');
 const { ServiceError } = require('../services/serviceError');
 
 const makeResponse = (type, text, suggestions = [], card = null) => ({ type, text, suggestions, card });
@@ -123,7 +124,7 @@ async function resolveInstrument(name) {
 async function propose(user, body, doneText) {
   try {
     const { proposal } = await proposalService.create(user, { source_channel: 'chat', ...body });
-    return makeResponse('text', `${doneText}: ${proposal.summary}.`, ['View approvals']);
+    return proposalResponse(proposal, user, `${doneText}.`);
   } catch (err) {
     if (err instanceof ServiceError) return makeResponse('error', err.message, []);
     throw err;

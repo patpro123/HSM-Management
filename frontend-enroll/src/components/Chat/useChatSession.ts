@@ -3,7 +3,7 @@ import { apiPost } from '../../api';
 import { newId } from './newId';
 import {
   ChatMessageUnion, ChatUserRole, QuickReplyChip, AttendancePickerResult,
-  getRoleDefaultChips, TextMessage,
+  getRoleDefaultChips, TextMessage, ProposalSummary,
 } from './chatTypes';
 
 interface BotApiResponse {
@@ -78,6 +78,15 @@ function botResponseToMessage(resp: BotApiResponse): ChatMessageUnion {
       return { ...base, type: 'card', title: resp.text, fields, actions };
     }
 
+    case 'proposal': {
+      const proposal = card.proposal as ProposalSummary | undefined;
+      if (!proposal) return { ...base, type: 'text', text: resp.text };
+      return { ...base, type: 'proposal', text: resp.text, proposal };
+    }
+
+    case 'enroll_form':
+      return { ...base, type: 'enroll_form', text: resp.text };
+
     case 'whatsapp': {
       const w = (card.whatsapp ?? {}) as Record<string, unknown>;
       return {
@@ -95,8 +104,8 @@ function botResponseToMessage(resp: BotApiResponse): ChatMessageUnion {
 
     case 'attendance_history': {
       const rows = (card.rows ?? []) as Extract<ChatMessageUnion, { type: 'attendance_history' }>['rows'];
-      const student = (card.student ?? {}) as { id?: string };
-      return { ...base, type: 'attendance_history', title: resp.text, studentId: String(student.id ?? ''), rows };
+      const student = (card.student ?? {}) as { id?: string; name?: string };
+      return { ...base, type: 'attendance_history', title: resp.text, studentId: String(student.id ?? ''), studentName: student.name, rows };
     }
 
     case 'chart': {
@@ -160,6 +169,7 @@ function isRenderable(m: ChatMessageUnion): boolean {
   if (m.type === 'attendance_history') return Array.isArray(m.rows);
   if (m.type === 'list') return Array.isArray(m.items);
   if (m.type === 'card') return Array.isArray(m.fields);
+  if (m.type === 'proposal') return typeof m.proposal?.id === 'string';
   if (m.type === 'whatsapp') return typeof m.text === 'string' && typeof m.link === 'string';
   return true;
 }

@@ -6,6 +6,7 @@ const { authorizeRole } = require('../auth/rbacMiddleware');
 const { authenticateJWT } = require('../auth/jwtMiddleware');
 const attendanceService = require('../services/attendanceService');
 const { toLocalDateStr, batchScheduledOnDay } = attendanceService;
+const { prepareAbsenceMessage } = require('../services/whatsappMessages');
 
 // GET /api/attendance - fetch attendance records
 router.get('/', rbac.filterTeacherData, async (req, res) => {
@@ -352,6 +353,25 @@ router.get('/by-date', authenticateJWT, authorizeRole(['admin', 'head_of_school'
   } catch (err) {
     console.error('[GET /attendance/by-date]', err);
     res.status(500).json({ error: 'Failed to fetch attendance for date' });
+  }
+});
+
+// POST /api/attendance/absence-message — the WhatsApp nudge for a student marked absent, ready for
+// the staff member to send from their own WhatsApp. Body: { student_id, date, batch_id? }
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+router.post('/absence-message', authenticateJWT, authorizeRole(['admin', 'head_of_school', 'teacher']), async (req, res) => {
+  const { student_id, date, batch_id } = req.body || {};
+  if (!UUID.test(student_id || '') || !ISO_DATE.test(date || '') || (batch_id && !UUID.test(batch_id))) {
+    return res.status(400).json({ error: 'student_id and date (YYYY-MM-DD) are required' });
+  }
+  try {
+    const message = await prepareAbsenceMessage({ studentId: student_id, batchId: batch_id || null, date });
+    if (!message) return res.status(404).json({ error: 'This student is not marked absent for that class' });
+    res.json({ message });
+  } catch (err) {
+    console.error('[POST /attendance/absence-message]', err);
+    res.status(500).json({ error: 'Failed to prepare the message' });
   }
 });
 

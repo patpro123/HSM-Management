@@ -4,6 +4,8 @@ import { MessageCard } from './MessageCard';
 import { MessageChart } from './MessageChart';
 import { MessageConfirm } from './MessageConfirm';
 import { MessageWhatsApp } from './MessageWhatsApp';
+import { MessageProposal } from './MessageProposal';
+import { MessageEnrollForm } from './MessageEnrollForm';
 import { AttendancePicker } from './AttendancePicker';
 import { AttendanceSummary } from './AttendanceSummary';
 import { CleffAvatar } from './CleffAvatar';
@@ -16,6 +18,8 @@ interface ChatMessageProps {
   onOpenWork?: (messageId: string) => void;
   /** Runs a skill directly, for list rows that carry an action */
   onRunAction?: (label: string, skill: string, params: Record<string, string>) => void;
+  /** Saves new fields onto a message, e.g. a proposal card after Approve or Reject */
+  onPatch?: (id: string, patch: Record<string, unknown>) => void;
   /** Phone layout: no avatar or per-message time, so bubbles get the full width */
   compact?: boolean;
 }
@@ -67,7 +71,7 @@ function toWhatsAppText(message: ChatMessageUnion): string | null {
   }
 }
 
-export function ChatMessage({ message, onChipSelect, onAttendanceSave, onOpenWork, onRunAction, compact }: ChatMessageProps) {
+export function ChatMessage({ message, onChipSelect, onAttendanceSave, onOpenWork, onRunAction, onPatch, compact }: ChatMessageProps) {
   const ref = useRef<HTMLDivElement>(null);
   const isUser = message.sender === 'user';
   const [copied, setCopied] = useState(false);
@@ -94,7 +98,7 @@ export function ChatMessage({ message, onChipSelect, onAttendanceSave, onOpenWor
   // The WhatsApp copy chip is for lists, cards and charts; on a phone it would only add a row
   // under every short text reply.
   const copyable = !isUser && toWhatsAppText(message) !== null &&
-    !['confirm', 'attendance-picker'].includes(message.type) &&
+    !['confirm', 'attendance-picker', 'proposal', 'enroll_form'].includes(message.type) &&
     !(compact && message.type === 'text');
 
   const timestamp = new Date(message.timestamp).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
@@ -207,6 +211,12 @@ export function ChatMessage({ message, onChipSelect, onAttendanceSave, onOpenWor
           />
         );
 
+      case 'proposal':
+        return <MessageProposal text={message.text} proposal={message.proposal} onChange={proposal => onPatch?.(message.id, { proposal })} />;
+
+      case 'enroll_form':
+        return <MessageEnrollForm text={message.text} proposal={message.proposal} onSubmitted={proposal => onPatch?.(message.id, { proposal })} />;
+
       case 'attendance_roll': {
         const t = tallyStatuses((message.groups ?? []).flatMap(g => (g.students ?? []).map(s => s.status)));
         return (
@@ -269,7 +279,7 @@ export function ChatMessage({ message, onChipSelect, onAttendanceSave, onOpenWor
     }
   };
 
-  const isStructured = ['list', 'card', 'chart', 'attendance_roll', 'attendance_history'].includes(message.type);
+  const isStructured = ['list', 'card', 'chart', 'attendance_roll', 'attendance_history', 'proposal', 'enroll_form'].includes(message.type);
 
   return (
     <div

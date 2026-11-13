@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   AttendanceStatus, Counts, StatusRow, SubmitBar, stripStyle, nextStatus, saveAttendanceRecords,
 } from './attendanceUi';
+import { AbsenceMessageSheet, AbsenceTarget } from './AbsenceMessageSheet';
 
 export interface HistoryRow {
   batch_id: string;
@@ -14,6 +15,7 @@ export interface HistoryRow {
 
 interface AttendanceHistoryProps {
   studentId: string;
+  studentName?: string;
   rows: HistoryRow[];
   onDirtyChange?: (changes: number) => void;
   onSaved: (rows: HistoryRow[], text: string) => void;
@@ -22,7 +24,8 @@ interface AttendanceHistoryProps {
 const keyOf = (r: HistoryRow) => `${r.batch_id}|${r.date}`;
 
 // One student across several days: one line per class, tap a row to change it.
-export function AttendanceHistory({ studentId, rows, onDirtyChange, onSaved }: AttendanceHistoryProps) {
+export function AttendanceHistory({ studentId, studentName, rows, onDirtyChange, onSaved }: AttendanceHistoryProps) {
+  const [messaging, setMessaging] = useState<AbsenceTarget | null>(null);
   const [saved, setSaved] = useState<Record<string, AttendanceStatus | null>>(() =>
     Object.fromEntries(rows.map(r => [keyOf(r), r.status])));
   const [current, setCurrent] = useState<Record<string, AttendanceStatus | null>>(() =>
@@ -76,6 +79,9 @@ export function AttendanceHistory({ studentId, rows, onDirtyChange, onSaved }: A
             status={current[keyOf(r)]}
             disabled={!r.editable}
             onTap={() => tap(r)}
+            onMessage={saved[keyOf(r)] === 'absent' && current[keyOf(r)] === 'absent'
+              ? () => setMessaging({ studentId, studentName: studentName || 'the student', batchId: r.batch_id, date: r.date })
+              : undefined}
           />
         ))}
       </div>
@@ -85,6 +91,8 @@ export function AttendanceHistory({ studentId, rows, onDirtyChange, onSaved }: A
         : <div style={{ padding: '10px 12px calc(10px + env(safe-area-inset-bottom))', fontSize: 12, color: 'var(--muted, #8a7d65)', borderTop: '1px solid var(--border, #e5e0d5)' }}>
             View only — teachers can mark today's classes.
           </div>}
+
+      {messaging && <AbsenceMessageSheet target={messaging} onClose={() => setMessaging(null)} />}
     </div>
   );
 }
