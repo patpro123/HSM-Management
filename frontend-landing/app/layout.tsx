@@ -106,9 +106,8 @@ export default function RootLayout({
                                 "longitude": 78.3909525
                             },
                             "openingHours": [
-                                "Tu-Fr 17:00-21:00",
-                                "Sa 15:00-21:00",
-                                "Su 10:00-13:00,17:00-21:00"
+                                "Mo-Sa 16:00-20:30",
+                                "Su 11:00-13:00"
                             ],
                             "aggregateRating": {
                                 "@type": "AggregateRating",
@@ -240,7 +239,7 @@ export default function RootLayout({
                                 {
                                     "@type": "Question",
                                     "name": "Where is Hyderabad School of Music located?",
-                                    "acceptedAnswer": { "@type": "Answer", "text": "HSM is located in Kismatpur, Hyderabad, Telangana. Classes run Tuesday–Friday 5PM–9PM, Saturday 3PM–9PM, and Sunday 10AM–1PM & 5PM–9PM." }
+                                    "acceptedAnswer": { "@type": "Answer", "text": "HSM is located in Kismatpur, Hyderabad, Telangana. The school is open Monday–Saturday 4PM–8:30PM. On Sunday, 11AM–1PM, only Hindustani and Carnatic Vocals classes run." }
                                 },
                                 {
                                     "@type": "Question",

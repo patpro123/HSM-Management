@@ -12,11 +12,10 @@ Priority for the Core App: 1) Enrollment, 2) Payments, 3) Attendance (Dashboard-
 ---
 
 ## 2. Business rules & Schedule 📋
-- School closed on Mondays.
+- School open all days.
 - School timings:
-  - Weekdays (Tue–Fri): 17:00–21:00
-  - Saturday: 15:00–21:00
-  - Sunday: 10:00–13:00 and 17:00–21:00
+  - Mon–Sat: 16:00–20:30
+  - Sunday: 11:00–13:00 (only Vocals classes run)
 - Each student can enroll in one or more instruments/vocal streams.
 - Classes typically run twice weekly for each instrument (two batches per student).
 - Batches are recurring weekly slots; makeup/adhoc batches allowed (admin-only creation).

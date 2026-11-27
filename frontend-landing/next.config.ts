@@ -4,6 +4,12 @@ const nextConfig: NextConfig = {
     async redirects() {
         const portalUrl = process.env.NEXT_PUBLIC_PORTAL_URL || 'https://portal.hsm.org.in';
         return [
+            // PBEL City is temporarily closed. On reopening, remove this redirect.
+            {
+                source: "/pbel-city",
+                destination: "/kismatpur",
+                permanent: false,
+            },
             {
                 source: "/demoday",
                 destination: `${portalUrl}/demoday`,

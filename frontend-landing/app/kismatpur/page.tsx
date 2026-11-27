@@ -18,10 +18,8 @@ export const metadata: Metadata = {
 };
 
 const HOURS = [
-  { days: 'Tuesday – Friday', time: '5:00 PM – 9:00 PM' },
-  { days: 'Saturday', time: '3:00 PM – 9:00 PM' },
-  { days: 'Sunday', time: '10:00 AM – 1:00 PM  &  5:00 PM – 9:00 PM' },
-  { days: 'Monday', time: 'Closed', closed: true },
+  { days: 'Monday – Saturday', time: '4:00 PM – 8:30 PM' },
+  { days: 'Sunday', time: '11:00 AM – 1:00 PM  (Vocals only)' },
 ];
 
 export default function KismatpurPage() {
@@ -44,7 +42,7 @@ export default function KismatpurPage() {
               addressCountry: 'IN',
             },
             geo: { '@type': 'GeoCoordinates', latitude: 17.3471995, longitude: 78.3909525 },
-            openingHours: ['Tu-Fr 17:00-21:00', 'Sa 15:00-21:00', 'Su 10:00-13:00,17:00-21:00'],
+            openingHours: ['Mo-Sa 16:00-20:30', 'Su 11:00-13:00'],
           }),
         }}
       />
@@ -98,8 +96,8 @@ export default function KismatpurPage() {
             <p className="text-muted" style={{ fontWeight: 700, margin: '1.5rem 0 0.5rem' }}>🕐 Opening Hours</p>
             <table className="hours-table">
               <tbody>
-                {HOURS.map(({ days, time, closed }) => (
-                  <tr key={days} className={closed ? 'hours-closed' : ''}>
+                {HOURS.map(({ days, time }) => (
+                  <tr key={days}>
                     <td className="hours-day">{days}</td>
                     <td className="hours-time">{time}</td>
                   </tr>

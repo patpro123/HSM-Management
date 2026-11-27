@@ -4,7 +4,8 @@ import Image from 'next/image';
 import { notFound } from 'next/navigation';
 import { INSTRUMENTS, getInstrumentBySlug } from '@/lib/instruments';
 import { getBatches } from '@/lib/data';
-import { getInstrumentSchedule, getInstrumentTeacherNames, dayLabel } from '@/lib/schedule';
+import { getInstrumentTeacherNames } from '@/lib/schedule';
+import { getClassSlots } from '@/lib/timetable';
 import { getTeacherDisplayName } from '@/lib/teacherProfiles';
 import PageShell from '@/components/PageShell/PageShell';
 import BookDemoButton from '@/components/PageShell/BookDemoButton';
@@ -77,7 +78,7 @@ export default async function InstrumentPage({ params }: PageProps) {
   if (!instrument) notFound();
 
   const batches = await getBatches();
-  const schedule = getInstrumentSchedule(batches, instrument.dbNames);
+  const schedule = getClassSlots(instrument.name);
   const teacherNames = getInstrumentTeacherNames(batches, instrument.dbNames).map(getTeacherDisplayName);
 
   const faqs = [
@@ -181,32 +182,24 @@ export default async function InstrumentPage({ params }: PageProps) {
       <section style={{ background: 'var(--bg-secondary)', padding: '3rem 0' }}>
         <div className="container section-padding" style={{ paddingTop: 0, paddingBottom: 0 }}>
           <h2 className="section-title serif-heading" style={{ fontSize: '1.75rem' }}>Schedule</h2>
-          {schedule.length > 0 ? (
-            <div className="pop-shadow" style={{ background: '#fff', borderRadius: 16, padding: '1.5rem', overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
-                <thead>
-                  <tr>
-                    <th style={{ textAlign: 'left', padding: '8px 12px', color: 'var(--text-muted)', fontSize: '0.75rem', textTransform: 'uppercase' }}>Day</th>
-                    <th style={{ textAlign: 'left', padding: '8px 12px', color: 'var(--text-muted)', fontSize: '0.75rem', textTransform: 'uppercase' }}>Time</th>
-                    <th style={{ textAlign: 'left', padding: '8px 12px', color: 'var(--text-muted)', fontSize: '0.75rem', textTransform: 'uppercase' }}>Teacher</th>
+          <div className="pop-shadow" style={{ background: '#fff', borderRadius: 16, padding: '1.5rem', overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
+              <thead>
+                <tr>
+                  <th style={{ textAlign: 'left', padding: '8px 12px', color: 'var(--text-muted)', fontSize: '0.75rem', textTransform: 'uppercase' }}>Days</th>
+                  <th style={{ textAlign: 'left', padding: '8px 12px', color: 'var(--text-muted)', fontSize: '0.75rem', textTransform: 'uppercase' }}>Time</th>
+                </tr>
+              </thead>
+              <tbody>
+                {schedule.map(slot => (
+                  <tr key={slot.days} style={{ borderTop: '1px solid rgba(0,0,0,0.06)' }}>
+                    <td style={{ padding: '10px 12px', fontWeight: 600 }}>{slot.days}</td>
+                    <td style={{ padding: '10px 12px' }}>{slot.time}</td>
                   </tr>
-                </thead>
-                <tbody>
-                  {schedule.map((slot, idx) => (
-                    <tr key={idx} style={{ borderTop: '1px solid rgba(0,0,0,0.06)' }}>
-                      <td style={{ padding: '10px 12px', fontWeight: 600 }}>{dayLabel(slot.day)}</td>
-                      <td style={{ padding: '10px 12px' }}>{slot.time}</td>
-                      <td style={{ padding: '10px 12px' }}>{slot.teacherName ? getTeacherDisplayName(slot.teacherName) : '—'}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <p className="body-text" style={{ color: 'var(--text-muted)' }}>
-              {instrument.name} batches are opening up as demand grows — message us on WhatsApp for the current timing options.
-            </p>
-          )}
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       </section>
 

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { API_BASE_URL } from '../config';
+import { isClosedBranch } from '../publicBranches';
 import './LandingPage.css';
 import { PublicCleffChat } from './Chat/PublicCleffChat';
 import Navbar from './LandingPage/Navbar';
@@ -29,7 +30,6 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLogin, authError }) => {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [prefilledInstrument, setPrefilledInstrument] = useState('');
     const [teachers, setTeachers] = useState<any[]>([]);
-    const [batches, setBatches] = useState<any[]>([]);
     const [testimonialIndex, setTestimonialIndex] = useState(0);
     const [activeFaq, setActiveFaq] = useState<number | null>(null);
     const [flashConfig, setFlashConfig] = useState<any>(null);
@@ -114,7 +114,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLogin, authError }) => {
                 const res = await fetch(`${API_BASE_URL}/api/teachers`);
                 if (res.ok) {
                     const data = await res.json();
-                    setTeachers(data.teachers);
+                    setTeachers(data.teachers.filter((t: { name: string }) => !isClosedBranch(t.name)));
                 } else {
                     throw new Error('Failed to fetch teachers');
                 }
@@ -130,29 +130,6 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLogin, authError }) => {
             }
         };
         fetchTeachers();
-    }, []);
-
-    useEffect(() => {
-        const fetchBatches = async () => {
-            try {
-                const res = await fetch(`${API_BASE_URL}/api/batches`);
-                if (res.ok) {
-                    const data = await res.json();
-                    setBatches(data.batches);
-                } else {
-                    throw new Error('Failed to fetch batches');
-                }
-            } catch (err) {
-                console.error("Failed to fetch batches for landing page:", err);
-                setBatches([
-                    { instrument_name: 'Guitar', days: 'Tue, Thu', timings: '5PM–8PM', age_group: 'All ages' },
-                    { instrument_name: 'Tabla', days: 'Sat, Sun', timings: '10AM–1PM', age_group: '6+' },
-                    { instrument_name: 'Hindustani Vocals', days: 'Tue, Thu, Sat', timings: '5PM–9PM', age_group: 'All ages' },
-                    { instrument_name: 'Piano', days: 'Mon, Wed', timings: '4PM–7PM', age_group: 'All ages' }
-                ]);
-            }
-        };
-        fetchBatches();
     }, []);
 
     useEffect(() => {
@@ -231,7 +208,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLogin, authError }) => {
                     onSetIndex={setTestimonialIndex}
                 />
                 <AlumniSection />
-                <ScheduleSection batches={batches} onOpenModal={handleOpenModal} />
+                <ScheduleSection onOpenModal={handleOpenModal} />
                 <FaqSection
                     faqs={faqs}
                     activeFaq={activeFaq}
