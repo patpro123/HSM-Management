@@ -37,19 +37,6 @@ const HeroSection: React.FC<HeroSectionProps> = ({ onOpenModal, flashConfig }) =
             marginBottom: '1.75rem',
             width: '100%',
           }}>
-            {/* 1. PBEL City Announcement Pill */}
-            <div style={{
-              display: 'inline-flex', alignItems: 'center', gap: '0.4rem',
-              background: 'rgba(255,255,255,0.12)', backdropFilter: 'blur(8px)',
-              border: '1px solid rgba(255,255,255,0.25)',
-              borderRadius: 999, padding: '0.4rem 0.95rem',
-            }}>
-              <span style={{ fontSize: '0.8rem' }}>🎉</span>
-              <span style={{ color: '#fff', fontSize: '0.76rem', fontWeight: 600, letterSpacing: '0.01em' }}>
-                PBEL City: Vocal classes live!
-              </span>
-            </div>
-
             {/* 2. Demo Day (glowing dynamic pill if enabled) */}
             {flashConfig?.demo_day_link_enabled && (
               <div

@@ -448,7 +448,7 @@ School: Hyderabad School of Music (HSM)
 Location: Hyderabad, India
 Instruments: ${instrumentList}
 Active enrolled students: ${studentCount}+
-Schedule: Mon–Fri evenings (5–8:30 PM), Sat mornings (10 AM–12 PM) & evenings (4–8:30 PM), Sun 11 AM–1 PM for Vocals only
+Schedule: Open Mon–Sat 4–8:30 PM, classes 5–8 PM Mon–Sat (Drums and Tabla Thu & Sat only; Carnatic Vocals Fri, Hindustani Vocals Sat), Sun 11 AM–1 PM for Vocals only
 Unique strengths: Personal attention, experienced teachers, structured curriculum, friendly community
 Sample testimonials:
 ${testimonialSample}

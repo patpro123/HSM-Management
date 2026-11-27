@@ -6,7 +6,6 @@ export async function GET() {
     const staticUrls = [
         { loc: 'https://hsm.org.in/', priority: '1.0' },
         { loc: 'https://hsm.org.in/kismatpur', priority: '0.9' },
-        { loc: 'https://hsm.org.in/pbel-city', priority: '0.8' },
         { loc: 'https://hsm.org.in/practice-portal', priority: '0.8' },
         { loc: 'https://hsm.org.in/terms', priority: '0.3' },
     ];

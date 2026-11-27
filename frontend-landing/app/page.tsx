@@ -1,8 +1,8 @@
 import LandingPage from '@/components/LandingPage';
-import { getTeachers, getBatches } from '@/lib/data';
+import { getTeachers } from '@/lib/data';
 
 export default async function Home() {
-    const [teachers, batches] = await Promise.all([getTeachers(), getBatches()]);
+    const teachers = await getTeachers();
 
-    return <LandingPage teachers={teachers} batches={batches} />;
+    return <LandingPage teachers={teachers} />;
 }

@@ -1,7 +1,9 @@
 'use client';
 import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { TIMETABLE } from '@/lib/timetable';
 
 const SCHEDULE_DAYS = [
+  { key: 'MON', label: 'Mon' },
   { key: 'TUE', label: 'Tue' },
   { key: 'WED', label: 'Wed' },
   { key: 'THU', label: 'Thu' },
@@ -66,13 +68,29 @@ function buildScheduleGrid(batches: Batch[]): Record<string, Record<string, Sche
   return grid;
 }
 
+/** Merges consecutive days with the same timing ("Mon – Sat") so a phone card fits. */
+function groupDays(row: Record<string, ScheduleCell>): { label: string; cell: ScheduleCell }[] {
+  const ranges: { first: string; last: string; lastIndex: number; cell: ScheduleCell }[] = [];
+  SCHEDULE_DAYS.forEach((day, index) => {
+    const cell = row[day.key];
+    if (!cell.morning && !cell.evening) return;
+    const prev = ranges[ranges.length - 1];
+    if (prev && prev.lastIndex === index - 1 && prev.cell.morning === cell.morning && prev.cell.evening === cell.evening) {
+      prev.last = day.label;
+      prev.lastIndex = index;
+    } else {
+      ranges.push({ first: day.label, last: day.label, lastIndex: index, cell });
+    }
+  });
+  return ranges.map(r => ({ label: r.first === r.last ? r.first : `${r.first} – ${r.last}`, cell: r.cell }));
+}
+
 interface ScheduleSectionProps {
-  batches: Batch[];
   onOpenModal: (e: React.MouseEvent) => void;
 }
 
-const ScheduleSection: React.FC<ScheduleSectionProps> = ({ batches, onOpenModal }) => {
-  const grid = buildScheduleGrid(batches);
+const ScheduleSection: React.FC<ScheduleSectionProps> = ({ onOpenModal }) => {
+  const grid = buildScheduleGrid(TIMETABLE);
   const instruments = Object.keys(grid).sort();
   const total = instruments.length;
 
@@ -107,7 +125,7 @@ const ScheduleSection: React.FC<ScheduleSectionProps> = ({ batches, onOpenModal 
           <span className="section-label">Find your perfect slot</span>
           <h2 className="section-title serif-heading">Class Schedule Overview</h2>
           <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginTop: '0.5rem' }}>
-            All classes are in-person at our Kismatpur centre. Closed on Mondays.
+            All classes are in-person at our Kismatpur centre. Evening classes run 5–8 PM, Monday–Saturday; some streams run on selected days, shown below. Sunday morning classes are for Vocals only.
           </p>
         </div>
 
@@ -194,7 +212,7 @@ const ScheduleSection: React.FC<ScheduleSectionProps> = ({ batches, onOpenModal 
               {instruments.map((name, idx) => {
                 const pos = cardPosition(idx);
                 const icon = getIcon(name);
-                const activeDays = SCHEDULE_DAYS.filter(d => grid[name][d.key]?.morning || grid[name][d.key]?.evening);
+                const dayRanges = groupDays(grid[name]);
                 return (
                   <div
                     key={name}
@@ -205,11 +223,10 @@ const ScheduleSection: React.FC<ScheduleSectionProps> = ({ batches, onOpenModal 
                     <h3 style={{ fontSize: '1.3rem', fontWeight: 700, color: 'var(--text-heading)', margin: '0 0 1rem' }}>{name}</h3>
 
                     <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                      {activeDays.map(d => {
-                        const cell = grid[name][d.key];
+                      {dayRanges.map(({ label, cell }) => {
                         return (
-                          <div key={d.key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.4rem 0.75rem', background: 'rgba(0,0,0,0.04)', borderRadius: 10 }}>
-                            <span style={{ fontWeight: 600, fontSize: '0.85rem', color: 'var(--text-heading)' }}>{d.label}</span>
+                          <div key={label} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.4rem 0.75rem', background: 'rgba(0,0,0,0.04)', borderRadius: 10 }}>
+                            <span style={{ fontWeight: 600, fontSize: '0.85rem', color: 'var(--text-heading)' }}>{label}</span>
                             <div style={{ display: 'flex', gap: '0.4rem' }}>
                               {cell.morning && (
                                 <span style={{ background: '#fef3c7', color: '#92400e', borderRadius: 20, padding: '2px 10px', fontSize: '0.7rem', fontWeight: 700 }}>Morn</span>

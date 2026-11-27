@@ -1434,19 +1434,12 @@ const skills = {
         instruments: 'All instruments and vocal streams',
         status: 'open',
       },
-      {
-        name: 'PBEL City Campus (New)',
-        address: 'PBEL City, Hyderabad',
-        landmark: '',
-        instruments: 'Hindustani Vocals & Carnatic Vocals — open now. Guitar, Keyboard, Piano, Drums and other instruments coming soon.',
-        status: 'partial',
-      },
     ];
     const lines = locations.map(l =>
       `${l.name}: ${l.address}${l.landmark ? ' (' + l.landmark + ')' : ''} — ${l.instruments}`
     ).join('\n');
     return makeResponse('list', `HSM has ${locations.length} campus location(s):\n${lines}`,
-      ['Get directions', 'Which instruments at PBEL City?', 'Working hours'],
+      ['Get directions', 'Working hours'],
       {
         students: locations.map(l => ({
           name: l.name,
@@ -1760,7 +1753,7 @@ const I = (desc) => ({ type: 'integer', description: desc });
 
 const TOOL_DEFINITIONS = [
   // School info
-  T('school.locations', 'List all HSM campus locations, which instruments are available at each, and which are coming soon', {}),
+  T('school.locations', 'List the open HSM campus locations and the instruments available at each', {}),
   // Lookups
   T('student.lookup', 'Search students by name or phone', { query: S('name or phone') }, ['query']),
   T('student.credits', 'Classes remaining per instrument for a student', { student_id: S('name or UUID') }),

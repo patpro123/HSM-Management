@@ -1,6 +1,8 @@
 import React from 'react';
+import { TIMETABLE } from '../../timetable';
 
 const SCHEDULE_DAYS = [
+  { key: 'MON', label: 'Mon' },
   { key: 'TUE', label: 'Tue' },
   { key: 'WED', label: 'Wed' },
   { key: 'THU', label: 'Thu' },
@@ -48,12 +50,11 @@ function buildScheduleGrid(batches: Batch[]): Record<string, Record<string, Sche
 }
 
 interface ScheduleSectionProps {
-  batches: Batch[];
   onOpenModal: (e: React.MouseEvent) => void;
 }
 
-const ScheduleSection: React.FC<ScheduleSectionProps> = ({ batches, onOpenModal }) => {
-  const grid = buildScheduleGrid(batches);
+const ScheduleSection: React.FC<ScheduleSectionProps> = ({ onOpenModal }) => {
+  const grid = buildScheduleGrid(TIMETABLE);
   const instruments = Object.keys(grid).sort();
 
   return (
@@ -63,7 +64,7 @@ const ScheduleSection: React.FC<ScheduleSectionProps> = ({ batches, onOpenModal 
           <span className="section-label">Find your perfect slot</span>
           <h2 className="section-title serif-heading">Class Schedule Overview</h2>
           <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginTop: '0.5rem' }}>
-            All classes are in-person at our Kismatpur centre. Closed on Mondays.
+            All classes are in-person at our Kismatpur centre. Evening classes run 5–8 PM, Monday–Saturday; some streams run on selected days, shown below. Sunday morning classes are for Vocals only.
           </p>
         </div>
 

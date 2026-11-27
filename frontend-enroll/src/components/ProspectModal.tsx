@@ -41,7 +41,7 @@ function generateNudgeMessage(name: string, instrument?: string, location?: stri
   const mapLink = location ? BRANCH_MAP_LINKS[location] : null;
   const instrumentLine = inst ? `\n🎵 Instrument registered: ${inst}` : '';
   const locationLine = mapLink ? `\n📍 Find us here: ${mapLink}` : '';
-  return `Hi ${name}! 👋\n\nThis is the team at Hyderabad School of Music. You recently signed up for a free demo class with us. We'd love to get you started!${instrumentLine}${locationLine}\n\nCould you share a convenient time? We're available Tue–Fri (5–9 PM) and weekends.\n\nLooking forward to meeting you! 🎵`;
+  return `Hi ${name}! 👋\n\nThis is the team at Hyderabad School of Music. You recently signed up for a free demo class with us. We'd love to get you started!${instrumentLine}${locationLine}\n\nCould you share a convenient time? We're available Mon–Sat, 4–8:30 PM.\n\nLooking forward to meeting you! 🎵`;
 }
 
 const ProspectModal: React.FC<ProspectModalProps> = ({ prospect, onClose, onUpdated }) => {

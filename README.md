@@ -254,10 +254,8 @@ VITE_API_BASE_URL=http://localhost:3000
 **Instruments:** Keyboard, Guitar, Piano, Drums, Tabla, Violin, Hindustani Vocals, Carnatic Vocals
 
 **Schedule:**
-- Closed Mondays
-- Tue–Fri: 17:00–21:00
-- Saturday: 15:00–21:00
-- Sunday: 10:00–13:00, 17:00–21:00
+- Mon–Sat: 16:00–20:30
+- Sunday: 11:00–13:00 (Vocals classes only)
 
 **Packages:** Monthly (8 classes) | Quarterly (24 classes)
 

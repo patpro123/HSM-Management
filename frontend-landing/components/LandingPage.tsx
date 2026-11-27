@@ -20,7 +20,7 @@ import FaqSection from './LandingPage/FaqSection';
 import AboutSection from './LandingPage/AboutSection';
 import LocationSection from './LandingPage/LocationSection';
 import FooterCTA from './LandingPage/FooterCTA';
-import type { Teacher, Batch } from '@/lib/data';
+import type { Teacher } from '@/lib/data';
 import { plansFaqAnswer } from '@/lib/plans';
 
 const PORTAL_URL = process.env.NEXT_PUBLIC_PORTAL_URL || 'https://portal.hsm.org.in';
@@ -28,7 +28,6 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'https://hsm-manage
 
 interface LandingPageProps {
     teachers: Teacher[];
-    batches: Batch[];
 }
 
 const faqs = [
@@ -48,7 +47,7 @@ const testimonials = [
     { quote: "Enrolled my kid for keyboard. He is enjoying the learning. Good facilities, sir pays attention to each student which is good. Would definitely recommend.", author: "B Srinivasu", role: "Parent of Keyboard student", initials: "BS", color: "#FBBC04" },
 ];
 
-const LandingPage: React.FC<LandingPageProps> = ({ teachers, batches }) => {
+const LandingPage: React.FC<LandingPageProps> = ({ teachers }) => {
     const [isScrolled, setIsScrolled] = useState(false);
     const [isPromoActive, setIsPromoActive] = useState(false);
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -142,7 +141,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ teachers, batches }) => {
                     onSetIndex={setTestimonialIndex}
                 />
                 <AlumniSection />
-                <ScheduleSection batches={batches} onOpenModal={handleOpenModal} />
+                <ScheduleSection onOpenModal={handleOpenModal} />
                 <PricingSection onOpenModal={handleOpenModal} />
                 <FaqSection
                     faqs={faqs}

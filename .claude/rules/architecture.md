@@ -4,7 +4,7 @@
 
 - ~100–200 active students, up to 10 teachers
 - 8 instruments: Keyboard, Guitar, Piano, Drums, Tabla, Violin, Hindustani Vocals, Carnatic Vocals
-- Closed on Mondays. Tue–Fri 17:00–21:00 | Sat 15:00–21:00 | Sun 10:00–13:00 & 17:00–21:00
+- Open all days. Mon–Sat 16:00–20:30 | Sun 11:00–13:00 (Vocals classes only)
 - Classes run twice weekly per instrument; students can enroll in multiple instruments
 - Payout models: fixed salary or per-student-monthly
 - Payment packages: Monthly (8 classes) or Quarterly (24 classes)

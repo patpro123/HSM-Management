@@ -3,10 +3,8 @@ import React, { memo } from 'react';
 const MAP_SRC = `https://maps.google.com/maps?q=17.3471995,78.3909525&z=17&output=embed`;
 
 const HOURS = [
-  { days: 'Tuesday – Friday', time: '5:00 PM – 9:00 PM' },
-  { days: 'Saturday',         time: '3:00 PM – 9:00 PM' },
-  { days: 'Sunday',           time: '10:00 AM – 1:00 PM  &  5:00 PM – 9:00 PM' },
-  { days: 'Monday',           time: 'Closed', closed: true },
+  { days: 'Monday – Saturday', time: '4:00 PM – 8:30 PM' },
+  { days: 'Sunday',           time: '11:00 AM – 1:00 PM  (Vocals only)' },
 ];
 
 const LocationSection: React.FC = memo(() => {
@@ -64,8 +62,8 @@ const LocationSection: React.FC = memo(() => {
               <p className="text-muted" style={{ fontWeight: 700, marginBottom: '0.5rem' }}>🕐 Opening Hours</p>
               <table className="hours-table">
                 <tbody>
-                  {HOURS.map(({ days, time, closed }) => (
-                    <tr key={days} className={closed ? 'hours-closed' : ''}>
+                  {HOURS.map(({ days, time }) => (
+                    <tr key={days}>
                       <td className="hours-day">{days}</td>
                       <td className="hours-time">{time}</td>
                     </tr>

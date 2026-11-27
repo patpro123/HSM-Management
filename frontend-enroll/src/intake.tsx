@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
 import './components/LandingPage.css';
+import { TIMETABLE } from './timetable';
 
 const PRODUCTION_API_URL = 'https://hsm-management.onrender.com';
 const API_BASE =
@@ -11,7 +12,6 @@ const API_BASE =
 
 const LOCATIONS = [
   { value: 'hsm_main', label: 'HSM Main Branch', sub: 'Kismatpur, Hyderabad' },
-  { value: 'pbel_city', label: 'PBEL City', sub: 'PBEL City Campus' },
 ];
 
 const SOURCES = [
@@ -24,6 +24,7 @@ const SOURCES = [
 ];
 
 const SCHEDULE_DAYS = [
+  { key: 'MON', label: 'Mon' },
   { key: 'TUE', label: 'Tue' },
   { key: 'WED', label: 'Wed' },
   { key: 'THU', label: 'Thu' },
@@ -44,22 +45,11 @@ function classifyPeriod(startTime: string): Period {
   return hour < 13 ? 'morning' : 'evening';
 }
 
-interface RawBatch {
-  id: string;
-  instrument_id: string;
-  instrument_name: string;
-  recurrence: string;
-  start_time: string;
-  end_time: string;
-  is_makeup: boolean;
-}
-
 interface ScheduleCell { morning: boolean; evening: boolean; }
 
-function buildScheduleGrid(batches: RawBatch[]): Record<string, Record<string, ScheduleCell>> {
+function buildScheduleGrid(batches: typeof TIMETABLE): Record<string, Record<string, ScheduleCell>> {
   const grid: Record<string, Record<string, ScheduleCell>> = {};
   for (const batch of batches) {
-    if (batch.is_makeup) continue;
     const name = batch.instrument_name;
     if (!grid[name]) {
       grid[name] = {};
@@ -93,13 +83,13 @@ interface FormData {
 
 const EMPTY_FORM: FormData = {
   first_name: '', last_name: '', phone: '', email: '', dob: '', address: '',
-  guardian_name: '', guardian_phone: '', instrument_id: '', location: '', source: '', notes: '',
+  guardian_name: '', guardian_phone: '', instrument_id: '', location: 'hsm_main', source: '', notes: '',
 };
 
 // ── Schedule Chart ──────────────────────────────────────────────────────────
 
-function ScheduleChart({ batches }: { batches: RawBatch[] }) {
-  const grid = buildScheduleGrid(batches);
+function ScheduleChart() {
+  const grid = buildScheduleGrid(TIMETABLE);
   const instruments = Object.keys(grid).sort();
   if (instruments.length === 0) return null;
 
@@ -108,11 +98,11 @@ function ScheduleChart({ batches }: { batches: RawBatch[] }) {
       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
         <thead>
           <tr>
-            <th style={{ textAlign: 'left', padding: '6px 12px 6px 0', color: 'var(--text-muted)', fontWeight: 600, fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em', minWidth: 120 }}>
+            <th style={{ textAlign: 'left', padding: '6px 6px 6px 0', color: 'var(--text-muted)', fontWeight: 600, fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em', minWidth: 90 }}>
               Instrument
             </th>
             {SCHEDULE_DAYS.map(d => (
-              <th key={d.key} style={{ textAlign: 'center', padding: '6px 8px', color: 'var(--text-muted)', fontWeight: 600, fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              <th key={d.key} style={{ textAlign: 'center', padding: '6px 2px', color: 'var(--text-muted)', fontWeight: 600, fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                 {d.label}
               </th>
             ))}
@@ -121,11 +111,11 @@ function ScheduleChart({ batches }: { batches: RawBatch[] }) {
         <tbody>
           {instruments.map((name, idx) => (
             <tr key={name} style={{ background: idx % 2 === 0 ? 'rgba(242,107,56,0.03)' : 'transparent' }}>
-              <td style={{ padding: '8px 12px 8px 0', fontWeight: 600, color: 'var(--text-heading)', fontSize: '0.85rem' }}>{name}</td>
+              <td style={{ padding: '8px 6px 8px 0', fontWeight: 600, color: 'var(--text-heading)', fontSize: '0.85rem' }}>{name}</td>
               {SCHEDULE_DAYS.map(d => {
                 const cell = grid[name][d.key];
                 return (
-                  <td key={d.key} style={{ textAlign: 'center', padding: '8px' }}>
+                  <td key={d.key} style={{ textAlign: 'center', padding: '8px 2px' }}>
                     {(cell?.morning || cell?.evening) ? (
                       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
                         {cell.morning && (
@@ -215,7 +205,6 @@ function IntakeForm() {
                     window.location.pathname === '/demoday.html';
 
   const [instruments, setInstruments] = useState<Instrument[]>([]);
-  const [batches, setBatches] = useState<RawBatch[]>([]);
   const [form, setForm] = useState<FormData>(EMPTY_FORM);
   const [errors, setErrors] = useState<Partial<Record<keyof FormData, string>>>({});
   const [submitting, setSubmitting] = useState(false);
@@ -239,11 +228,6 @@ function IntakeForm() {
     fetch(`${API_BASE}/api/instruments`)
       .then(r => r.json())
       .then(data => setInstruments((data.instruments || data || []).filter((i: Instrument) => !i.is_deprecated)))
-      .catch(() => {});
-
-    fetch(`${API_BASE}/api/batches`)
-      .then(r => r.json())
-      .then(data => setBatches(data.batches || []))
       .catch(() => {});
 
     fetch(`${API_BASE}/api/flash-banner`)
@@ -666,14 +650,14 @@ function IntakeForm() {
             </div>
 
             {/* ── Class Schedule ── */}
-            {!isDemoDay && batches.length > 0 && (
+            {!isDemoDay && (
               <div>
                 <SectionHeading>When do classes run?</SectionHeading>
                 <p style={{ color: 'var(--text-muted)', fontSize: '0.825rem', marginBottom: '0.75rem' }}>
-                  We're closed on Mondays. Here's the current schedule across all instruments.
+                  Evening classes run 5–8 PM, Monday–Saturday; some streams run on selected days, shown below. Sunday morning classes are for Vocals only.
                 </p>
                 <div style={{ background: 'var(--bg-secondary)', borderRadius: 12, padding: '1rem 1.25rem' }}>
-                  <ScheduleChart batches={batches} />
+                  <ScheduleChart />
                 </div>
               </div>
             )}
