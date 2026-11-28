@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { apiGet } from '../api';
 import { Student, Batch, Instrument } from '../types';
+import type { PaymentItem } from './StudentManagement/PostEnrollmentPayment';
 
 type PaymentType = 'trial' | 'quarterly' | 'pbel_4' | 'pbel_8';
 
@@ -20,7 +21,7 @@ interface StudentDetailsProps {
   student?: Student | null;
   batches: Batch[];
   instruments: Instrument[];
-  onSave: (data: any, enrollments: EnrollmentSelection[], prospectId?: string, feeTotal?: number, creditsTotal?: number) => void;
+  onSave: (data: any, enrollments: EnrollmentSelection[], prospectId?: string, paymentItems?: PaymentItem[]) => void;
   onCancel: () => void;
   initialProspectId?: string | null;
 }
@@ -287,28 +288,28 @@ const StudentDetails: React.FC<StudentDetailsProps> = ({ student, batches, instr
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const feeTotal = selectedInstrumentIds.reduce((sum, id) => sum + (instrFees[id]?.fee_amount || 0), 0);
-    let creditsTotal = 0;
+    const location = branches.find(b => b.id === selectedBranchId)?.code === 'pbel' ? 'pbel' : 'hsm';
 
-    // Deduplicate batches by instrument to avoid double counting credits
-    const uniqueInstrumentsMap = new Map();
-    selectedBatches.forEach(b => {
-      const batchObj = batches.find(db => String(db.id) === String(b.batch_id));
-      if (batchObj?.instrument_id) {
-        uniqueInstrumentsMap.set(String(batchObj.instrument_id), b);
-      }
+    // One payment item per instrument, from its Day 1 batch
+    const paymentItems: PaymentItem[] = [];
+    selectedInstrumentIds.forEach(instrumentId => {
+      const selection = selectedBatches.find(s =>
+        batches.some(b => String(b.id) === String(s.batch_id) && String(b.instrument_id) === instrumentId)
+      );
+      if (!selection) return;
+      const type = selection.payment_frequency;
+      paymentItems.push({
+        instrumentId,
+        instrumentName: instruments.find(i => String(i.id) === instrumentId)?.name || '',
+        batchId: selection.batch_id,
+        paymentFrequency: type,
+        fee: instrFees[instrumentId]?.fee_amount || 0,
+        credits: type === 'quarterly' ? 24 : type === 'pbel_8' ? 8 : 4, // trial, pbel_4
+        location,
+      });
     });
 
-    Array.from(uniqueInstrumentsMap.values()).forEach(b => {
-      const type = (b.payment_frequency || 'monthly').toLowerCase();
-      if (type === 'pbel_4' || type === 'trial') creditsTotal += 4;
-      else if (type === 'pbel_8' || type === 'monthly') creditsTotal += 8;
-      else if (type === 'quarterly') creditsTotal += 24;
-      else if (type === 'half_yearly') creditsTotal += 48;
-      else if (type === 'yearly') creditsTotal += 96;
-    });
-
-    onSave(formData, selectedBatches, selectedProspectId, feeTotal, creditsTotal);
+    onSave(formData, selectedBatches, selectedProspectId, paymentItems);
   };
 
   // For new enrollments: only non-deprecated instruments.

@@ -12,6 +12,7 @@ import StudentTableView from './StudentManagement/StudentTableView';
 import ProspectList from './StudentManagement/ProspectList';
 import DemoDayList from './StudentManagement/DemoDayList';
 import IntentfulUserList from './StudentManagement/IntentfulUserList';
+import PostEnrollmentPayment, { PaymentItem } from './StudentManagement/PostEnrollmentPayment';
 
 interface StudentManagementProps {
   students: Student[];
@@ -56,9 +57,7 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students: propStu
   const [searchTerm, setSearchTerm] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingStudent, setEditingStudent] = useState<Student | null>(null);
-  const [paymentStep, setPaymentStep] = useState<{ studentId: string; studentName: string; amount: number; credits?: number } | null>(null);
-  const [paymentForm, setPaymentForm] = useState({ method: 'cash', notes: '', skipPayment: false, skipReason: '' });
-  const [savingPayment, setSavingPayment] = useState(false);
+  const [paymentStep, setPaymentStep] = useState<{ studentId: string; studentName: string; items: PaymentItem[] } | null>(null);
   const [viewMode, setViewMode] = useState<'card' | 'table'>('card');
   const [selectedStudentId, setSelectedStudentId] = useState<string | number | null>(null);
   const [initialProspectId, setInitialProspectId] = useState<string | null>(null);
@@ -225,39 +224,6 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students: propStu
 
   const relevantBatches = batches.filter(b => filterInstruments.includes(b.instrument_id));
 
-  const handlePaymentSubmit = async () => {
-    if (!paymentStep) return;
-    if (paymentForm.skipPayment && !paymentForm.skipReason.trim()) {
-      alert('Please provide a reason for deferring payment.');
-      return;
-    }
-    setSavingPayment(true);
-    try {
-      if (!paymentForm.skipPayment) {
-        await apiPost('/api/payments', {
-          student_id: paymentStep.studentId,
-          amount: paymentStep.amount,
-          class_credits: paymentStep.credits,
-          payment_method: paymentForm.method,
-          payment_for: 'tuition',
-          notes: paymentForm.notes,
-          payment_date: new Date().toISOString().split('T')[0],
-        });
-      }
-      setPaymentStep(null);
-      setSuccessBanner(paymentForm.skipPayment
-        ? `Enrollment saved. Payment deferred — ${paymentForm.skipReason}`
-        : 'Enrollment and payment recorded successfully!');
-      onRefresh();
-      setTimeout(() => setSuccessBanner(''), 4000);
-    } catch {
-      alert('Payment recording failed. Enrollment was saved.');
-      setPaymentStep(null);
-    } finally {
-      setSavingPayment(false);
-    }
-  };
-
   const handleAddStudent = () => {
     setEditingStudent(null);
     setShowAddModal(true);
@@ -268,7 +234,7 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students: propStu
     setShowAddModal(true);
   };
 
-  const handleSaveStudent = async (formData: any, selectedBatches: EnrollmentSelection[], prospectId?: string, feeTotal?: number, creditsTotal?: number) => {
+  const handleSaveStudent = async (formData: any, selectedBatches: EnrollmentSelection[], prospectId?: string, paymentItems: PaymentItem[] = []) => {
     if (!editingStudent && selectedBatches.length === 0) {
       setErrorBanner('Please select at least one batch. A student must be enrolled in a batch.');
       setTimeout(() => setErrorBanner(''), 3000);
@@ -358,10 +324,9 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students: propStu
             .then(res => setProspectList(res.prospects || []))
             .catch(err => console.error('Failed to fetch prospects', err));
         }
-        if (!editingStudent && savedId && (feeTotal || 0) > 0) {
+        if (!editingStudent && savedId && paymentItems.length > 0) {
           // New enrollment — show payment step
-          setPaymentStep({ studentId: savedId, studentName: savedName, amount: feeTotal || 0, credits: creditsTotal });
-          setPaymentForm({ method: 'cash', notes: '', skipPayment: false, skipReason: '' });
+          setPaymentStep({ studentId: savedId, studentName: savedName, items: paymentItems });
         } else {
           setSuccessBanner('Student saved successfully!');
           setTimeout(() => setSuccessBanner(''), 3000);
@@ -582,84 +547,18 @@ const StudentManagement: React.FC<StudentManagementProps> = ({ students: propStu
 
       {/* Post-enrollment payment modal */}
       {paymentStep && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full">
-            <div className="bg-green-50 border-b border-green-200 rounded-t-xl px-6 py-4 flex items-center gap-3">
-              <div className="w-9 h-9 rounded-full bg-green-600 text-white flex items-center justify-center font-bold">✓</div>
-              <div>
-                <p className="font-bold text-green-800">Enrollment Confirmed!</p>
-                <p className="text-sm text-green-700">{paymentStep.studentName} enrolled successfully.</p>
-              </div>
-            </div>
-            <div className="p-6 space-y-4">
-              <div>
-                <h3 className="font-bold text-slate-800 text-lg mb-1">Record Payment</h3>
-                <p className="text-sm text-slate-500">Total due: <span className="font-bold text-slate-800">₹{paymentStep.amount.toLocaleString()}</span></p>
-              </div>
-
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={paymentForm.skipPayment}
-                  onChange={e => setPaymentForm(f => ({ ...f, skipPayment: e.target.checked, skipReason: '' }))}
-                  className="w-4 h-4 text-orange-500 rounded"
-                />
-                <span className="text-sm font-medium text-slate-700">Defer payment — collect later</span>
-              </label>
-
-              {paymentForm.skipPayment ? (
-                <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-1">
-                    Reason for deferring <span className="text-red-500">*</span>
-                  </label>
-                  <textarea
-                    value={paymentForm.skipReason}
-                    onChange={e => setPaymentForm(f => ({ ...f, skipReason: e.target.value }))}
-                    placeholder="e.g. Parent will pay by end of week..."
-                    rows={2}
-                    className="w-full px-3 py-2 rounded-lg border border-slate-300 focus:border-orange-500 focus:ring-2 focus:ring-orange-200 outline-none resize-none text-sm"
-                  />
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  <div>
-                    <label className="block text-sm font-semibold text-slate-700 mb-1">Payment Method</label>
-                    <div className="flex gap-2 flex-wrap">
-                      {(['cash', 'upi', 'bank_transfer'] as const).map(m => (
-                        <button
-                          key={m}
-                          type="button"
-                          onClick={() => setPaymentForm(f => ({ ...f, method: m }))}
-                          className={`px-4 py-2 rounded-lg border-2 text-sm font-semibold transition ${paymentForm.method === m ? 'border-orange-500 bg-orange-500 text-white' : 'border-slate-300 bg-white text-slate-700 hover:border-orange-400'}`}
-                        >
-                          {m === 'cash' ? 'Cash' : m === 'upi' ? 'UPI' : 'Bank Transfer'}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-semibold text-slate-700 mb-1">Notes (optional)</label>
-                    <input
-                      type="text"
-                      value={paymentForm.notes}
-                      onChange={e => setPaymentForm(f => ({ ...f, notes: e.target.value }))}
-                      placeholder="Transaction ID, reference..."
-                      className="w-full px-3 py-2 rounded-lg border border-slate-300 focus:border-orange-500 focus:ring-2 focus:ring-orange-200 outline-none text-sm"
-                    />
-                  </div>
-                </div>
-              )}
-
-              <button
-                onClick={handlePaymentSubmit}
-                disabled={savingPayment || (paymentForm.skipPayment && !paymentForm.skipReason.trim())}
-                className="w-full py-3 bg-orange-500 text-white rounded-xl font-bold hover:bg-orange-600 transition disabled:bg-slate-400 disabled:cursor-not-allowed"
-              >
-                {savingPayment ? 'Processing...' : paymentForm.skipPayment ? 'Save & Defer Payment' : `Record Payment · ₹${paymentStep.amount.toLocaleString()}`}
-              </button>
-            </div>
-          </div>
-        </div>
+        <PostEnrollmentPayment
+          studentId={paymentStep.studentId}
+          studentName={paymentStep.studentName}
+          items={paymentStep.items}
+          onPaymentRecorded={onRefresh}
+          onFinish={message => {
+            setPaymentStep(null);
+            setSuccessBanner(message);
+            onRefresh();
+            setTimeout(() => setSuccessBanner(''), 4000);
+          }}
+        />
       )}
 
       {selectedStudentId && (
